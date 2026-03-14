@@ -1,0 +1,169 @@
+﻿<Window x:Class="MicMixer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MicMixer" Height="700" Width="640" MinHeight="640" MinWidth="560"
+        ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
+    Background="#F3F5F7"
+    PreviewKeyDown="OnPreviewHotkeyKeyDown"
+    PreviewMouseDown="OnPreviewHotkeyMouseDown">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="0,0,0,20">
+                <TextBlock Text="MicMixer" FontSize="28" FontWeight="SemiBold" Foreground="#10233A"/>
+                <TextBlock Margin="0,6,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="#4B5563"
+                           Text="Skicka alltid ljudet till en virtuell kabel och växla globalt mellan vanlig mikrofon och VoiceMod medan hotkeyn hålls nere."/>
+            </StackPanel>
+
+            <Border Grid.Row="1" Margin="0,0,0,16" Padding="18" CornerRadius="16" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,16" Text="Konfiguration" FontSize="18" FontWeight="SemiBold" Foreground="#10233A"/>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,14">
+                        <TextBlock Text="Vanlig mic" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="DryInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="12,0,0,14">
+                        <TextBlock Text="Moddad mic (VoiceMod)" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="ModdedInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="Virtuell kabel ut" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged"/>
+                        <TextBlock Margin="0,6,0,0"
+                                   FontSize="11"
+                                   Foreground="#6B7280"
+                                   TextWrapping="Wrap"
+                                   Text="Detta är mål-enheten som MicMixer skriver till. I ditt upplägg ska den normalt vara CABLE Input från VB-CABLE."/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="12,0,0,0">
+                        <TextBlock Text="Global hotkey" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <Border Padding="10" CornerRadius="10" Background="#F8FAFC" BorderBrush="#D7DEE7" BorderThickness="1">
+                            <TextBlock x:Name="HotkeyValueText" FontWeight="SemiBold" Foreground="#10233A"/>
+                        </Border>
+                        <Button x:Name="CaptureHotkeyButton"
+                                Margin="0,8,0,0"
+                                Height="32"
+                                Click="OnCaptureHotkeyClick"
+                                Content="Tryck och välj hotkey"
+                                Background="#E8EEF5"
+                                Foreground="#10233A"
+                                BorderBrush="#D7DEE7"
+                                BorderThickness="1"/>
+                        <TextBlock x:Name="HotkeyCaptureHintText"
+                                   Margin="0,6,0,0"
+                                   FontSize="11"
+                                   Foreground="#6B7280"
+                                   TextWrapping="Wrap"
+                                   Text="Klicka här ovanför och tryck sedan valfri tangent eller musknapp, till exempel Alt, F8, musens mittenknapp eller XButton1."/>
+                        <StackPanel Margin="0,12,0,0">
+                            <TextBlock Text="Återgångsdelay efter släpp" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBox x:Name="ReleaseDelayTextBox"
+                                         Width="92"
+                                         MaxLength="5"
+                                         VerticalContentAlignment="Center"
+                                         LostFocus="OnReleaseDelayTextBoxLostFocus"
+                                         KeyDown="OnReleaseDelayTextBoxKeyDown"/>
+                                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#4B5563" Text="ms"/>
+                            </StackPanel>
+                            <TextBlock Margin="0,6,0,0"
+                                       FontSize="11"
+                                       Foreground="#6B7280"
+                                       TextWrapping="Wrap"
+                                       Text="0 betyder direkt återgång. Ett högre värde håller kvar VoiceMod en kort stund efter att du släppt hotkeyn."/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,16">
+                <Button x:Name="ToggleBtn"
+                        Content="Aktivera routning"
+                        Click="OnToggleClick"
+                        Width="160"
+                        Height="36"
+                        FontWeight="SemiBold"
+                        Background="#10233A"
+                        Foreground="White"
+                        BorderThickness="0"/>
+                <Button Content="Uppdatera enheter"
+                        Click="OnRefreshClick"
+                        Width="140"
+                        Height="36"
+                        Margin="10,0,0,0"
+                        FontWeight="SemiBold"
+                        Background="#E8EEF5"
+                        Foreground="#10233A"
+                        BorderBrush="#D7DEE7"
+                        BorderThickness="1"/>
+            </StackPanel>
+
+            <Border Grid.Row="3" Margin="0,0,0,16" Padding="18" CornerRadius="16" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock x:Name="RoutingStateText" Text="Routning stoppad" FontSize="18" FontWeight="SemiBold" Foreground="#10233A"/>
+                    <TextBlock x:Name="ActiveSourceText" Margin="0,8,0,0" Text="Aktiv källa: Ingen" Foreground="#0F766E" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="HotkeyStateText" Margin="0,4,0,0" Text="Hotkey ej vald" Foreground="#4B5563"/>
+                    <TextBlock x:Name="StatusText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#6B7280"/>
+
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Text="Vanlig mic nivå" FontSize="12" Foreground="#4B5563" Margin="0,0,0,4"/>
+                            <ProgressBar x:Name="DryLevelMeter" Height="14" Minimum="0" Maximum="1" Foreground="#0F766E" Background="#E5E7EB"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                            <TextBlock Text="Moddad mic nivå" FontSize="12" Foreground="#4B5563" Margin="0,0,0,4"/>
+                            <ProgressBar x:Name="ModdedLevelMeter" Height="14" Minimum="0" Maximum="1" Foreground="#C2410C" Background="#E5E7EB"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="4" Padding="18" CornerRadius="16" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="VB-CABLE" FontSize="18" FontWeight="SemiBold" Foreground="#10233A"/>
+                    <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#1F2937">
+                        <Run Text="1. Installera VB-CABLE från "/>
+                        <Hyperlink NavigateUri="https://vb-audio.com/Cable/" RequestNavigate="OnGuideNavigate">vb-audio.com/Cable</Hyperlink>
+                        <Run Text="."/>
+                    </TextBlock>
+                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#1F2937"
+                               Text="2. Packa upp zip-filen, kör setup som administratör och starta om Windows om installationsprogrammet ber om det."/>
+                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#1F2937"
+                               Text="3. Välj CABLE Input som Virtuell kabel ut här i MicMixer."/>
+                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#1F2937"
+                               Text="4. I Discord, OBS eller spelet väljer du CABLE Output som mikrofon. Då får appen alltid rätt ljud ut till den virtuella micen."/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</Window>
