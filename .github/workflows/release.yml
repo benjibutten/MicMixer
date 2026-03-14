@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: true
+
+env:
+  PROJECT_PATH: src/MicMixer/MicMixer.csproj
+  RUNTIME_ID: win-x64
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Compute release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          $assemblyVersion = "1.0.${{ github.run_number }}.0"
+          $tag = "v$version"
+          $assetName = "MicMixer-$version-win-x64.zip"
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "asset_name=$assetName" >> $env:GITHUB_OUTPUT
+
+      - name: Restore dependencies
+        shell: pwsh
+        run: dotnet restore $env:PROJECT_PATH
+
+      - name: Publish app
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID"
+
+          if (Test-Path $publishDir)
+          {
+            Remove-Item $publishDir -Recurse -Force
+          }
+
+          dotnet publish $env:PROJECT_PATH `
+            -c Release `
+            -r $env:RUNTIME_ID `
+            --self-contained true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Version=${{ steps.meta.outputs.version }} `
+            -p:AssemblyVersion=${{ steps.meta.outputs.assembly_version }} `
+            -p:FileVersion=${{ steps.meta.outputs.assembly_version }} `
+            -p:InformationalVersion="${{ steps.meta.outputs.version }}+${{ github.sha }}" `
+            -o $publishDir
+
+      - name: Create release zip
+        shell: pwsh
+        run: |
+          $zipPath = Join-Path $PWD "artifacts/${{ steps.meta.outputs.asset_name }}"
+
+          if (Test-Path $zipPath)
+          {
+            Remove-Item $zipPath -Force
+          }
+
+          Compress-Archive -Path "artifacts/publish/$env:RUNTIME_ID/*" -DestinationPath $zipPath
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: micmixer-win-x64
+          path: artifacts/${{ steps.meta.outputs.asset_name }}
+
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          @"
+          Automated release from the main branch.
+
+          Version: ${{ steps.meta.outputs.version }}
+          Commit: ${{ github.sha }}
+          Runtime: ${{ env.RUNTIME_ID }}
+
+          Download the zip asset below, extract it, and run MicMixer.exe.
+          "@ | Set-Content -Path artifacts/release-notes.md
+
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.meta.outputs.tag }}
+          name: MicMixer ${{ steps.meta.outputs.version }}
+          bodyFile: artifacts/release-notes.md
+          artifacts: artifacts/${{ steps.meta.outputs.asset_name }}
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          replacesArtifacts: true
+          makeLatest: true

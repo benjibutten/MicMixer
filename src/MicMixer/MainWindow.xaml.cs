@@ -1,9 +1,12 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Navigation;
 using System.Windows.Threading;
 using MicMixer.Audio;
@@ -23,12 +26,14 @@ public partial class MainWindow : Window
     private readonly SettingsStore _settingsStore = new();
     private readonly DispatcherTimer _levelTimer;
     private readonly DispatcherTimer _releaseDelayTimer;
+    private readonly System.Windows.Forms.NotifyIcon _trayIcon;
     private AppSettings _settings;
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
     private int _releaseDelayMilliseconds;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
     private bool _isUpdatingUi;
+    private TrayIconState _lastTrayState = TrayIconState.Stopped;
 
     public MainWindow()
     {
@@ -37,6 +42,12 @@ public partial class MainWindow : Window
         _releaseDelayTimer = new DispatcherTimer();
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         InitializeComponent();
+
+        using var windowIcon = RenderTrayIcon(TrayIconState.Normal);
+        Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+            windowIcon.Handle,
+            System.Windows.Int32Rect.Empty,
+            System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
 
         _router.Error += OnRouterError;
         _hotkeyListener.Error += OnHotkeyError;
@@ -47,6 +58,8 @@ public partial class MainWindow : Window
         UpdateHotkeyUi();
         ReleaseDelayTextBox.Text = _releaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
 
+        _trayIcon = CreateTrayIcon();
+
         RefreshDevices();
 
         _levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
@@ -54,6 +67,7 @@ public partial class MainWindow : Window
         _levelTimer.Start();
 
         UpdateStatusText();
+        UpdateTrayIcon();
         Closing += OnClosing;
     }
 
@@ -144,7 +158,8 @@ public partial class MainWindow : Window
 
         if (_router.IsRouting)
         {
-            ToggleBtn.Content = "Stoppa routning";
+            ToggleBtnText.Text = "Stoppa";
+            ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
@@ -157,7 +172,8 @@ public partial class MainWindow : Window
     {
         CancelPendingReleaseDelay();
         _router.Stop();
-        ToggleBtn.Content = "Aktivera routning";
+        ToggleBtnText.Text = "Aktivera";
+        ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
         DryLevelMeter.Value = 0;
         ModdedLevelMeter.Value = 0;
         DryInputCombo.IsEnabled = true;
@@ -230,7 +246,7 @@ public partial class MainWindow : Window
         Focus();
     }
 
-    private void OnPreviewHotkeyKeyDown(object sender, KeyEventArgs e)
+    private void OnPreviewHotkeyKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (!_isCapturingHotkey)
         {
@@ -263,7 +279,7 @@ public partial class MainWindow : Window
         ApplyReleaseDelayFromTextBox();
     }
 
-    private void OnReleaseDelayTextBoxKeyDown(object sender, KeyEventArgs e)
+    private void OnReleaseDelayTextBoxKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key is not Key.Enter and not Key.Return)
         {
@@ -292,6 +308,8 @@ public partial class MainWindow : Window
     {
         _levelTimer.Stop();
         _releaseDelayTimer.Stop();
+        _trayIcon.Visible = false;
+        _trayIcon.Dispose();
         _router.Dispose();
         _hotkeyListener.Dispose();
         _enumerator.Dispose();
@@ -325,30 +343,40 @@ public partial class MainWindow : Window
         if (_router.IsRouting)
         {
             RoutingStateText.Text = "Routning aktiv";
+            RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
+            RoutingStateIcon.Fill = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
             ActiveSourceText.Text = _router.UseModdedInput ? "Aktiv källa: Moddad mic" : "Aktiv källa: Vanlig mic";
+            ActiveSourceText.Foreground = _router.UseModdedInput
+                ? new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C2410C"))
+                : new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
             if (!_isCapturingHotkey)
             {
                 HotkeyStateText.Text = _hotkeyListener.IsPressed
-                    ? $"{_hotkeyBinding.DisplayName} hålls nere och VoiceMod-spåret skickas ut."
+                    ? $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic"
                     : _isReleaseDelayPending
-                        ? $"{_hotkeyBinding.DisplayName} är släppt, men återgår först om {_releaseDelayMilliseconds} ms."
-                        : $"{_hotkeyBinding.DisplayName} är släppt och vanliga micen skickas ut.";
+                        ? $"{_hotkeyBinding.DisplayName} släppt — återgår om {_releaseDelayMilliseconds} ms"
+                        : $"{_hotkeyBinding.DisplayName} — vanlig mic";
             }
 
-            StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as MMDevice)?.FriendlyName ?? "Ingen vald")}. Välj samma kabels inspelningssida i dina appar.";
+            StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as MMDevice)?.FriendlyName ?? "—")}";
+
+            UpdateTrayIcon();
             return;
         }
 
         RoutingStateText.Text = "Routning stoppad";
+        RoutingStateIcon.Data = (Geometry)FindResource("CircleOffIcon");
+        RoutingStateIcon.Fill = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#9CA3AF"));
         ActiveSourceText.Text = "Aktiv källa: Ingen";
+        ActiveSourceText.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
         if (!_isCapturingHotkey)
         {
-            HotkeyStateText.Text = _isReleaseDelayPending
-                ? $"Återgång väntar {_releaseDelayMilliseconds} ms efter att {_hotkeyBinding.DisplayName} släpptes."
-                : $"Håll nere {_hotkeyBinding.DisplayName} för att använda moddad mic när routningen är aktiv.";
+            HotkeyStateText.Text = $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
         }
 
-        StatusText.Text = $"Tips: välj VoiceMods virtuella mic som moddad mic, CABLE Input som virtuell kabel ut och använd {_releaseDelayMilliseconds} ms om du vill ha mjukare återgång efter släpp.";
+        StatusText.Text = "";
+
+        UpdateTrayIcon();
     }
 
     private void ApplyHotkeyBinding(HotkeyBinding binding)
@@ -366,10 +394,10 @@ public partial class MainWindow : Window
     private void UpdateHotkeyUi()
     {
         HotkeyValueText.Text = _hotkeyBinding.DisplayName;
-        CaptureHotkeyButton.Content = _isCapturingHotkey ? "Tryck tangent eller musknapp nu" : "Tryck och välj hotkey";
+        CaptureHotkeyButton.Content = _isCapturingHotkey ? "Tryck nu..." : "Ändra";
         HotkeyCaptureHintText.Text = _isCapturingHotkey
-            ? "Nästa tangent eller musknapp du trycker på blir global hotkey. Det fungerar även med mittenknapp och musens sidoknappar."
-            : "Klicka här ovanför och tryck sedan valfri tangent eller musknapp, till exempel Alt, F8, musens mittenknapp eller XButton1.";
+            ? "Tryck valfri tangent eller musknapp nu."
+            : "Klicka Ändra och tryck valfri tangent/musknapp.";
     }
 
     private void ApplyHotkeyPressedState(bool isPressed)
@@ -506,5 +534,134 @@ public partial class MainWindow : Window
             FileName = url,
             UseShellExecute = true
         });
+    }
+
+    // --- System tray support ---
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            Hide();
+            _trayIcon.Visible = true;
+        }
+    }
+
+    private System.Windows.Forms.NotifyIcon CreateTrayIcon()
+    {
+        var trayIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Text = "MicMixer",
+            Icon = RenderTrayIcon(TrayIconState.Stopped),
+            Visible = false
+        };
+
+        trayIcon.DoubleClick += OnTrayIconDoubleClick;
+
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        menu.Items.Add("Visa MicMixer", null, OnTrayShowClick);
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("Avsluta", null, OnTrayExitClick);
+        trayIcon.ContextMenuStrip = menu;
+
+        return trayIcon;
+    }
+
+    private void OnTrayIconDoubleClick(object? sender, EventArgs e)
+    {
+        RestoreFromTray();
+    }
+
+    private void OnTrayShowClick(object? sender, EventArgs e)
+    {
+        RestoreFromTray();
+    }
+
+    private void OnTrayExitClick(object? sender, EventArgs e)
+    {
+        _trayIcon.Visible = false;
+        System.Windows.Application.Current.Shutdown();
+    }
+
+    private void RestoreFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+        _trayIcon.Visible = false;
+    }
+
+    private void UpdateTrayIcon()
+    {
+        var newState = _router.IsRouting
+            ? (_router.UseModdedInput ? TrayIconState.Modded : TrayIconState.Normal)
+            : TrayIconState.Stopped;
+
+        if (newState == _lastTrayState)
+            return;
+
+        _lastTrayState = newState;
+
+        var oldIcon = _trayIcon.Icon;
+        _trayIcon.Icon = RenderTrayIcon(newState);
+        oldIcon?.Dispose();
+
+        _trayIcon.Text = newState switch
+        {
+            TrayIconState.Normal => "MicMixer — Vanlig mic",
+            TrayIconState.Modded => "MicMixer — Moddad mic",
+            _ => "MicMixer — Stoppad"
+        };
+    }
+
+    private static Icon RenderTrayIcon(TrayIconState state)
+    {
+        const int size = 32;
+        using var bmp = new Bitmap(size, size);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(System.Drawing.Color.Transparent);
+
+        System.Drawing.Color bgColor = state switch
+        {
+            TrayIconState.Normal => System.Drawing.Color.FromArgb(15, 118, 110),   // teal
+            TrayIconState.Modded => System.Drawing.Color.FromArgb(194, 65, 12),    // orange
+            _ => System.Drawing.Color.FromArgb(107, 114, 128)                       // gray
+        };
+
+        // Circle background
+        using (var bgBrush = new SolidBrush(bgColor))
+        {
+            g.FillEllipse(bgBrush, 1, 1, size - 2, size - 2);
+        }
+
+        // Mic body (white) — simple rounded rectangle + circle cap
+        using var micBrush = new SolidBrush(System.Drawing.Color.White);
+        using var micPen = new System.Drawing.Pen(System.Drawing.Color.White, 1.8f);
+
+        // Mic capsule
+        var capsuleRect = new RectangleF(12, 6, 8, 12);
+        using var capsulePath = new GraphicsPath();
+        capsulePath.AddArc(capsuleRect.X, capsuleRect.Y, capsuleRect.Width, 8, 180, 180);
+        capsulePath.AddLine(capsuleRect.Right, capsuleRect.Y + 4, capsuleRect.Right, capsuleRect.Bottom - 2);
+        capsulePath.AddArc(capsuleRect.X, capsuleRect.Bottom - 6, capsuleRect.Width, 6, 0, 180);
+        capsulePath.AddLine(capsuleRect.X, capsuleRect.Bottom - 3, capsuleRect.X, capsuleRect.Y + 4);
+        g.FillPath(micBrush, capsulePath);
+
+        // Arm arc
+        g.DrawArc(micPen, 9, 10, 14, 12, 0, 180);
+
+        // Stand line
+        g.DrawLine(micPen, 16, 22, 16, 26);
+        g.DrawLine(micPen, 12, 26, 20, 26);
+
+        return System.Drawing.Icon.FromHandle(bmp.GetHicon());
+    }
+
+    private enum TrayIconState
+    {
+        Stopped,
+        Normal,
+        Modded
     }
 }
