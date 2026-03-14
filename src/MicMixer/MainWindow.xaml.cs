@@ -50,7 +50,6 @@ public partial class MainWindow : Window
             System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
 
         _router.Error += OnRouterError;
-        _hotkeyListener.Error += OnHotkeyError;
         _hotkeyListener.PressedStateChanged += OnHotkeyPressedStateChanged;
 
         _hotkeyBinding = HotkeyBinding.Parse(_settings.HotkeyId);
@@ -191,11 +190,6 @@ public partial class MainWindow : Window
         });
     }
 
-    private void OnHotkeyError(object? sender, string message)
-    {
-        Dispatcher.BeginInvoke(() => StatusText.Text = $"Hotkey-fel: {message}");
-    }
-
     private void OnHotkeyPressedStateChanged(object? sender, bool isPressed)
     {
         Dispatcher.BeginInvoke(() => ApplyHotkeyPressedState(isPressed));
@@ -221,10 +215,6 @@ public partial class MainWindow : Window
                 StopRouting();
             }
         }
-
-        _hotkeyListener.VerifyPressedState();
-
-        UpdateStatusText();
     }
 
     private void OnSettingsSelectionChanged(object sender, SelectionChangedEventArgs e)
