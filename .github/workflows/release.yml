@@ -1,4 +1,4 @@
-name: Release
+name: Release Latest
 
 on:
   push:
@@ -16,6 +16,7 @@ concurrency:
 env:
   PROJECT_PATH: src/MicMixer/MicMixer.csproj
   RUNTIME_ID: win-x64
+  RELEASE_TAG: latest
 
 jobs:
   release:
@@ -38,12 +39,12 @@ jobs:
         run: |
           $version = "1.0.${{ github.run_number }}"
           $assemblyVersion = "1.0.${{ github.run_number }}.0"
-          $tag = "v$version"
-          $assetName = "MicMixer-$version-win-x64.zip"
+          $releaseName = "MicMixer latest"
+          $assetName = "MicMixer-win-x64.zip"
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "release_name=$releaseName" >> $env:GITHUB_OUTPUT
           "asset_name=$assetName" >> $env:GITHUB_OUTPUT
 
       - name: Restore dependencies
@@ -94,20 +95,28 @@ jobs:
         shell: pwsh
         run: |
           @"
-          Automated release from the main branch.
+          Rolling release from the main branch.
 
-          Version: ${{ steps.meta.outputs.version }}
+          Build: ${{ steps.meta.outputs.version }}
           Commit: ${{ github.sha }}
           Runtime: ${{ env.RUNTIME_ID }}
 
           Download the zip asset below, extract it, and run MicMixer.exe.
           "@ | Set-Content -Path artifacts/release-notes.md
 
+      - name: Move latest tag
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --force $env:RELEASE_TAG $env:GITHUB_SHA
+          git push origin "refs/tags/$env:RELEASE_TAG" --force
+
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ steps.meta.outputs.tag }}
-          name: MicMixer ${{ steps.meta.outputs.version }}
+          tag: ${{ env.RELEASE_TAG }}
+          name: ${{ steps.meta.outputs.release_name }}
           bodyFile: artifacts/release-notes.md
           artifacts: artifacts/${{ steps.meta.outputs.asset_name }}
           allowUpdates: true

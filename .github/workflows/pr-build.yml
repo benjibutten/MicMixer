@@ -1,0 +1,38 @@
+name: Pull Request Build
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_PATH: src/MicMixer/MicMixer.csproj
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        shell: pwsh
+        run: dotnet restore $env:PROJECT_PATH
+
+      - name: Build app
+        shell: pwsh
+        run: dotnet build $env:PROJECT_PATH -c Release --no-restore

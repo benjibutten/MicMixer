@@ -31,4 +31,8 @@ dotnet build .\src\MicMixer\MicMixer.csproj
 
 ## Automatic Releases
 
-Every push to `main` runs GitHub Actions on Windows, publishes a self-contained `win-x64` build, zips it, and creates a GitHub release automatically.
+Every push to `main` runs GitHub Actions on Windows, publishes a self-contained `win-x64` build, zips it, and updates one rolling GitHub release tagged `latest`.
+
+## Pull Request Validation
+
+Pull requests that target `main` run a separate GitHub Actions workflow that restores and builds the app without publishing a release.
