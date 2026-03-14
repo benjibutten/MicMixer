@@ -1,4 +1,4 @@
-name: Release Latest
+name: Release
 
 on:
   push:
@@ -16,7 +16,6 @@ concurrency:
 env:
   PROJECT_PATH: src/MicMixer/MicMixer.csproj
   RUNTIME_ID: win-x64
-  RELEASE_TAG: latest
 
 jobs:
   release:
@@ -38,11 +37,13 @@ jobs:
         shell: pwsh
         run: |
           $version = "1.0.${{ github.run_number }}"
+          $tagName = "v$version"
           $assemblyVersion = "1.0.${{ github.run_number }}.0"
-          $releaseName = "MicMixer latest"
-          $assetName = "MicMixer-win-x64.zip"
+          $releaseName = "MicMixer $version"
+          $assetName = "MicMixer-$version-win-x64.zip"
 
           "version=$version" >> $env:GITHUB_OUTPUT
+          "tag_name=$tagName" >> $env:GITHUB_OUTPUT
           "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
           "release_name=$releaseName" >> $env:GITHUB_OUTPUT
           "asset_name=$assetName" >> $env:GITHUB_OUTPUT
@@ -91,15 +92,16 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: micmixer-win-x64
+          name: micmixer-${{ steps.meta.outputs.version }}-win-x64
           path: artifacts/${{ steps.meta.outputs.asset_name }}
 
       - name: Write release notes
         shell: pwsh
         run: |
           @"
-          Rolling release from the main branch.
+          Automated release from the main branch.
 
+          Tag: ${{ steps.meta.outputs.tag_name }}
           Build: ${{ steps.meta.outputs.version }}
           Commit: ${{ github.sha }}
           Runtime: ${{ env.RUNTIME_ID }}
@@ -107,18 +109,11 @@ jobs:
           Download the zip asset below, extract it, and run MicMixer.exe.
           "@ | Set-Content -Path artifacts/release-notes.md
 
-      - name: Move latest tag
-        shell: pwsh
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag --force $env:RELEASE_TAG $env:GITHUB_SHA
-          git push origin "refs/tags/$env:RELEASE_TAG" --force
-
       - name: Create GitHub release
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ env.RELEASE_TAG }}
+          tag: ${{ steps.meta.outputs.tag_name }}
+          commit: ${{ github.sha }}
           name: ${{ steps.meta.outputs.release_name }}
           bodyFile: artifacts/release-notes.md
           artifacts: artifacts/${{ steps.meta.outputs.asset_name }}
