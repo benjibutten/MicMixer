@@ -20,10 +20,9 @@ public partial class MainWindow : Window
 {
     private const int MaxReleaseDelayMilliseconds = 5_000;
 
-    private readonly AudioRouter _router = new();
-    private readonly GlobalHotkeyListener _hotkeyListener = new();
-    private readonly MMDeviceEnumerator _enumerator = new();
-    private readonly SettingsStore _settingsStore = new();
+    private readonly AudioRouter _router;
+    private readonly GlobalHotkeyListener _hotkeyListener;
+    private readonly SettingsStore _settingsStore;
     private readonly DispatcherTimer _levelTimer;
     private readonly DispatcherTimer _releaseDelayTimer;
     private readonly System.Windows.Forms.NotifyIcon _trayIcon;
@@ -32,16 +31,31 @@ public partial class MainWindow : Window
     private int _releaseDelayMilliseconds;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
+    private bool _isStartingRouting;
+    private bool _isDevicesLoading;
     private bool _isUpdatingUi;
+    private bool _isReallyClosing;
+    private bool _devicesLoaded;
+    private string? _deviceLoadError;
     private TrayIconState _lastTrayState = TrayIconState.Stopped;
 
     public MainWindow()
     {
+        _router = new AudioRouter();
+        App.StartupTrace("AudioRouter created");
+        _hotkeyListener = new GlobalHotkeyListener();
+        App.StartupTrace("GlobalHotkeyListener created");
+        _settingsStore = new SettingsStore();
+        App.StartupTrace("SettingsStore created");
+
+        App.StartupTrace("MainWindow ctor begin");
         _settings = _settingsStore.Load();
+        App.StartupTrace("Settings loaded");
         _releaseDelayMilliseconds = ClampReleaseDelay(_settings.ReleaseDelayMilliseconds);
         _releaseDelayTimer = new DispatcherTimer();
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         InitializeComponent();
+        App.StartupTrace("InitializeComponent done");
 
         using var windowIcon = RenderTrayIcon(TrayIconState.Normal);
         Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
@@ -58,8 +72,9 @@ public partial class MainWindow : Window
         ReleaseDelayTextBox.Text = _releaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
 
         _trayIcon = CreateTrayIcon();
-
-        RefreshDevices();
+        DryInputCombo.IsEnabled = false;
+        ModdedInputCombo.IsEnabled = false;
+        OutputDeviceCombo.IsEnabled = false;
 
         _levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _levelTimer.Tick += OnLevelTimerTick;
@@ -68,63 +83,146 @@ public partial class MainWindow : Window
         UpdateStatusText();
         UpdateTrayIcon();
         Closing += OnClosing;
+
+        App.StartupTrace("MainWindow ctor done");
+
+        ContentRendered += (_, _) =>
+        {
+            App.StartupTrace("ContentRendered (startup complete)");
+            App.StartupStopwatch.Stop();
+
+            if (!App.StartupBenchmarkMode)
+            {
+                App.StartupTrace("Device refresh queued");
+                _ = RefreshDevicesAsync();
+            }
+
+            if (App.StartupBenchmarkMode)
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _isReallyClosing = true;
+                    System.Windows.Application.Current.Shutdown();
+                }, DispatcherPriority.Background);
+            }
+        };
     }
 
-    private void RefreshDevices()
+    private async Task RefreshDevicesAsync()
     {
-        var selectedDryInput = (DryInputCombo.SelectedItem as MMDevice)?.ID;
-        var selectedModdedInput = (ModdedInputCombo.SelectedItem as MMDevice)?.ID;
-        var selectedOutput = (OutputDeviceCombo.SelectedItem as MMDevice)?.ID;
+        if (_isDevicesLoading)
+        {
+            return;
+        }
 
-        var inputs = _enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).ToList();
-        var outputs = _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).ToList();
+        _isDevicesLoading = true;
+        _deviceLoadError = null;
 
-        _isUpdatingUi = true;
+        if (!_router.IsRouting)
+        {
+            DryInputCombo.IsEnabled = false;
+            ModdedInputCombo.IsEnabled = false;
+            OutputDeviceCombo.IsEnabled = false;
+        }
+
+        UpdateStatusText();
+
+        var selectedDryInput = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        var selectedModdedInput = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        var selectedOutput = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
 
         try
         {
-            DryInputCombo.ItemsSource = inputs;
-            ModdedInputCombo.ItemsSource = inputs;
-            OutputDeviceCombo.ItemsSource = outputs;
+            App.StartupTrace("Device refresh started");
+            var (inputs, outputs) = await Task.Run(EnumerateActiveDevices);
 
-            var drySelection = SelectInputDevice(
-                inputs,
-                selectedDryInput ?? _settings.NormalInputDeviceId,
-                device => !LooksLikeVoiceModDevice(device));
+            _isUpdatingUi = true;
 
-            DryInputCombo.SelectedItem = drySelection;
-
-            var moddedSelection = SelectInputDevice(
-                inputs,
-                selectedModdedInput ?? _settings.ModdedInputDeviceId,
-                LooksLikeVoiceModDevice,
-                drySelection?.ID);
-
-            if (moddedSelection == null && drySelection != null)
+            try
             {
-                moddedSelection = inputs.FirstOrDefault(device => device.ID != drySelection.ID);
+                DryInputCombo.ItemsSource = inputs;
+                ModdedInputCombo.ItemsSource = inputs;
+                OutputDeviceCombo.ItemsSource = outputs;
+
+                var drySelection = SelectInputDevice(
+                    inputs,
+                    selectedDryInput ?? _settings.NormalInputDeviceId,
+                    device => !LooksLikeVoiceModDevice(device));
+
+                DryInputCombo.SelectedItem = drySelection;
+
+                var moddedSelection = SelectInputDevice(
+                    inputs,
+                    selectedModdedInput ?? _settings.ModdedInputDeviceId,
+                    LooksLikeVoiceModDevice,
+                    drySelection?.Id);
+
+                if (moddedSelection == null && drySelection != null)
+                {
+                    moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection.Id);
+                }
+
+                ModdedInputCombo.SelectedItem = moddedSelection ?? drySelection;
+
+                if ((ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id)
+                {
+                    ModdedInputCombo.SelectedItem = inputs.FirstOrDefault(device => device.Id != (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id)
+                        ?? ModdedInputCombo.SelectedItem;
+                }
+
+                OutputDeviceCombo.SelectedItem = SelectOutputDevice(outputs, selectedOutput ?? _settings.OutputDeviceId);
+            }
+            finally
+            {
+                _isUpdatingUi = false;
             }
 
-            ModdedInputCombo.SelectedItem = moddedSelection ?? drySelection;
+            _devicesLoaded = true;
+            _deviceLoadError = null;
 
-            if ((ModdedInputCombo.SelectedItem as MMDevice)?.ID == (DryInputCombo.SelectedItem as MMDevice)?.ID)
+            if (!_router.IsRouting)
             {
-                ModdedInputCombo.SelectedItem = inputs.FirstOrDefault(device => device.ID != (DryInputCombo.SelectedItem as MMDevice)?.ID)
-                    ?? ModdedInputCombo.SelectedItem;
+                DryInputCombo.IsEnabled = true;
+                ModdedInputCombo.IsEnabled = true;
+                OutputDeviceCombo.IsEnabled = true;
             }
 
-            OutputDeviceCombo.SelectedItem = SelectOutputDevice(outputs, selectedOutput ?? _settings.OutputDeviceId);
+            SaveSettings();
+            App.StartupTrace("Devices refreshed");
+        }
+        catch (Exception ex)
+        {
+            _devicesLoaded = false;
+            _deviceLoadError = $"Kunde inte läsa ljudenheter: {ex.Message}";
+            App.StartupTrace($"Device refresh failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
-            _isUpdatingUi = false;
+            _isDevicesLoading = false;
+            UpdateStatusText();
         }
-
-        SaveSettings();
-        UpdateStatusText();
     }
 
-    private void OnToggleClick(object sender, RoutedEventArgs e)
+    private static (List<AudioDeviceOption> inputs, List<AudioDeviceOption> outputs) EnumerateActiveDevices()
+    {
+        App.StartupTrace("Creating MMDeviceEnumerator (lazy)");
+        using var enumerator = new MMDeviceEnumerator();
+        App.StartupTrace("MMDeviceEnumerator created (lazy)");
+
+        var inputs = enumerator
+            .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+            .Select(device => new AudioDeviceOption(device.ID, device.FriendlyName))
+            .ToList();
+
+        var outputs = enumerator
+            .EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
+            .Select(device => new AudioDeviceOption(device.ID, device.FriendlyName))
+            .ToList();
+
+        return (inputs, outputs);
+    }
+
+    private async void OnToggleClick(object sender, RoutedEventArgs e)
     {
         if (_router.IsRouting)
         {
@@ -132,15 +230,28 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (DryInputCombo.SelectedItem is not MMDevice dryInput ||
-            ModdedInputCombo.SelectedItem is not MMDevice moddedInput ||
-            OutputDeviceCombo.SelectedItem is not MMDevice output)
+        if (_isStartingRouting)
+        {
+            return;
+        }
+
+        if (!_devicesLoaded)
+        {
+            StatusText.Text = _isDevicesLoading
+                ? "Vänta, laddar ljudenheter..."
+                : _deviceLoadError ?? "Kunde inte läsa ljudenheter. Klicka uppdatera och försök igen.";
+            return;
+        }
+
+        if (DryInputCombo.SelectedItem is not AudioDeviceOption dryInput ||
+            ModdedInputCombo.SelectedItem is not AudioDeviceOption moddedInput ||
+            OutputDeviceCombo.SelectedItem is not AudioDeviceOption output)
         {
             StatusText.Text = "Välj vanlig mic, moddad mic och virtuell kabel.";
             return;
         }
 
-        if (dryInput.ID == moddedInput.ID)
+        if (dryInput.Id == moddedInput.Id)
         {
             StatusText.Text = "Vanlig mic och moddad mic måste vara två olika enheter.";
             return;
@@ -152,8 +263,24 @@ public partial class MainWindow : Window
             return;
         }
 
-        _router.SetUseModdedInput(GetEffectiveModdedState());
-        _router.Start(dryInput, moddedInput, output);
+        _isStartingRouting = true;
+        ToggleBtn.IsEnabled = false;
+        StatusText.Text = "Startar routning...";
+
+        try
+        {
+            await Task.Run(() => StartRoutingByDeviceId(dryInput.Id, moddedInput.Id, output.Id));
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Fel vid start: {ex.Message}";
+            return;
+        }
+        finally
+        {
+            _isStartingRouting = false;
+            ToggleBtn.IsEnabled = true;
+        }
 
         if (_router.IsRouting)
         {
@@ -165,6 +292,21 @@ public partial class MainWindow : Window
             SaveSettings();
             UpdateStatusText();
         }
+        else
+        {
+            UpdateStatusText();
+        }
+    }
+
+    private void StartRoutingByDeviceId(string dryInputId, string moddedInputId, string outputId)
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        var dryInput = enumerator.GetDevice(dryInputId);
+        var moddedInput = enumerator.GetDevice(moddedInputId);
+        var output = enumerator.GetDevice(outputId);
+
+        _router.SetUseModdedInput(GetEffectiveModdedState());
+        _router.Start(dryInput, moddedInput, output);
     }
 
     private void StopRouting()
@@ -175,9 +317,14 @@ public partial class MainWindow : Window
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
         DryLevelMeter.Value = 0;
         ModdedLevelMeter.Value = 0;
-        DryInputCombo.IsEnabled = true;
-        ModdedInputCombo.IsEnabled = true;
-        OutputDeviceCombo.IsEnabled = true;
+
+        if (!_isDevicesLoading)
+        {
+            DryInputCombo.IsEnabled = true;
+            ModdedInputCombo.IsEnabled = true;
+            OutputDeviceCombo.IsEnabled = true;
+        }
+
         UpdateStatusText();
     }
 
@@ -210,7 +357,7 @@ public partial class MainWindow : Window
             // Detect unexpected routing stop (e.g., device gracefully removed without
             // an exception). The combo boxes are disabled while routing is active, so
             // if routing has stopped but they are still disabled, reset the UI.
-            if (!DryInputCombo.IsEnabled)
+            if (!DryInputCombo.IsEnabled && !_isDevicesLoading)
             {
                 StopRouting();
             }
@@ -280,12 +427,12 @@ public partial class MainWindow : Window
         ApplyReleaseDelayFromTextBox();
     }
 
-    private void OnRefreshClick(object sender, RoutedEventArgs e)
+    private async void OnRefreshClick(object sender, RoutedEventArgs e)
     {
         if (_router.IsRouting)
             StopRouting();
 
-        RefreshDevices();
+        await RefreshDevicesAsync();
     }
 
     private void OnGuideNavigate(object sender, RequestNavigateEventArgs e)
@@ -296,20 +443,27 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        if (!_isReallyClosing && !App.StartupBenchmarkMode)
+        {
+            e.Cancel = true;
+            Hide();
+            _trayIcon.Visible = true;
+            return;
+        }
+
         _levelTimer.Stop();
         _releaseDelayTimer.Stop();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _router.Dispose();
         _hotkeyListener.Dispose();
-        _enumerator.Dispose();
     }
 
     private void SaveSettings()
     {
-        _settings.NormalInputDeviceId = (DryInputCombo.SelectedItem as MMDevice)?.ID;
-        _settings.ModdedInputDeviceId = (ModdedInputCombo.SelectedItem as MMDevice)?.ID;
-        _settings.OutputDeviceId = (OutputDeviceCombo.SelectedItem as MMDevice)?.ID;
+        _settings.NormalInputDeviceId = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        _settings.ModdedInputDeviceId = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        _settings.OutputDeviceId = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
         _settings.HotkeyId = _hotkeyBinding.SerializedValue;
         _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
 
@@ -348,7 +502,7 @@ public partial class MainWindow : Window
                         : $"{_hotkeyBinding.DisplayName} — vanlig mic";
             }
 
-            StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as MMDevice)?.FriendlyName ?? "—")}";
+            StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
 
             UpdateTrayIcon();
             return;
@@ -364,7 +518,11 @@ public partial class MainWindow : Window
             HotkeyStateText.Text = $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
         }
 
-        StatusText.Text = "";
+        StatusText.Text = _devicesLoaded
+            ? ""
+            : _isDevicesLoading
+                ? "Laddar ljudenheter..."
+                : _deviceLoadError ?? "Laddar ljudenheter...";
 
         UpdateTrayIcon();
     }
@@ -482,33 +640,33 @@ public partial class MainWindow : Window
         return Math.Clamp(releaseDelayMilliseconds, 0, MaxReleaseDelayMilliseconds);
     }
 
-    private static MMDevice? SelectInputDevice(
-        IReadOnlyList<MMDevice> devices,
+    private static AudioDeviceOption? SelectInputDevice(
+        IReadOnlyList<AudioDeviceOption> devices,
         string? preferredId,
-        Func<MMDevice, bool> heuristic,
+        Func<AudioDeviceOption, bool> heuristic,
         string? excludedId = null)
     {
-        return devices.FirstOrDefault(device => device.ID == preferredId)
-            ?? devices.FirstOrDefault(device => device.ID != excludedId && heuristic(device))
-            ?? devices.FirstOrDefault(device => device.ID != excludedId)
+        return devices.FirstOrDefault(device => device.Id == preferredId)
+            ?? devices.FirstOrDefault(device => device.Id != excludedId && heuristic(device))
+            ?? devices.FirstOrDefault(device => device.Id != excludedId)
             ?? devices.FirstOrDefault();
     }
 
-    private static MMDevice? SelectOutputDevice(IReadOnlyList<MMDevice> devices, string? preferredId)
+    private static AudioDeviceOption? SelectOutputDevice(IReadOnlyList<AudioDeviceOption> devices, string? preferredId)
     {
-        return devices.FirstOrDefault(device => device.ID == preferredId)
+        return devices.FirstOrDefault(device => device.Id == preferredId)
             ?? devices.FirstOrDefault(LooksLikeVirtualCable)
             ?? devices.FirstOrDefault();
     }
 
-    private static bool LooksLikeVoiceModDevice(MMDevice device)
+    private static bool LooksLikeVoiceModDevice(AudioDeviceOption device)
     {
         string name = device.FriendlyName;
         return name.Contains("voicemod", StringComparison.OrdinalIgnoreCase)
             || name.Contains("voice mod", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool LooksLikeVirtualCable(MMDevice device)
+    private static bool LooksLikeVirtualCable(AudioDeviceOption device)
     {
         string name = device.FriendlyName;
         return name.Contains("cable input", StringComparison.OrdinalIgnoreCase)
@@ -569,7 +727,7 @@ public partial class MainWindow : Window
 
     private void OnTrayExitClick(object? sender, EventArgs e)
     {
-        _trayIcon.Visible = false;
+        _isReallyClosing = true;
         System.Windows.Application.Current.Shutdown();
     }
 
@@ -647,6 +805,8 @@ public partial class MainWindow : Window
 
         return System.Drawing.Icon.FromHandle(bmp.GetHicon());
     }
+
+    private sealed record AudioDeviceOption(string Id, string FriendlyName);
 
     private enum TrayIconState
     {
