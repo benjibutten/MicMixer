@@ -116,6 +116,7 @@ public partial class MainWindow : Window
         }
 
         _isDevicesLoading = true;
+        _devicesLoaded = false;
         _deviceLoadError = null;
 
         if (!_router.IsRouting)
@@ -232,6 +233,12 @@ public partial class MainWindow : Window
 
         if (_isStartingRouting)
         {
+            return;
+        }
+
+        if (_isDevicesLoading)
+        {
+            StatusText.Text = "Vänta, laddar ljudenheter...";
             return;
         }
 
