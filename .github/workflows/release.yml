@@ -40,7 +40,7 @@ jobs:
           $tagName = "v$version"
           $assemblyVersion = "1.0.${{ github.run_number }}.0"
           $releaseName = "MicMixer $version"
-          $assetName = "MicMixer-$version-win-x64.zip"
+          $assetName = "MicMixer-win-x64.zip"
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag_name=$tagName" >> $env:GITHUB_OUTPUT
@@ -70,7 +70,8 @@ jobs:
             -p:DebugSymbols=false `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true `
+            -p:EnableCompressionInSingleFile=false `
+            -p:PublishReadyToRun=true `
             -p:Version=${{ steps.meta.outputs.version }} `
             -p:AssemblyVersion=${{ steps.meta.outputs.assembly_version }} `
             -p:FileVersion=${{ steps.meta.outputs.assembly_version }} `
@@ -106,7 +107,8 @@ jobs:
           Commit: ${{ github.sha }}
           Runtime: ${{ env.RUNTIME_ID }}
 
-          Download the zip asset below, extract it, and run MicMixer.exe.
+          Download the zip asset below and extract over your existing MicMixer folder,
+          then run MicMixer.exe. Keeping the same install path helps Windows keep tray icon preferences.
           "@ | Set-Content -Path artifacts/release-notes.md
 
       - name: Create GitHub release
