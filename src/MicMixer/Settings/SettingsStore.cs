@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using Serilog;
 
 namespace MicMixer.Settings;
 
@@ -27,8 +28,9 @@ public sealed class SettingsStore
             using FileStream stream = File.OpenRead(_settingsPath);
             return JsonSerializer.Deserialize<AppSettings>(stream) ?? new AppSettings();
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warning(ex, "Failed to load settings from {SettingsPath}; using defaults.", _settingsPath);
             return new AppSettings();
         }
     }

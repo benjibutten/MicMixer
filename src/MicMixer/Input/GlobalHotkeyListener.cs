@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Serilog;
 
 namespace MicMixer.Input;
 
@@ -70,7 +71,14 @@ public sealed class GlobalHotkeyListener : IDisposable
         {
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
-                VerifyPressedState();
+                try
+                {
+                    VerifyPressedState();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Global hotkey poll iteration failed.");
+                }
             }
         }
         catch (OperationCanceledException)

@@ -3,6 +3,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Threading;
+using MicMixer.Diagnostics;
+using Serilog;
 
 namespace MicMixer;
 
@@ -14,10 +17,14 @@ public partial class App : System.Windows.Application
 
     internal static readonly Stopwatch StartupStopwatch = Stopwatch.StartNew();
     private static readonly object StartupLogSync = new();
+    private static readonly object UnhandledDialogSync = new();
+    private static readonly TimeSpan UnhandledDialogCooldown = TimeSpan.FromMinutes(2);
     private static readonly string StartupLogFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MicMixer",
         "startup-timeline.log");
+    private static DateTime _nextUnhandledDialogUtc = DateTime.MinValue;
+    private static int _suppressedUnhandledDialogs;
 
     internal static bool StartupBenchmarkMode { get; private set; }
 
@@ -52,9 +59,19 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        try
+        {
+            AppLogger.Initialize();
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"[MicMixer] Logger initialization failed: {ex.Message}");
+        }
+
         StartupBenchmarkMode = e.Args.Any(arg =>
             string.Equals(arg, "--startup-benchmark", StringComparison.OrdinalIgnoreCase));
 
+        Log.Information("MicMixer startup begin. BenchmarkMode={BenchmarkMode}", StartupBenchmarkMode);
         StartupTrace("OnStartup begin");
         if (StartupBenchmarkMode)
         {
@@ -66,9 +83,9 @@ public partial class App : System.Windows.Application
         {
             _ = SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
         }
-        catch
+        catch (Exception ex)
         {
-            // Non-fatal if unavailable.
+            Log.Warning(ex, "Failed to set AppUserModelID.");
         }
 
         base.OnStartup(e);
@@ -78,6 +95,7 @@ public partial class App : System.Windows.Application
         if (!createdNew)
         {
             // Another instance is already running — signal it to show its window.
+            Log.Information("Second app instance detected; signaling existing instance.");
             try
             {
                 using var signal = EventWaitHandle.OpenExisting(EventName);
@@ -102,11 +120,9 @@ public partial class App : System.Windows.Application
         };
         _listenerThread.Start();
 
-        DispatcherUnhandledException += (_, args) =>
-        {
-            System.Windows.MessageBox.Show(args.Exception.Message, "MicMixer — Fel", MessageBoxButton.OK, MessageBoxImage.Error);
-            args.Handled = true;
-        };
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnCurrentDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedTaskException;
 
         StartupTrace("Pre-MainWindow");
         var mainWindow = new MainWindow();
@@ -117,6 +133,10 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        DispatcherUnhandledException -= OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException -= OnCurrentDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException -= OnTaskSchedulerUnobservedTaskException;
+
         _showEvent?.Set();   // unblock listener thread so it exits
         _showEvent?.Dispose();
 
@@ -125,6 +145,9 @@ public partial class App : System.Windows.Application
             _instanceMutex.ReleaseMutex();
             _instanceMutex.Dispose();
         }
+
+        Log.Information("MicMixer exiting.");
+        AppLogger.Shutdown();
 
         base.OnExit(e);
     }
@@ -139,6 +162,11 @@ public partial class App : System.Windows.Application
             }
             catch (ObjectDisposedException)
             {
+                return;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Single-instance listener loop failed while waiting for activation signal.");
                 return;
             }
 
@@ -158,6 +186,75 @@ public partial class App : System.Windows.Application
                 window.Topmost = false;
                 window.Focus();
             });
+        }
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs args)
+    {
+        Log.Error(args.Exception, "Unhandled UI exception.");
+        args.Handled = true;
+        ShowUnhandledErrorDialog(args.Exception);
+    }
+
+    private void OnCurrentDomainUnhandledException(object? sender, UnhandledExceptionEventArgs args)
+    {
+        if (args.ExceptionObject is Exception ex)
+        {
+            Log.Fatal(ex, "Unhandled AppDomain exception. IsTerminating={IsTerminating}", args.IsTerminating);
+            return;
+        }
+
+        Log.Fatal(
+            "Unhandled AppDomain exception with non-exception payload. PayloadType={PayloadType} IsTerminating={IsTerminating}",
+            args.ExceptionObject?.GetType().FullName ?? "null",
+            args.IsTerminating);
+    }
+
+    private void OnTaskSchedulerUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs args)
+    {
+        Log.Error(args.Exception, "Unobserved task exception.");
+        args.SetObserved();
+    }
+
+    private static void ShowUnhandledErrorDialog(Exception exception)
+    {
+        int suppressedSinceLastDialog;
+
+        lock (UnhandledDialogSync)
+        {
+            var now = DateTime.UtcNow;
+
+            if (now < _nextUnhandledDialogUtc)
+            {
+                _suppressedUnhandledDialogs++;
+                return;
+            }
+
+            suppressedSinceLastDialog = _suppressedUnhandledDialogs;
+            _suppressedUnhandledDialogs = 0;
+            _nextUnhandledDialogUtc = now + UnhandledDialogCooldown;
+        }
+
+        try
+        {
+            string message = "Ett internt fel inträffade och loggades. MicMixer fortsätter köra.";
+            message += $"{Environment.NewLine}{Environment.NewLine}Senaste fel: {exception.Message}";
+
+            if (suppressedSinceLastDialog > 0)
+            {
+                message += $"{Environment.NewLine}{Environment.NewLine}{suppressedSinceLastDialog} liknande fel undertrycktes för att undvika popup-storm.";
+            }
+
+            System.Windows.MessageBox.Show(message, "MicMixer — Fel", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch
+        {
+            // Best effort only.
+        }
+
+        if (suppressedSinceLastDialog > 0)
+        {
+            Log.Warning("Suppressed {SuppressedCount} repeated UI exception dialogs.", suppressedSinceLastDialog);
         }
     }
 }

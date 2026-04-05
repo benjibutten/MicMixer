@@ -23,6 +23,14 @@ https://github.com/benjibutten/MicMixer/releases/latest
 4. Choose a global hotkey.
 5. In Discord, OBS, or the target app, select the recording side of the virtual cable as the microphone input.
 
+## Logging
+
+MicMixer writes rolling runtime logs to:
+
+`%LocalAppData%\MicMixer\logs\micmixer-YYYYMMDD.log`
+
+These logs include handled and unhandled error information that helps diagnose long-running stability issues.
+
 ## Development
 
 ```powershell
