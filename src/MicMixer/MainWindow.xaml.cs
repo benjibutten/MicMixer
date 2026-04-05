@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,6 +14,7 @@ using MicMixer.Audio;
 using MicMixer.Input;
 using MicMixer.Settings;
 using NAudio.CoreAudioApi;
+using Serilog;
 
 namespace MicMixer;
 
@@ -195,6 +197,7 @@ public partial class MainWindow : Window
         {
             _devicesLoaded = false;
             _deviceLoadError = $"Kunde inte läsa ljudenheter: {ex.Message}";
+            Log.Error(ex, "Device refresh failed.");
             App.StartupTrace($"Device refresh failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
@@ -280,6 +283,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "Routing start failed.");
             StatusText.Text = $"Fel vid start: {ex.Message}";
             return;
         }
@@ -337,6 +341,8 @@ public partial class MainWindow : Window
 
     private void OnRouterError(object? sender, string message)
     {
+        Log.Error("Audio routing error: {ErrorMessage}", message);
+
         Dispatcher.BeginInvoke(() =>
         {
             StopRouting();
@@ -480,6 +486,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            Log.Warning(ex, "Failed to save settings.");
             StatusText.Text = $"Kunde inte spara inställningar: {ex.Message}";
         }
     }
@@ -755,19 +762,29 @@ public partial class MainWindow : Window
         if (newState == _lastTrayState)
             return;
 
-        _lastTrayState = newState;
-
-        var oldIcon = _trayIcon.Icon;
-        _trayIcon.Icon = RenderTrayIcon(newState);
-        oldIcon?.Dispose();
-
-        _trayIcon.Text = newState switch
+        try
         {
-            TrayIconState.Normal => "MicMixer — Vanlig mic",
-            TrayIconState.Modded => "MicMixer — Moddad mic",
-            _ => "MicMixer — Stoppad"
-        };
+            var oldIcon = _trayIcon.Icon;
+            _trayIcon.Icon = RenderTrayIcon(newState);
+            oldIcon?.Dispose();
+
+            _trayIcon.Text = newState switch
+            {
+                TrayIconState.Normal => "MicMixer — Vanlig mic",
+                TrayIconState.Modded => "MicMixer — Moddad mic",
+                _ => "MicMixer — Stoppad"
+            };
+
+            _lastTrayState = newState;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to update tray icon to state {TrayState}.", newState);
+        }
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
 
     private static Icon RenderTrayIcon(TrayIconState state)
     {
@@ -810,7 +827,17 @@ public partial class MainWindow : Window
         g.DrawLine(micPen, 16, 22, 16, 26);
         g.DrawLine(micPen, 12, 26, 20, 26);
 
-        return System.Drawing.Icon.FromHandle(bmp.GetHicon());
+        IntPtr hIcon = bmp.GetHicon();
+
+        try
+        {
+            using Icon temporaryIcon = System.Drawing.Icon.FromHandle(hIcon);
+            return (Icon)temporaryIcon.Clone();
+        }
+        finally
+        {
+            _ = DestroyIcon(hIcon);
+        }
     }
 
     private sealed record AudioDeviceOption(string Id, string FriendlyName);
