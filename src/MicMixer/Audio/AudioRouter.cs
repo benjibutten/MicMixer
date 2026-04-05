@@ -1,6 +1,7 @@
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
+using Serilog;
 
 namespace MicMixer.Audio;
 
@@ -54,6 +55,8 @@ public sealed class AudioRouter : IDisposable
         }
         catch (Exception ex)
         {
+            Log.Error(ex, "Failed to start audio routing.");
+
             if (player != null)
             {
                 player.PlaybackStopped -= OnPlaybackStopped;
@@ -125,6 +128,7 @@ public sealed class AudioRouter : IDisposable
     {
         if (e.Exception != null)
         {
+            Log.Error(e.Exception, "Audio playback stopped with exception.");
             RaiseError(e.Exception.Message);
         }
     }
@@ -405,6 +409,7 @@ public sealed class AudioRouter : IDisposable
         {
             if (e.Exception != null)
             {
+                Log.Error(e.Exception, "Audio capture stopped with exception.");
                 _errorHandler(e.Exception.Message);
             }
         }
