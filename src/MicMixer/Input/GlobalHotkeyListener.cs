@@ -5,12 +5,13 @@ namespace MicMixer.Input;
 
 public sealed class GlobalHotkeyListener : IDisposable
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(20);
 
     private readonly object _syncRoot = new();
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly Task _pollLoopTask;
     private HotkeyBinding? _binding;
+    private bool _isMonitoringEnabled;
     private bool _isPressed;
     private bool _disposed;
 
@@ -28,6 +29,16 @@ public sealed class GlobalHotkeyListener : IDisposable
         lock (_syncRoot)
         {
             _binding = binding;
+        }
+
+        VerifyPressedState();
+    }
+
+    public void SetMonitoringEnabled(bool isMonitoringEnabled)
+    {
+        lock (_syncRoot)
+        {
+            _isMonitoringEnabled = isMonitoringEnabled;
         }
 
         VerifyPressedState();
@@ -90,13 +101,15 @@ public sealed class GlobalHotkeyListener : IDisposable
     private bool ReadPressedState()
     {
         HotkeyBinding? binding;
+        bool isMonitoringEnabled;
 
         lock (_syncRoot)
         {
             binding = _binding;
+            isMonitoringEnabled = _isMonitoringEnabled;
         }
 
-        if (binding == null)
+        if (!isMonitoringEnabled || binding == null)
         {
             return false;
         }
