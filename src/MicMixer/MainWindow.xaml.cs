@@ -295,6 +295,7 @@ public partial class MainWindow : Window
 
         if (_router.IsRouting)
         {
+            SetHotkeyMonitoringEnabled(true);
             ToggleBtnText.Text = "Stoppa";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
@@ -316,12 +317,13 @@ public partial class MainWindow : Window
         var moddedInput = enumerator.GetDevice(moddedInputId);
         var output = enumerator.GetDevice(outputId);
 
-        _router.SetUseModdedInput(GetEffectiveModdedState());
+        _router.SetUseModdedInput(false);
         _router.Start(dryInput, moddedInput, output);
     }
 
     private void StopRouting()
     {
+        SetHotkeyMonitoringEnabled(false);
         CancelPendingReleaseDelay();
         _router.Stop();
         ToggleBtnText.Text = "Aktivera";
@@ -564,6 +566,13 @@ public partial class MainWindow : Window
 
     private void ApplyHotkeyPressedState(bool isPressed)
     {
+        if (!_router.IsRouting)
+        {
+            CancelPendingReleaseDelay();
+            _router.SetUseModdedInput(false);
+            return;
+        }
+
         if (isPressed)
         {
             CancelPendingReleaseDelay();
@@ -586,6 +595,21 @@ public partial class MainWindow : Window
         _releaseDelayTimer.Start();
         _router.SetUseModdedInput(true);
         UpdateStatusText();
+    }
+
+    private void SetHotkeyMonitoringEnabled(bool isEnabled)
+    {
+        _hotkeyListener.SetMonitoringEnabled(isEnabled);
+
+        if (!isEnabled)
+        {
+            return;
+        }
+
+        if (_hotkeyListener.IsPressed)
+        {
+            ApplyHotkeyPressedState(true);
+        }
     }
 
     private void OnReleaseDelayTimerTick(object? sender, EventArgs e)
