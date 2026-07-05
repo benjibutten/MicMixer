@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - src/**
+      - MicMixer.slnx
   workflow_dispatch:
 
 permissions:
