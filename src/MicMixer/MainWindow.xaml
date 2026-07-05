@@ -1,7 +1,7 @@
-﻿<Window x:Class="MicMixer.MainWindow"
+<Window x:Class="MicMixer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MicMixer" Height="540" Width="620" MinHeight="520" MinWidth="580"
+        Title="MicMixer" Height="640" Width="1100" MinHeight="600" MinWidth="1040"
         ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
         Background="#F3F5F7"
         PreviewKeyDown="OnPreviewHotkeyKeyDown"
@@ -33,6 +33,26 @@
         <Geometry x:Key="CheckCircleIcon">M12,2C17.52,2 22,6.48 22,12C22,17.52 17.52,22 12,22C6.48,22 2,17.52 2,12C2,6.48 6.48,2 12,2M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z</Geometry>
         <!-- Circle off icon (routing stopped) -->
         <Geometry x:Key="CircleOffIcon">M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z</Geometry>
+        <!-- Music note icon -->
+        <Geometry x:Key="MusicIcon">M12,3V13.55A4,4 0 0,0 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V7H18V3H12Z</Geometry>
+        <!-- Download icon -->
+        <Geometry x:Key="DownloadIcon">M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z</Geometry>
+        <!-- Folder icon -->
+        <Geometry x:Key="FolderIcon">M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z</Geometry>
+        <!-- Skip previous icon -->
+        <Geometry x:Key="SkipPrevIcon">M6,18V6H8V18H6M9.5,12L18,6V18L9.5,12Z</Geometry>
+        <!-- Skip next icon -->
+        <Geometry x:Key="SkipNextIcon">M16,18H18V6H16M6,18L14.5,12L6,6V18Z</Geometry>
+        <!-- Pause icon -->
+        <Geometry x:Key="PauseIcon">M14,19H18V5H14M6,19H10V5H6V19Z</Geometry>
+        <!-- Queue (playlist plus) icon -->
+        <Geometry x:Key="QueueIcon">M2,16H10V14H2M18,14V10H16V14H12V16H16V20H18V16H22V14M2,12H14V10H2M2,8H14V6H2V8Z</Geometry>
+        <!-- Headphones icon -->
+        <Geometry x:Key="HeadphonesIcon">M12,1C7.03,1 3,5.03 3,10V17A3,3 0 0,0 6,20H9V12H5V10A7,7 0 0,1 12,3A7,7 0 0,1 19,10V12H15V20H18A3,3 0 0,0 21,17V10C21,5.03 16.97,1 12,1Z</Geometry>
+        <!-- Search icon -->
+        <Geometry x:Key="SearchIcon">M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z</Geometry>
+        <!-- Close / clear icon -->
+        <Geometry x:Key="CloseIcon">M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z</Geometry>
 
         <!-- Shared icon style helper -->
         <Style x:Key="SectionIcon" TargetType="Path">
@@ -45,8 +65,6 @@
 
     <Grid Margin="20,16,20,16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -80,139 +98,365 @@
             </StackPanel>
         </Grid>
 
-        <!-- Device configuration — 3 columns -->
-        <Border Grid.Row="1" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+        <!-- Content: routing to the left, music to the right -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <!-- Normal mic -->
-                <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Vanlig mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
-                    </StackPanel>
-                    <ComboBox x:Name="DryInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
-                </StackPanel>
-
-                <!-- Modded mic -->
-                <StackPanel Grid.Column="1" Margin="8,0,8,0">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Moddad mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
-                    </StackPanel>
-                    <ComboBox x:Name="ModdedInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
-                </StackPanel>
-
-                <!-- Output -->
-                <StackPanel Grid.Column="2" Margin="8,0,0,0">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <Path Data="{StaticResource CableIcon}" Fill="#4338CA" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Virtuell kabel ut" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
-                    </StackPanel>
-                    <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- Hotkey + delay row -->
-        <Border Grid.Row="2" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Hotkey -->
-                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <Path Data="{StaticResource HotkeyIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Global hotkey" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <Border Padding="8,5" CornerRadius="6" Background="#F8FAFC" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="80">
-                            <TextBlock x:Name="HotkeyValueText" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
-                        </Border>
-                        <Button x:Name="CaptureHotkeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
-                                Click="OnCaptureHotkeyClick" Content="Ändra" FontSize="11.5"
-                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
-                    </StackPanel>
-                    <TextBlock x:Name="HotkeyCaptureHintText" Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
-                               Text="Klicka Ändra och tryck valfri tangent/musknapp."/>
-                </StackPanel>
-
-                <!-- Delay -->
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" MinWidth="140">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                        <Path Data="{StaticResource ClockIcon}" Fill="#6B7280" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                        <TextBlock Text="Återgångsdelay" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBox x:Name="ReleaseDelayTextBox" Width="64" MaxLength="5" Height="28"
-                                 VerticalContentAlignment="Center" FontSize="12"
-                                 LostFocus="OnReleaseDelayTextBoxLostFocus" KeyDown="OnReleaseDelayTextBoxKeyDown"/>
-                        <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#6B7280" FontSize="12" Text="ms"/>
-                    </StackPanel>
-                    <TextBlock Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" Text="0 = direkt återgång"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- Live status panel -->
-        <Border Grid.Row="3" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
-            <Grid>
+            <!-- Left column: devices, hotkey, status -->
+            <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Status header -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                    <Path x:Name="RoutingStateIcon" Data="{StaticResource CircleOffIcon}" Fill="#9CA3AF"
-                          Style="{StaticResource SectionIcon}" Width="16" Height="16" Margin="0,0,8,0"/>
-                    <TextBlock x:Name="RoutingStateText" Text="Routning stoppad" FontSize="14" FontWeight="SemiBold" Foreground="#10233A" VerticalAlignment="Center"/>
-                </StackPanel>
+                <!-- Device configuration — 3 columns -->
+                <Border Grid.Row="0" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Row="1" Margin="0,0,0,6">
-                    <TextBlock x:Name="ActiveSourceText" Text="Aktiv källa: Ingen" Foreground="#0F766E" FontWeight="SemiBold" FontSize="12"/>
-                    <TextBlock x:Name="HotkeyStateText" Margin="0,2,0,0" Text="Hotkey ej vald" Foreground="#6B7280" FontSize="11.5"/>
-                </StackPanel>
-
-                <!-- Level meters -->
-                <Grid Grid.Row="2" VerticalAlignment="Center" Margin="0,4,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
-                            <TextBlock Text="Vanlig" FontSize="11" Foreground="#6B7280"/>
+                        <!-- Normal mic -->
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                                <TextBlock Text="Vanlig mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                            </StackPanel>
+                            <ComboBox x:Name="DryInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
                         </StackPanel>
-                        <ProgressBar x:Name="DryLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#0F766E" Background="#E5E7EB"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
-                            <TextBlock Text="Moddad" FontSize="11" Foreground="#6B7280"/>
-                        </StackPanel>
-                        <ProgressBar x:Name="ModdedLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#C2410C" Background="#E5E7EB"/>
-                    </StackPanel>
-                </Grid>
 
-                <!-- Status text -->
-                <TextBlock x:Name="StatusText" Grid.Row="3" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#9CA3AF" FontSize="11"/>
+                        <!-- Modded mic -->
+                        <StackPanel Grid.Column="1" Margin="8,0,8,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                                <TextBlock Text="Moddad mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                            </StackPanel>
+                            <ComboBox x:Name="ModdedInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
+                        </StackPanel>
+
+                        <!-- Output -->
+                        <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Path Data="{StaticResource CableIcon}" Fill="#4338CA" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                                <TextBlock Text="Virtuell kabel ut" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                            </StackPanel>
+                            <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Hotkey + delay row -->
+                <Border Grid.Row="1" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Hotkey -->
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Path Data="{StaticResource HotkeyIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                                <TextBlock Text="Global hotkey" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Padding="8,5" CornerRadius="6" Background="#F8FAFC" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="80">
+                                    <TextBlock x:Name="HotkeyValueText" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
+                                </Border>
+                                <Button x:Name="CaptureHotkeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
+                                        Click="OnCaptureHotkeyClick" Content="Ändra" FontSize="11.5"
+                                        Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                            </StackPanel>
+                            <TextBlock x:Name="HotkeyCaptureHintText" Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
+                                       Text="Klicka Ändra och tryck valfri tangent/musknapp."/>
+                        </StackPanel>
+
+                        <!-- Delay -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" MinWidth="140">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Path Data="{StaticResource ClockIcon}" Fill="#6B7280" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                                <TextBlock Text="Återgångsdelay" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox x:Name="ReleaseDelayTextBox" Width="64" MaxLength="5" Height="28"
+                                         VerticalContentAlignment="Center" FontSize="12"
+                                         LostFocus="OnReleaseDelayTextBoxLostFocus" KeyDown="OnReleaseDelayTextBoxKeyDown"/>
+                                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#6B7280" FontSize="12" Text="ms"/>
+                            </StackPanel>
+                            <TextBlock Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" Text="0 = direkt återgång"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Live status panel -->
+                <Border Grid.Row="2" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Status header -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                            <Path x:Name="RoutingStateIcon" Data="{StaticResource CircleOffIcon}" Fill="#9CA3AF"
+                                  Style="{StaticResource SectionIcon}" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="RoutingStateText" Text="Routning stoppad" FontSize="14" FontWeight="SemiBold" Foreground="#10233A" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Margin="0,0,0,6">
+                            <TextBlock x:Name="ActiveSourceText" Text="Aktiv källa: Ingen" Foreground="#0F766E" FontWeight="SemiBold" FontSize="12"/>
+                            <TextBlock x:Name="HotkeyStateText" Margin="0,2,0,0" Text="Hotkey ej vald" Foreground="#6B7280" FontSize="11.5"/>
+                        </StackPanel>
+
+                        <!-- Level meters -->
+                        <Grid Grid.Row="2" VerticalAlignment="Center" Margin="0,4,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
+                                    <TextBlock Text="Vanlig" FontSize="11" Foreground="#6B7280"/>
+                                </StackPanel>
+                                <ProgressBar x:Name="DryLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#0F766E" Background="#E5E7EB"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
+                                    <TextBlock Text="Moddad" FontSize="11" Foreground="#6B7280"/>
+                                </StackPanel>
+                                <ProgressBar x:Name="ModdedLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#C2410C" Background="#E5E7EB"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Status text -->
+                        <TextBlock x:Name="StatusText" Grid.Row="3" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#9CA3AF" FontSize="11"/>
+                    </Grid>
+                </Border>
             </Grid>
-        </Border>
+
+            <!-- Right column: music player -->
+            <Border Grid.Column="2" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header + monitor selection -->
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource MusicIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                            <TextBlock Text="Musik in i mic-kanalen" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <CheckBox x:Name="MonitorEnabledCheck" Grid.Column="1" VerticalAlignment="Center" FontSize="11.5" Foreground="#10233A"
+                                  Checked="OnMonitorConfigChanged" Unchecked="OnMonitorConfigChanged" ToolTip="Spela musiken även i dina egna hörlurar/högtalare">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource HeadphonesIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,4,0"/>
+                                <TextBlock Text="Medhörning" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <ComboBox x:Name="MonitorDeviceCombo" Grid.Column="2" Width="170" Margin="10,0,0,0" FontSize="11"
+                                  DisplayMemberPath="FriendlyName" SelectionChanged="OnMonitorDeviceSelectionChanged"/>
+                    </Grid>
+
+                    <!-- YouTube URL row -->
+                    <Grid Grid.Row="1" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid>
+                            <TextBox x:Name="YoutubeUrlBox" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
+                                     KeyDown="OnYoutubeUrlKeyDown" TextChanged="OnYoutubeUrlChanged"/>
+                            <TextBlock x:Name="YoutubeUrlHintText" Text="Klistra in YouTube-länk här..." FontSize="11.5"
+                                       Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                        </Grid>
+                        <Button x:Name="DownloadBtn" Grid.Column="1" Height="28" Margin="8,0,0,0" Padding="10,0"
+                                Click="OnDownloadClick" FontSize="11.5" FontWeight="SemiBold"
+                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource DownloadIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
+                                <TextBlock Text="Hämta MP3" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <!-- Download progress -->
+                    <Grid Grid.Row="2" x:Name="DownloadStatusRow" Visibility="Collapsed" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ProgressBar x:Name="DownloadProgressBar" Height="6" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                                     Foreground="#7C3AED" Background="#E5E7EB"/>
+                        <TextBlock x:Name="DownloadStatusText" Grid.Column="1" Margin="8,0,0,0" FontSize="10.5" Foreground="#6B7280" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Search / filter -->
+                    <Grid Grid.Row="3" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Path Data="{StaticResource SearchIcon}" Fill="#9CA3AF" Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,6,0"/>
+                        <Grid Grid.Column="1">
+                            <TextBox x:Name="PlaylistFilterBox" Height="26" VerticalContentAlignment="Center" FontSize="11.5"
+                                     TextChanged="OnPlaylistFilterChanged"/>
+                            <TextBlock x:Name="PlaylistFilterHintText" Text="Sök i spellistan..." FontSize="11.5"
+                                       Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Playlist (fills remaining height) -->
+                    <Grid Grid.Row="4" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ListBox x:Name="PlaylistListBox" FontSize="11.5"
+                                 MouseDoubleClick="OnPlaylistDoubleClick" BorderBrush="#D7DEE7"
+                                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="6,3"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Path Data="{StaticResource PlayIcon}" Fill="#7C3AED" Width="9" Height="9" Stretch="Uniform"
+                                              VerticalAlignment="Center" Margin="0,0,5,0" Visibility="{Binding PlayingVisibility}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <Border Grid.Column="2" Background="#EDE9FE" CornerRadius="8" Padding="6,1" Margin="8,0,0,0"
+                                                VerticalAlignment="Center" Visibility="{Binding QueueVisibility}"
+                                                ToolTip="Plats i kön">
+                                            <TextBlock Text="{Binding QueueText}" FontSize="10" FontWeight="SemiBold" Foreground="#7C3AED"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                            <Button Height="28" Width="28" Padding="0" Click="OnQueueClick" ToolTip="Lägg vald låt i kö"
+                                    Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                                <Path Data="{StaticResource QueueIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
+                            </Button>
+                            <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnPlaylistRefreshClick" ToolTip="Uppdatera spellistan"
+                                    Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                                <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
+                            </Button>
+                            <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Öppna musikmappen"
+                                    Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                                <Path Data="{StaticResource FolderIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Transport -->
+                    <Grid Grid.Row="5" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Height="30" Width="30" Padding="0" Click="OnPrevTrackClick" ToolTip="Föregående / börja om"
+                                Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                            <Path Data="{StaticResource SkipPrevIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
+                        </Button>
+                        <Button Grid.Column="1" Height="30" Width="38" Padding="0" Margin="6,0,0,0" Click="OnPlayPauseClick" ToolTip="Spela / pausa"
+                                Background="#10233A" BorderThickness="0">
+                            <Path x:Name="PlayPauseIcon" Data="{StaticResource PlayIcon}" Fill="White" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
+                        </Button>
+                        <Button Grid.Column="2" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Nästa låt"
+                                Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                            <Path Data="{StaticResource SkipNextIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
+                        </Button>
+                        <Slider x:Name="SeekSlider" Grid.Column="3" Margin="12,0,8,0" VerticalAlignment="Center"
+                                Minimum="0" Maximum="1" IsMoveToPointEnabled="True"
+                                Thumb.DragStarted="OnSeekDragStarted" Thumb.DragCompleted="OnSeekDragCompleted" ValueChanged="OnSeekValueChanged"/>
+                        <TextBlock x:Name="TrackTimeText" Grid.Column="4" Text="0:00 / 0:00" FontSize="11" Foreground="#6B7280"
+                                   VerticalAlignment="Center" MinWidth="76" TextAlignment="Right"/>
+                    </Grid>
+
+                    <!-- Volumes (drag only — no jump on track click) -->
+                    <Grid Grid.Row="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Musikvolym" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Slider x:Name="MusicVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                                LargeChange="0" SmallChange="0.05"
+                                ValueChanged="OnMusicVolumeChanged" ToolTip="Hur högt musiken hörs för andra (i mic-kanalen)"/>
+                        <TextBlock x:Name="MusicVolumePercentText" Grid.Column="2" Text="50 %" FontSize="11" Foreground="#10233A"
+                                   FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
+                        <TextBlock Grid.Column="4" Text="Medhörning" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Slider x:Name="MonitorVolumeSlider" Grid.Column="5" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                                LargeChange="0" SmallChange="0.05"
+                                ValueChanged="OnMonitorVolumeChanged" ToolTip="Hur högt musiken hörs i dina egna hörlurar"/>
+                        <TextBlock x:Name="MonitorVolumePercentText" Grid.Column="6" Text="50 %" FontSize="11" Foreground="#10233A"
+                                   FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
+                    </Grid>
+
+                    <!-- Now playing + hints -->
+                    <Grid Grid.Row="7" Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="MusicStatusText" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
+                                   Text="Dubbelklicka på en låt för att spela. Musiken mixas med micen när routning är aktiv."/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="QueueCountText" FontSize="10.5" Foreground="#7C3AED" FontWeight="SemiBold" Margin="8,0,0,0"
+                                       VerticalAlignment="Center" ToolTipService.ShowDuration="30000"/>
+                            <Button x:Name="ClearQueueBtn" Height="18" Width="18" Padding="0" Margin="4,0,0,0" Visibility="Collapsed"
+                                    Click="OnClearQueueClick" ToolTip="Rensa kön" Background="Transparent" BorderThickness="0">
+                                <Path Data="{StaticResource CloseIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="10" Height="10"/>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- Collapsed help row -->
-        <Expander Grid.Row="4" Margin="0,10,0,0" IsExpanded="False">
+        <Expander Grid.Row="2" Margin="0,10,0,0" IsExpanded="False">
             <Expander.Header>
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource InfoIcon}" Fill="#3B82F6" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
@@ -232,6 +476,8 @@
                                Text="3. Välj CABLE Input som Virtuell kabel ut i MicMixer."/>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
                                Text="4. I Discord/OBS välj CABLE Output som mikrofon."/>
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
+                               Text="5. Musik: om mottagaren (t.ex. Discord/FiveM) har brusreducering aktiverad kan musiken dämpas — stäng av brusreducering där för bäst musikljud."/>
                 </StackPanel>
             </Border>
         </Expander>
