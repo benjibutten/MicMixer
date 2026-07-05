@@ -19,6 +19,12 @@ public sealed class AudioRouter : IDisposable
     public float NormalPeak => _normalRoute?.CurrentPeak ?? 0f;
     public float ModdedPeak => _moddedRoute?.CurrentPeak ?? 0f;
 
+    /// <summary>
+    /// Optional factory that provides a music source in the routing target format.
+    /// The returned provider must always fill requested sample counts (silence when idle).
+    /// </summary>
+    public Func<WaveFormat, ISampleProvider>? MusicSourceFactory { get; set; }
+
     public event EventHandler<string>? Error;
 
     public void Start(MMDevice normalInputDevice, MMDevice moddedInputDevice, MMDevice outputDevice)
@@ -36,11 +42,20 @@ public sealed class AudioRouter : IDisposable
             normalRoute = new InputRoute(normalInputDevice, targetFormat, RaiseError);
             moddedRoute = new InputRoute(moddedInputDevice, targetFormat, RaiseError);
 
-            var source = new SwitchingSampleProvider(normalRoute, moddedRoute, () => UseModdedInput);
+            var micSource = new SwitchingSampleProvider(normalRoute, moddedRoute, () => UseModdedInput);
+            ISampleProvider source = micSource;
+
+            if (MusicSourceFactory != null)
+            {
+                var mixer = new MixingSampleProvider(micSource.WaveFormat) { ReadFully = true };
+                mixer.AddMixerInput(micSource);
+                mixer.AddMixerInput(MusicSourceFactory(targetFormat));
+                source = mixer;
+            }
 
             player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 50);
             player.PlaybackStopped += OnPlaybackStopped;
-            player.Init(CreateOutputProvider(source, targetFormat));
+            player.Init(new SampleToTargetWaveProvider(source, targetFormat));
 
             normalRoute.Start();
             moddedRoute.Start();
@@ -138,193 +153,6 @@ public sealed class AudioRouter : IDisposable
         Error?.Invoke(this, message);
     }
 
-    private static IWaveProvider CreateOutputProvider(ISampleProvider source, WaveFormat targetFormat)
-    {
-        return new SampleToTargetWaveProvider(source, targetFormat);
-    }
-
-    // Write bytes directly instead of using NAudio's generic float adapter, which can
-    // surface runtime array type issues on modern .NET when the destination buffer is a byte overlay.
-    private sealed class SampleToTargetWaveProvider : IWaveProvider
-    {
-        private static readonly Guid PcmSubFormat = new("00000001-0000-0010-8000-00AA00389B71");
-        private static readonly Guid FloatSubFormat = new("00000003-0000-0010-8000-00AA00389B71");
-
-        private readonly ISampleProvider _source;
-        private readonly OutputSampleFormat _outputSampleFormat;
-        private float[] _sourceBuffer = Array.Empty<float>();
-
-        public SampleToTargetWaveProvider(ISampleProvider source, WaveFormat targetFormat)
-        {
-            _source = source;
-            WaveFormat = targetFormat;
-            _outputSampleFormat = DetermineOutputSampleFormat(targetFormat);
-        }
-
-        public WaveFormat WaveFormat { get; }
-
-        public int Read(byte[] buffer, int offset, int count)
-        {
-            int bytesPerSample = Math.Max(WaveFormat.BitsPerSample / 8, 1);
-            int alignedByteCount = count - (count % bytesPerSample);
-            int samplesRequested = alignedByteCount / bytesPerSample;
-
-            EnsureCapacity(samplesRequested);
-
-            int samplesRead = _source.Read(_sourceBuffer, 0, samplesRequested);
-            int bytesWritten = _outputSampleFormat switch
-            {
-                OutputSampleFormat.Float32 => WriteFloat32(buffer, offset, samplesRead),
-                OutputSampleFormat.Pcm16 => WritePcm16(buffer, offset, samplesRead),
-                OutputSampleFormat.Pcm24 => WritePcm24(buffer, offset, samplesRead),
-                OutputSampleFormat.Pcm32 => WritePcm32(buffer, offset, samplesRead),
-                _ => throw new NotSupportedException($"Unsupported output format: {WaveFormat.Encoding} {WaveFormat.BitsPerSample}-bit")
-            };
-
-            if (bytesWritten < count)
-            {
-                Array.Clear(buffer, offset + bytesWritten, count - bytesWritten);
-            }
-
-            return count;
-        }
-
-        private int WriteFloat32(byte[] buffer, int offset, int samplesRead)
-        {
-            int bytesWritten = samplesRead * sizeof(float);
-            Buffer.BlockCopy(_sourceBuffer, 0, buffer, offset, bytesWritten);
-            return bytesWritten;
-        }
-
-        private int WritePcm16(byte[] buffer, int offset, int samplesRead)
-        {
-            for (int i = 0; i < samplesRead; i++)
-            {
-                short value = ConvertToPcm16(_sourceBuffer[i]);
-                int writeOffset = offset + (i * 2);
-                buffer[writeOffset] = (byte)value;
-                buffer[writeOffset + 1] = (byte)(value >> 8);
-            }
-
-            return samplesRead * 2;
-        }
-
-        private int WritePcm24(byte[] buffer, int offset, int samplesRead)
-        {
-            for (int i = 0; i < samplesRead; i++)
-            {
-                int value = ConvertToPcm24(_sourceBuffer[i]);
-                int writeOffset = offset + (i * 3);
-                buffer[writeOffset] = (byte)value;
-                buffer[writeOffset + 1] = (byte)(value >> 8);
-                buffer[writeOffset + 2] = (byte)(value >> 16);
-            }
-
-            return samplesRead * 3;
-        }
-
-        private int WritePcm32(byte[] buffer, int offset, int samplesRead)
-        {
-            for (int i = 0; i < samplesRead; i++)
-            {
-                int value = ConvertToPcm32(_sourceBuffer[i]);
-                int writeOffset = offset + (i * 4);
-                buffer[writeOffset] = (byte)value;
-                buffer[writeOffset + 1] = (byte)(value >> 8);
-                buffer[writeOffset + 2] = (byte)(value >> 16);
-                buffer[writeOffset + 3] = (byte)(value >> 24);
-            }
-
-            return samplesRead * 4;
-        }
-
-        private void EnsureCapacity(int sampleCount)
-        {
-            if (_sourceBuffer.Length < sampleCount)
-            {
-                _sourceBuffer = new float[sampleCount];
-            }
-        }
-
-        private static OutputSampleFormat DetermineOutputSampleFormat(WaveFormat targetFormat)
-        {
-            bool isFloat = targetFormat.Encoding == WaveFormatEncoding.IeeeFloat
-                || targetFormat is WaveFormatExtensible floatExtensible && floatExtensible.SubFormat == FloatSubFormat;
-
-            bool isPcm = targetFormat.Encoding == WaveFormatEncoding.Pcm
-                || targetFormat is WaveFormatExtensible pcmExtensible && pcmExtensible.SubFormat == PcmSubFormat;
-
-            return (targetFormat.BitsPerSample, isFloat, isPcm) switch
-            {
-                (32, true, _) => OutputSampleFormat.Float32,
-                (16, _, true) => OutputSampleFormat.Pcm16,
-                (24, _, true) => OutputSampleFormat.Pcm24,
-                (32, _, true) => OutputSampleFormat.Pcm32,
-                _ => throw new NotSupportedException(
-                    $"Output format {targetFormat.Encoding} ({targetFormat.BitsPerSample}-bit) is not supported.")
-            };
-        }
-
-        private static short ConvertToPcm16(float value)
-        {
-            if (value >= 1f)
-            {
-                return short.MaxValue;
-            }
-
-            if (value <= -1f)
-            {
-                return short.MinValue;
-            }
-
-            return (short)Math.Round(value * short.MaxValue);
-        }
-
-        private static int ConvertToPcm24(float value)
-        {
-            const int maxValue = 8_388_607;
-            const int minValue = -8_388_608;
-
-            if (value >= 1f)
-            {
-                return maxValue;
-            }
-
-            if (value <= -1f)
-            {
-                return minValue;
-            }
-
-            return (int)Math.Round(value * maxValue);
-        }
-
-        private static int ConvertToPcm32(float value)
-        {
-            const int maxValue = int.MaxValue;
-            const int minValue = int.MinValue;
-
-            if (value >= 1f)
-            {
-                return maxValue;
-            }
-
-            if (value <= -1f)
-            {
-                return minValue;
-            }
-
-            return (int)Math.Round(value * maxValue);
-        }
-
-        private enum OutputSampleFormat
-        {
-            Float32,
-            Pcm16,
-            Pcm24,
-            Pcm32
-        }
-    }
-
     private sealed class InputRoute : IDisposable
     {
         private readonly Action<string> _errorHandler;
@@ -348,7 +176,7 @@ public sealed class AudioRouter : IDisposable
             _capture.DataAvailable += OnDataAvailable;
             _capture.RecordingStopped += OnRecordingStopped;
 
-            var source = CreateNormalizedProvider(_buffer, targetFormat);
+            var source = FormatNormalizer.Normalize(_buffer.ToSampleProvider(), targetFormat);
             var samplesPerNotification = Math.Max(targetFormat.SampleRate * Math.Max(targetFormat.Channels, 1) / 20, targetFormat.Channels);
             _meter = new MeteringSampleProvider(source, samplesPerNotification);
             _meter.StreamVolume += OnStreamVolume;
@@ -421,23 +249,6 @@ public sealed class AudioRouter : IDisposable
         }
     }
 
-    private static ISampleProvider CreateNormalizedProvider(BufferedWaveProvider buffer, WaveFormat targetFormat)
-    {
-        ISampleProvider provider = buffer.ToSampleProvider();
-
-        if (provider.WaveFormat.SampleRate != targetFormat.SampleRate)
-        {
-            provider = new WdlResamplingSampleProvider(provider, targetFormat.SampleRate);
-        }
-
-        if (provider.WaveFormat.Channels != targetFormat.Channels)
-        {
-            provider = new ChannelAdapterSampleProvider(provider, targetFormat.Channels);
-        }
-
-        return provider;
-    }
-
     private sealed class SwitchingSampleProvider : ISampleProvider
     {
         private readonly InputRoute _normalRoute;
@@ -489,83 +300,6 @@ public sealed class AudioRouter : IDisposable
             if (_moddedBuffer.Length < count)
             {
                 _moddedBuffer = new float[count];
-            }
-        }
-    }
-
-    private sealed class ChannelAdapterSampleProvider : ISampleProvider
-    {
-        private readonly ISampleProvider _source;
-        private readonly WaveFormat _waveFormat;
-        private float[] _sourceBuffer = Array.Empty<float>();
-
-        public ChannelAdapterSampleProvider(ISampleProvider source, int targetChannels)
-        {
-            _source = source;
-            _waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(source.WaveFormat.SampleRate, targetChannels);
-        }
-
-        public WaveFormat WaveFormat => _waveFormat;
-
-        public int Read(float[] buffer, int offset, int count)
-        {
-            int targetChannels = _waveFormat.Channels;
-            int sourceChannels = _source.WaveFormat.Channels;
-            int framesRequested = count / targetChannels;
-            int sourceSamplesNeeded = framesRequested * sourceChannels;
-
-            EnsureCapacity(sourceSamplesNeeded);
-
-            int sourceSamplesRead = _source.Read(_sourceBuffer, 0, sourceSamplesNeeded);
-            int framesRead = sourceSamplesRead / sourceChannels;
-            int samplesWritten = framesRead * targetChannels;
-
-            for (int frame = 0; frame < framesRead; frame++)
-            {
-                int sourceFrameOffset = frame * sourceChannels;
-                int targetFrameOffset = offset + (frame * targetChannels);
-
-                if (sourceChannels == 1)
-                {
-                    float sample = _sourceBuffer[sourceFrameOffset];
-                    for (int channel = 0; channel < targetChannels; channel++)
-                    {
-                        buffer[targetFrameOffset + channel] = sample;
-                    }
-                }
-                else if (targetChannels == 1)
-                {
-                    float sum = 0f;
-                    for (int channel = 0; channel < sourceChannels; channel++)
-                    {
-                        sum += _sourceBuffer[sourceFrameOffset + channel];
-                    }
-
-                    buffer[targetFrameOffset] = sum / sourceChannels;
-                }
-                else
-                {
-                    for (int channel = 0; channel < targetChannels; channel++)
-                    {
-                        int sourceChannel = Math.Min(channel, sourceChannels - 1);
-                        buffer[targetFrameOffset + channel] = _sourceBuffer[sourceFrameOffset + sourceChannel];
-                    }
-                }
-            }
-
-            if (samplesWritten < count)
-            {
-                Array.Clear(buffer, offset + samplesWritten, count - samplesWritten);
-            }
-
-            return samplesWritten;
-        }
-
-        private void EnsureCapacity(int sampleCount)
-        {
-            if (_sourceBuffer.Length < sampleCount)
-            {
-                _sourceBuffer = new float[sampleCount];
             }
         }
     }
