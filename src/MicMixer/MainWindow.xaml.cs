@@ -38,6 +38,8 @@ public partial class MainWindow : Window
     private readonly List<string> _musicQueue = new();
     private List<TrackItem> _allTracks = new();
     private string? _lastPlayedTrackPath;
+    private string? _acknowledgedNonCableOutputId;
+    private bool _musicWasAutoPaused;
     private bool _isSeekDragging;
     private bool _isUpdatingMusicUi;
     private bool _isDownloading;
@@ -99,6 +101,8 @@ public partial class MainWindow : Window
         DryInputCombo.IsEnabled = false;
         ModdedInputCombo.IsEnabled = false;
         OutputDeviceCombo.IsEnabled = false;
+
+        ApplyModdedMicUiState(_settings.SkipModdedMic);
 
         _music.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
         _music.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
@@ -180,8 +184,11 @@ public partial class MainWindow : Window
 
             try
             {
+                var moddedItems = new List<AudioDeviceOption>(inputs.Count + 1) { NoModdedMicOption };
+                moddedItems.AddRange(inputs);
+
                 DryInputCombo.ItemsSource = inputs;
-                ModdedInputCombo.ItemsSource = inputs;
+                ModdedInputCombo.ItemsSource = moddedItems;
                 OutputDeviceCombo.ItemsSource = outputs;
 
                 var drySelection = SelectInputDevice(
@@ -191,24 +198,33 @@ public partial class MainWindow : Window
 
                 DryInputCombo.SelectedItem = drySelection;
 
-                var moddedSelection = SelectInputDevice(
-                    inputs,
-                    selectedModdedInput ?? _settings.ModdedInputDeviceId,
-                    LooksLikeVoiceModDevice,
-                    drySelection?.Id);
+                string? preferredModdedId = selectedModdedInput
+                    ?? (_settings.SkipModdedMic ? NoModdedMicOption.Id : _settings.ModdedInputDeviceId);
 
-                if (moddedSelection == null && drySelection != null)
+                AudioDeviceOption? moddedSelection;
+
+                if (preferredModdedId == NoModdedMicOption.Id)
                 {
-                    moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection.Id);
+                    moddedSelection = NoModdedMicOption;
+                }
+                else
+                {
+                    moddedSelection = SelectInputDevice(
+                        inputs,
+                        preferredModdedId,
+                        LooksLikeVoiceModDevice,
+                        drySelection?.Id);
+
+                    // Never auto-pick the same device as the normal mic — fall back to
+                    // "no modded mic" when there is no distinct second input.
+                    if (moddedSelection == null || moddedSelection.Id == drySelection?.Id)
+                    {
+                        moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection?.Id)
+                            ?? NoModdedMicOption;
+                    }
                 }
 
-                ModdedInputCombo.SelectedItem = moddedSelection ?? drySelection;
-
-                if ((ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id)
-                {
-                    ModdedInputCombo.SelectedItem = inputs.FirstOrDefault(device => device.Id != (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id)
-                        ?? ModdedInputCombo.SelectedItem;
-                }
+                ModdedInputCombo.SelectedItem = moddedSelection;
 
                 OutputDeviceCombo.SelectedItem = SelectOutputDevice(outputs, selectedOutput ?? _settings.OutputDeviceId);
 
@@ -230,6 +246,8 @@ public partial class MainWindow : Window
                 OutputDeviceCombo.IsEnabled = true;
             }
 
+            ApplyModdedMicUiState();
+            UpdateOutputCableWarning();
             SaveSettings();
             await ApplyMonitorConfigAsync();
             App.StartupTrace("Devices refreshed");
@@ -294,23 +312,31 @@ public partial class MainWindow : Window
             return;
         }
 
+        bool skipModded = IsModdedMicSkipped;
+        var moddedInput = ModdedInputCombo.SelectedItem as AudioDeviceOption;
+
         if (DryInputCombo.SelectedItem is not AudioDeviceOption dryInput ||
-            ModdedInputCombo.SelectedItem is not AudioDeviceOption moddedInput ||
-            OutputDeviceCombo.SelectedItem is not AudioDeviceOption output)
+            OutputDeviceCombo.SelectedItem is not AudioDeviceOption output ||
+            (!skipModded && moddedInput == null))
         {
-            StatusText.Text = "Välj vanlig mic, moddad mic och virtuell kabel.";
+            StatusText.Text = skipModded
+                ? "Välj vanlig mic och virtuell kabel."
+                : "Välj vanlig mic, moddad mic och virtuell kabel.";
             return;
         }
 
-        if (dryInput.Id == moddedInput.Id)
+        if (!skipModded && dryInput.Id == moddedInput!.Id)
         {
             StatusText.Text = "Vanlig mic och moddad mic måste vara två olika enheter.";
             return;
         }
 
-        if (!LooksLikeVirtualCable(output))
+        // Warn instead of hard-blocking: unusual cable drivers (VAC, Voicemeeter Aux)
+        // fail the name heuristic, and a silent refusal looks like a dead button.
+        if (!LooksLikeVirtualCable(output) && _acknowledgedNonCableOutputId != output.Id)
         {
-            StatusText.Text = "Virtuell kabel ut ska normalt vara CABLE Input från VB-CABLE eller annan virtuell kabeldrivrutin.";
+            _acknowledgedNonCableOutputId = output.Id;
+            StatusText.Text = $"\"{output.FriendlyName}\" ser inte ut som en virtuell kabel — spelet hör mixen bara via t.ex. CABLE Input. Klicka Aktivera igen för att starta ändå.";
             return;
         }
 
@@ -320,7 +346,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await Task.Run(() => StartRoutingByDeviceId(dryInput.Id, moddedInput.Id, output.Id));
+            await Task.Run(() => StartRoutingByDeviceId(dryInput.Id, skipModded ? null : moddedInput!.Id, output.Id));
         }
         catch (Exception ex)
         {
@@ -336,7 +362,11 @@ public partial class MainWindow : Window
 
         if (_router.IsRouting)
         {
-            SetHotkeyMonitoringEnabled(true);
+            if (!skipModded)
+            {
+                SetHotkeyMonitoringEnabled(true);
+            }
+
             ToggleBtnText.Text = "Stoppa";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
@@ -344,6 +374,7 @@ public partial class MainWindow : Window
             OutputDeviceCombo.IsEnabled = false;
             SaveSettings();
             UpdateStatusText();
+            ResumeMusicIfAutoPaused();
         }
         else
         {
@@ -351,11 +382,11 @@ public partial class MainWindow : Window
         }
     }
 
-    private void StartRoutingByDeviceId(string dryInputId, string moddedInputId, string outputId)
+    private void StartRoutingByDeviceId(string dryInputId, string? moddedInputId, string outputId)
     {
         using var enumerator = new MMDeviceEnumerator();
         var dryInput = enumerator.GetDevice(dryInputId);
-        var moddedInput = enumerator.GetDevice(moddedInputId);
+        var moddedInput = moddedInputId != null ? enumerator.GetDevice(moddedInputId) : null;
         var output = enumerator.GetDevice(outputId);
 
         _router.SetUseModdedInput(false);
@@ -367,6 +398,7 @@ public partial class MainWindow : Window
         SetHotkeyMonitoringEnabled(false);
         CancelPendingReleaseDelay();
         _router.Stop();
+        PauseMusicIfClockLost();
         ToggleBtnText.Text = "Aktivera";
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
         DryLevelMeter.Value = 0;
@@ -427,8 +459,39 @@ public partial class MainWindow : Window
             return;
         }
 
+        ApplyModdedMicUiState();
+        UpdateOutputCableWarning();
         SaveSettings();
         UpdateStatusText();
+    }
+
+    /// <summary>List entry in the modded-mic combo that disables the modded route entirely.</summary>
+    private static readonly AudioDeviceOption NoModdedMicOption = new("__no_modded_mic__", "Ingen moddad mic");
+
+    private bool IsModdedMicSkipped => (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == NoModdedMicOption.Id;
+
+    private void ApplyModdedMicUiState()
+    {
+        ApplyModdedMicUiState(IsModdedMicSkipped);
+    }
+
+    private void ApplyModdedMicUiState(bool skip)
+    {
+        HotkeyDelayCard.IsEnabled = !skip;
+        HotkeyDelayCard.Opacity = skip ? 0.55 : 1.0;
+        ModdedMeterPanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
+        Grid.SetColumnSpan(DryMeterPanel, skip ? 3 : 1);
+    }
+
+    private void UpdateOutputCableWarning()
+    {
+        bool looksWrong = OutputDeviceCombo.SelectedItem is AudioDeviceOption output && !LooksLikeVirtualCable(output);
+        OutputCableWarningText.Visibility = looksWrong ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!looksWrong)
+        {
+            _acknowledgedNonCableOutputId = null;
+        }
     }
 
     private void OnCaptureHotkeyClick(object sender, RoutedEventArgs e)
@@ -520,7 +583,14 @@ public partial class MainWindow : Window
     private void SaveSettings()
     {
         _settings.NormalInputDeviceId = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        _settings.ModdedInputDeviceId = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        _settings.SkipModdedMic = IsModdedMicSkipped;
+
+        // Keep the last real device id so a stored selection survives toggling
+        // "Ingen moddad mic" on and off between sessions.
+        if (!IsModdedMicSkipped)
+        {
+            _settings.ModdedInputDeviceId = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        }
         _settings.OutputDeviceId = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
         _settings.HotkeyId = _hotkeyBinding.SerializedValue;
         _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
@@ -558,11 +628,13 @@ public partial class MainWindow : Window
                 : new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
             if (!_isCapturingHotkey)
             {
-                HotkeyStateText.Text = _hotkeyListener.IsPressed
-                    ? $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic"
-                    : _isReleaseDelayPending
-                        ? $"{_hotkeyBinding.DisplayName} släppt — återgår om {_releaseDelayMilliseconds} ms"
-                        : $"{_hotkeyBinding.DisplayName} — vanlig mic";
+                HotkeyStateText.Text = IsModdedMicSkipped
+                    ? "Moddad mic används ej — musiken mixas in så länge den spelar"
+                    : _hotkeyListener.IsPressed
+                        ? $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic"
+                        : _isReleaseDelayPending
+                            ? $"{_hotkeyBinding.DisplayName} släppt — återgår om {_releaseDelayMilliseconds} ms"
+                            : $"{_hotkeyBinding.DisplayName} — vanlig mic";
             }
 
             StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
@@ -578,7 +650,9 @@ public partial class MainWindow : Window
         ActiveSourceText.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
         if (!_isCapturingHotkey)
         {
-            HotkeyStateText.Text = $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
+            HotkeyStateText.Text = IsModdedMicSkipped
+                ? "Moddad mic används ej — endast vanlig mic + musik"
+                : $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
         }
 
         StatusText.Text = _devicesLoaded
@@ -613,6 +687,13 @@ public partial class MainWindow : Window
 
     private void ApplyHotkeyPressedState(bool isPressed)
     {
+        if (IsModdedMicSkipped)
+        {
+            CancelPendingReleaseDelay();
+            _router.SetUseModdedInput(false);
+            return;
+        }
+
         if (!_router.IsRouting)
         {
             CancelPendingReleaseDelay();
@@ -771,6 +852,52 @@ public partial class MainWindow : Window
 
     // --- Music player ---
 
+    /// <summary>
+    /// Without monitor output the routing pull is the only clock; pause instead of
+    /// leaving the engine in a frozen "playing" state that the UI reports as playing.
+    /// </summary>
+    private void PauseMusicIfClockLost()
+    {
+        if (!_music.IsPlaying || _music.HasMonitorOutput || _router.IsRouting)
+        {
+            return;
+        }
+
+        _music.Pause();
+        _musicWasAutoPaused = true;
+
+        if (_music.CurrentTrackPath is string pausedPath)
+        {
+            MusicStatusText.Text = $"Pausad: {Path.GetFileNameWithoutExtension(pausedPath)} — spelar vidare när routningen är igång.";
+        }
+
+        UpdateMusicUi();
+    }
+
+    /// <summary>Resumes a track that was auto-paused by <see cref="PauseMusicIfClockLost"/> once a clock is back.</summary>
+    private void ResumeMusicIfAutoPaused()
+    {
+        if (!_musicWasAutoPaused || !_music.IsPaused)
+        {
+            return;
+        }
+
+        if (!_music.HasMonitorOutput && !_router.IsRouting)
+        {
+            return;
+        }
+
+        _musicWasAutoPaused = false;
+        _music.Resume();
+
+        if (_music.CurrentTrackPath is string resumedPath)
+        {
+            MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(resumedPath)}";
+        }
+
+        UpdateMusicUi();
+    }
+
     private void OnMusicTimerTick(object? sender, EventArgs e)
     {
         UpdateMusicUi();
@@ -907,6 +1034,7 @@ public partial class MainWindow : Window
         }
 
         _lastPlayedTrackPath = path;
+        _musicWasAutoPaused = false;
         MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(path)}";
 
         if (PlaylistListBox.ItemsSource is List<TrackItem> tracks)
@@ -1009,6 +1137,9 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(() =>
         {
+            // The engine may have dropped its monitor output (e.g. device lost);
+            // pause first so the error message below wins over the pause text.
+            PauseMusicIfClockLost();
             MusicStatusText.Text = message;
             UpdateMusicUi();
         });
@@ -1062,6 +1193,7 @@ public partial class MainWindow : Window
         if (_music.IsPlaying)
         {
             _music.Pause();
+            _musicWasAutoPaused = false;
             if (_music.CurrentTrackPath is string playingPath)
             {
                 MusicStatusText.Text = $"Pausad: {Path.GetFileNameWithoutExtension(playingPath)}";
@@ -1080,6 +1212,7 @@ public partial class MainWindow : Window
             }
 
             _music.Resume();
+            _musicWasAutoPaused = false;
             if (_music.CurrentTrackPath is string resumedPath)
             {
                 MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(resumedPath)}";
@@ -1220,6 +1353,8 @@ public partial class MainWindow : Window
         try
         {
             await Task.Run(() => _music.ConfigureMonitor(deviceId));
+            PauseMusicIfClockLost();
+            ResumeMusicIfAutoPaused();
         }
         catch (Exception ex)
         {

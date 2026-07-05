@@ -6,6 +6,8 @@ public sealed class AppSettings
 
     public string? ModdedInputDeviceId { get; set; }
 
+    public bool SkipModdedMic { get; set; }
+
     public string? OutputDeviceId { get; set; }
 
     public string HotkeyId { get; set; } = Input.HotkeyBinding.Default.SerializedValue;

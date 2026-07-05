@@ -27,7 +27,11 @@ public sealed class AudioRouter : IDisposable
 
     public event EventHandler<string>? Error;
 
-    public void Start(MMDevice normalInputDevice, MMDevice moddedInputDevice, MMDevice outputDevice)
+    /// <summary>
+    /// Starts routing. When <paramref name="moddedInputDevice"/> is null only the normal
+    /// mic is routed and hotkey switching has no effect.
+    /// </summary>
+    public void Start(MMDevice normalInputDevice, MMDevice? moddedInputDevice, MMDevice outputDevice)
     {
         Stop();
 
@@ -40,7 +44,9 @@ public sealed class AudioRouter : IDisposable
             var targetFormat = outputDevice.AudioClient.MixFormat;
 
             normalRoute = new InputRoute(normalInputDevice, targetFormat, RaiseError);
-            moddedRoute = new InputRoute(moddedInputDevice, targetFormat, RaiseError);
+            moddedRoute = moddedInputDevice != null
+                ? new InputRoute(moddedInputDevice, targetFormat, RaiseError)
+                : null;
 
             var micSource = new SwitchingSampleProvider(normalRoute, moddedRoute, () => UseModdedInput);
             ISampleProvider source = micSource;
@@ -58,7 +64,7 @@ public sealed class AudioRouter : IDisposable
             player.Init(new SampleToTargetWaveProvider(source, targetFormat));
 
             normalRoute.Start();
-            moddedRoute.Start();
+            moddedRoute?.Start();
             player.Play();
 
             lock (_syncRoot)
@@ -252,12 +258,12 @@ public sealed class AudioRouter : IDisposable
     private sealed class SwitchingSampleProvider : ISampleProvider
     {
         private readonly InputRoute _normalRoute;
-        private readonly InputRoute _moddedRoute;
+        private readonly InputRoute? _moddedRoute;
         private readonly Func<bool> _useModdedInput;
         private float[] _normalBuffer = Array.Empty<float>();
         private float[] _moddedBuffer = Array.Empty<float>();
 
-        public SwitchingSampleProvider(InputRoute normalRoute, InputRoute moddedRoute, Func<bool> useModdedInput)
+        public SwitchingSampleProvider(InputRoute normalRoute, InputRoute? moddedRoute, Func<bool> useModdedInput)
         {
             _normalRoute = normalRoute;
             _moddedRoute = moddedRoute;
@@ -274,9 +280,9 @@ public sealed class AudioRouter : IDisposable
             EnsureCapacity(count);
 
             int normalRead = _normalRoute.Read(_normalBuffer, 0, count);
-            int moddedRead = _moddedRoute.Read(_moddedBuffer, 0, count);
+            int moddedRead = _moddedRoute?.Read(_moddedBuffer, 0, count) ?? 0;
 
-            bool useModdedInput = _useModdedInput();
+            bool useModdedInput = _moddedRoute != null && _useModdedInput();
             float[] selectedBuffer = useModdedInput ? _moddedBuffer : _normalBuffer;
             int selectedSamples = useModdedInput ? moddedRead : normalRead;
 

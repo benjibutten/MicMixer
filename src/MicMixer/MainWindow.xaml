@@ -61,6 +61,33 @@
             <Setter Property="Stretch" Value="Uniform"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+
+        <!-- Info-tooltip helpers: (i) icon next to a section label with an explanatory tooltip -->
+        <Style x:Key="InfoTipHost" TargetType="Border">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Help"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+            <Setter Property="ToolTipService.InitialShowDelay" Value="200"/>
+        </Style>
+        <Style x:Key="InfoTipIcon" TargetType="Path" BasedOn="{StaticResource SectionIcon}">
+            <Setter Property="Data" Value="{StaticResource InfoIcon}"/>
+            <Setter Property="Fill" Value="#9CA3AF"/>
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+        </Style>
+        <Style x:Key="TipTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="MaxWidth" Value="300"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="TipBody" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="MaxWidth" Value="300"/>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="20,16,20,16">
@@ -128,6 +155,18 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
                                 <TextBlock Text="Vanlig mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <Border Style="{StaticResource InfoTipHost}">
+                                    <Path Style="{StaticResource InfoTipIcon}"/>
+                                    <Border.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Din riktiga mikrofon"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Mikrofonen du faktiskt pratar i — samma som du brukar välja i andra program. Det är den som hörs som standard när routningen är igång."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </Border.ToolTip>
+                                </Border>
                             </StackPanel>
                             <ComboBox x:Name="DryInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
                         </StackPanel>
@@ -137,6 +176,20 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
                                 <TextBlock Text="Moddad mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <Border Style="{StaticResource InfoTipHost}">
+                                    <Path Style="{StaticResource InfoTipIcon}"/>
+                                    <Border.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Röstmoddad mikrofon (t.ex. Voicemod)"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Utgången från ett röstmodd-program — för Voicemod heter den oftast 'Voicemod Virtual Audio Device'. Så länge du håller in hotkeyn hörs den här i stället för din vanliga mic."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Använder du inget röstmodd-program? Välj 'Ingen moddad mic' — då skickas bara vanlig mic + musik till kabeln, och hotkeyn behövs inte."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </Border.ToolTip>
+                                </Border>
                             </StackPanel>
                             <ComboBox x:Name="ModdedInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
                         </StackPanel>
@@ -146,14 +199,31 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource CableIcon}" Fill="#4338CA" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
                                 <TextBlock Text="Virtuell kabel ut" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <Border Style="{StaticResource InfoTipHost}">
+                                    <Path Style="{StaticResource InfoTipIcon}"/>
+                                    <Border.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Hit skickas den färdiga mixen"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Välj CABLE Input (VB-Audio Virtual Cable). Allt som routas — mic och musik — spelas upp här, och i spelet/Discord väljer du sedan CABLE Output som mikrofon."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Har du inte VB-CABLE installerat? Följ guiden längst ner i fönstret."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </Border.ToolTip>
+                                </Border>
                             </StackPanel>
                             <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
+                            <TextBlock x:Name="OutputCableWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="#B45309" Visibility="Collapsed"
+                                       Text="⚠ Det här ser inte ut som en virtuell kabel. Spelet/Discord hör mixen bara om den skickas till t.ex. CABLE Input (VB-CABLE)."/>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- Hotkey + delay row -->
-                <Border Grid.Row="1" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                <Border x:Name="HotkeyDelayCard" Grid.Row="1" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -212,36 +282,40 @@
                             <TextBlock x:Name="RoutingStateText" Text="Routning stoppad" FontSize="14" FontWeight="SemiBold" Foreground="#10233A" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <StackPanel Grid.Row="1" Margin="0,0,0,6">
+                        <StackPanel Grid.Row="1" Margin="0,0,0,10">
                             <TextBlock x:Name="ActiveSourceText" Text="Aktiv källa: Ingen" Foreground="#0F766E" FontWeight="SemiBold" FontSize="12"/>
                             <TextBlock x:Name="HotkeyStateText" Margin="0,2,0,0" Text="Hotkey ej vald" Foreground="#6B7280" FontSize="11.5"/>
                         </StackPanel>
 
                         <!-- Level meters -->
-                        <Grid Grid.Row="2" VerticalAlignment="Center" Margin="0,4,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
-                                    <TextBlock Text="Vanlig" FontSize="11" Foreground="#6B7280"/>
+                        <Border Grid.Row="2" VerticalAlignment="Top" Padding="12,10" CornerRadius="8"
+                                Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel x:Name="DryMeterPanel" Grid.Column="0">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Vanlig" FontSize="11" Foreground="#6B7280"/>
+                                    </StackPanel>
+                                    <ProgressBar x:Name="DryLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#0F766E" Background="#E5E7EB"/>
                                 </StackPanel>
-                                <ProgressBar x:Name="DryLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#0F766E" Background="#E5E7EB"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                    <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
-                                    <TextBlock Text="Moddad" FontSize="11" Foreground="#6B7280"/>
+                                <StackPanel x:Name="ModdedMeterPanel" Grid.Column="2">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <Path Data="{StaticResource ModdedMicIcon}" Fill="#C2410C" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Moddad" FontSize="11" Foreground="#6B7280"/>
+                                    </StackPanel>
+                                    <ProgressBar x:Name="ModdedLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#C2410C" Background="#E5E7EB"/>
                                 </StackPanel>
-                                <ProgressBar x:Name="ModdedLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="#C2410C" Background="#E5E7EB"/>
-                            </StackPanel>
-                        </Grid>
+                            </Grid>
+                        </Border>
 
-                        <!-- Status text -->
-                        <TextBlock x:Name="StatusText" Grid.Row="3" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#9CA3AF" FontSize="11"/>
+                        <!-- Status text (pinned to the bottom of the card) -->
+                        <TextBlock x:Name="StatusText" Grid.Row="3" Margin="0,8,0,0" VerticalAlignment="Bottom"
+                                   TextWrapping="Wrap" Foreground="#9CA3AF" FontSize="11"/>
                     </Grid>
                 </Border>
             </Grid>
@@ -270,16 +344,34 @@
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="{StaticResource MusicIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
                             <TextBlock Text="Musik in i mic-kanalen" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource InfoTipHost}">
+                                <Path Style="{StaticResource InfoTipIcon}"/>
+                                <Border.ToolTip>
+                                    <ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="Så funkar musiken"/>
+                                            <TextBlock Style="{StaticResource TipBody}"
+                                                       Text="Musiken mixas in i mic-kanalen tillsammans med din röst, så att andra hör den — så länge en låt spelas och routningen är aktiv."/>
+                                            <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                       Text="Hämta låtar genom att klistra in en YouTube-länk, eller lägg egna MP3-filer i musikmappen (mappikonen till höger)."/>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </Border.ToolTip>
+                            </Border>
                         </StackPanel>
                         <CheckBox x:Name="MonitorEnabledCheck" Grid.Column="1" VerticalAlignment="Center" FontSize="11.5" Foreground="#10233A"
-                                  Checked="OnMonitorConfigChanged" Unchecked="OnMonitorConfigChanged" ToolTip="Spela musiken även i dina egna hörlurar/högtalare">
+                                  Checked="OnMonitorConfigChanged" Unchecked="OnMonitorConfigChanged"
+                                  ToolTipService.ShowDuration="60000"
+                                  ToolTip="Spela musiken även i dina egna hörlurar/högtalare, så att du själv hör vad som spelas. Påverkar inte vad andra hör.">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource HeadphonesIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,4,0"/>
                                 <TextBlock Text="Medhörning" VerticalAlignment="Center"/>
                             </StackPanel>
                         </CheckBox>
                         <ComboBox x:Name="MonitorDeviceCombo" Grid.Column="2" Width="170" Margin="10,0,0,0" FontSize="11"
-                                  DisplayMemberPath="FriendlyName" SelectionChanged="OnMonitorDeviceSelectionChanged"/>
+                                  DisplayMemberPath="FriendlyName" SelectionChanged="OnMonitorDeviceSelectionChanged"
+                                  ToolTipService.ShowDuration="60000"
+                                  ToolTip="Utgången där du själv vill höra musiken — välj dina hörlurar eller högtalare, inte den virtuella kabeln. Andra hör musiken via mic-kanalen oavsett."/>
                     </Grid>
 
                     <!-- YouTube URL row -->
