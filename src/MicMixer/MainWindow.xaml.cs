@@ -1359,7 +1359,9 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to configure music monitor.");
+            PauseMusicIfClockLost();
             MusicStatusText.Text = $"Kunde inte starta medhörning: {ex.Message}";
+            UpdateMusicUi();
         }
     }
 
