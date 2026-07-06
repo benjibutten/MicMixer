@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -37,6 +37,9 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _musicTimer;
     private readonly List<string> _musicQueue = new();
     private List<TrackItem> _allTracks = new();
+    private System.Windows.Point _queueDragStart;
+    private int _queueDragIndex = -1;
+    private DateTime _queuePopupClosedAt = DateTime.MinValue;
     private string? _lastPlayedTrackPath;
     private string? _acknowledgedNonCableOutputId;
     private bool _musicWasAutoPaused;
@@ -1093,18 +1096,20 @@ public partial class MainWindow : Window
     {
         if (_musicQueue.Count > 0)
         {
-            QueueCountText.Text = $"Kö: {_musicQueue.Count}";
-            QueueCountText.ToolTip = string.Join(
-                "\n",
-                _musicQueue.Select((path, index) => $"{index + 1}. {Path.GetFileNameWithoutExtension(path)}"));
+            QueueChipBtn.Content = $"Kö: {_musicQueue.Count}";
+            QueueChipBtn.Visibility = Visibility.Visible;
             ClearQueueBtn.Visibility = Visibility.Visible;
         }
         else
         {
-            QueueCountText.Text = "";
-            QueueCountText.ToolTip = null;
+            QueueChipBtn.Visibility = Visibility.Collapsed;
+            QueueChipBtn.IsChecked = false;
             ClearQueueBtn.Visibility = Visibility.Collapsed;
         }
+
+        QueueListBox.ItemsSource = _musicQueue
+            .Select((path, index) => new QueueEntry(index, path))
+            .ToList();
 
         foreach (var track in _allTracks)
         {
@@ -1126,6 +1131,242 @@ public partial class MainWindow : Window
         _musicQueue.Clear();
         UpdateQueueUi();
         MusicStatusText.Text = "Kön rensad.";
+    }
+
+    // --- Queue popup: reorder via drag & drop ---
+
+    private void OnQueueChipChecked(object sender, RoutedEventArgs e)
+    {
+        // Clicking the chip while the popup is open closes the popup on mouse-down
+        // (StaysOpen=False) and the click would immediately re-open it — swallow that.
+        if (DateTime.UtcNow - _queuePopupClosedAt < TimeSpan.FromMilliseconds(250))
+        {
+            QueueChipBtn.IsChecked = false;
+        }
+    }
+
+    private void OnQueuePopupClosed(object? sender, EventArgs e)
+    {
+        _queuePopupClosedAt = DateTime.UtcNow;
+        _queueDragIndex = -1;
+        ClearQueueDropIndicators();
+    }
+
+    private void OnQueueListMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _queueDragStart = e.GetPosition(QueueListBox);
+        _queueDragIndex = -1;
+
+        // A press on the remove button is a click, not the start of a drag.
+        if (FindAncestor<System.Windows.Controls.Button>(e.OriginalSource as DependencyObject, QueueListBox) != null)
+        {
+            return;
+        }
+
+        var item = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject, QueueListBox);
+        if (item?.DataContext is QueueEntry entry)
+        {
+            _queueDragIndex = entry.Index;
+        }
+    }
+
+    private void OnQueueListMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_queueDragIndex < 0 || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(QueueListBox);
+        if (Math.Abs(position.X - _queueDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(position.Y - _queueDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        int dragIndex = _queueDragIndex;
+        _queueDragIndex = -1;
+
+        // StaysOpen=False closes the popup when it loses mouse capture, which the
+        // drag loop takes — pin it open for the duration of the drag.
+        QueuePopup.StaysOpen = true;
+        try
+        {
+            DragDrop.DoDragDrop(QueueListBox, dragIndex, System.Windows.DragDropEffects.Move);
+        }
+        finally
+        {
+            QueuePopup.StaysOpen = false;
+            ClearQueueDropIndicators();
+        }
+    }
+
+    private void OnQueueListDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(int)))
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = System.Windows.DragDropEffects.Move;
+        e.Handled = true;
+        ShowQueueDropIndicator(ComputeQueueInsertIndex(e));
+    }
+
+    private void OnQueueListDragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        ClearQueueDropIndicators();
+    }
+
+    private void OnQueueListDrop(object sender, System.Windows.DragEventArgs e)
+    {
+        ClearQueueDropIndicators();
+
+        if (e.Data.GetData(typeof(int)) is not int fromIndex ||
+            fromIndex < 0 || fromIndex >= _musicQueue.Count)
+        {
+            return;
+        }
+
+        int insertIndex = ComputeQueueInsertIndex(e);
+        if (insertIndex > fromIndex)
+        {
+            insertIndex--;
+        }
+
+        insertIndex = Math.Clamp(insertIndex, 0, _musicQueue.Count - 1);
+        if (insertIndex == fromIndex)
+        {
+            return;
+        }
+
+        string moved = _musicQueue[fromIndex];
+        _musicQueue.RemoveAt(fromIndex);
+        _musicQueue.Insert(insertIndex, moved);
+        UpdateQueueUi();
+        e.Handled = true;
+    }
+
+    private void OnQueueListDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (FindAncestor<System.Windows.Controls.Button>(e.OriginalSource as DependencyObject, QueueListBox) != null)
+        {
+            return;
+        }
+
+        if (QueueListBox.SelectedItem is not QueueEntry entry || !IsQueueEntryCurrent(entry))
+        {
+            return;
+        }
+
+        _musicQueue.RemoveAt(entry.Index);
+        UpdateQueueUi();
+
+        if (File.Exists(entry.Path))
+        {
+            PlayTrack(entry.Path);
+        }
+        else
+        {
+            MusicStatusText.Text = "Filen finns inte längre.";
+        }
+    }
+
+    private void OnQueueRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not QueueEntry entry || !IsQueueEntryCurrent(entry))
+        {
+            return;
+        }
+
+        _musicQueue.RemoveAt(entry.Index);
+        UpdateQueueUi();
+    }
+
+    /// <summary>Entries are rebuilt on every queue change; reject any that got stale anyway.</summary>
+    private bool IsQueueEntryCurrent(QueueEntry entry)
+    {
+        return entry.Index >= 0
+            && entry.Index < _musicQueue.Count
+            && string.Equals(_musicQueue[entry.Index], entry.Path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private int ComputeQueueInsertIndex(System.Windows.DragEventArgs e)
+    {
+        for (int i = 0; i < QueueListBox.Items.Count; i++)
+        {
+            if (QueueListBox.ItemContainerGenerator.ContainerFromIndex(i) is not ListBoxItem container)
+            {
+                continue;
+            }
+
+            var position = e.GetPosition(container);
+            if (position.Y < 0)
+            {
+                return i;
+            }
+
+            if (position.Y <= container.ActualHeight)
+            {
+                return position.Y < container.ActualHeight / 2 ? i : i + 1;
+            }
+        }
+
+        return QueueListBox.Items.Count;
+    }
+
+    private void ShowQueueDropIndicator(int insertIndex)
+    {
+        if (QueueListBox.ItemsSource is not List<QueueEntry> entries || entries.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            entry.SetDropIndicator(above: false, below: false);
+        }
+
+        if (insertIndex < entries.Count)
+        {
+            entries[insertIndex].SetDropIndicator(above: true, below: false);
+        }
+        else
+        {
+            entries[^1].SetDropIndicator(above: false, below: true);
+        }
+    }
+
+    private void ClearQueueDropIndicators()
+    {
+        if (QueueListBox.ItemsSource is not List<QueueEntry> entries)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            entry.SetDropIndicator(above: false, below: false);
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? node, DependencyObject stopAt) where T : DependencyObject
+    {
+        while (node != null && node != stopAt)
+        {
+            if (node is T match)
+            {
+                return match;
+            }
+
+            node = node is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+
+        return null;
     }
 
     private void OnMusicTrackEnded(object? sender, EventArgs e)
@@ -1451,6 +1692,59 @@ public partial class MainWindow : Window
         return devices.FirstOrDefault(device => device.Id == preferredId)
             ?? devices.FirstOrDefault(device => !LooksLikeVirtualCable(device))
             ?? devices.FirstOrDefault();
+    }
+
+    private sealed class QueueEntry : INotifyPropertyChanged
+    {
+        private Visibility _insertAboveVisibility = Visibility.Collapsed;
+        private Visibility _insertBelowVisibility = Visibility.Collapsed;
+
+        public QueueEntry(int index, string path)
+        {
+            Index = index;
+            Path = path;
+            Name = System.IO.Path.GetFileNameWithoutExtension(path);
+        }
+
+        /// <summary>0-based position in the queue at the time the list was built.</summary>
+        public int Index { get; }
+
+        public string Path { get; }
+
+        public string Name { get; }
+
+        public string NumberText => $"{Index + 1}.";
+
+        public Visibility InsertAboveVisibility
+        {
+            get => _insertAboveVisibility;
+            private set => SetField(ref _insertAboveVisibility, value, nameof(InsertAboveVisibility));
+        }
+
+        public Visibility InsertBelowVisibility
+        {
+            get => _insertBelowVisibility;
+            private set => SetField(ref _insertBelowVisibility, value, nameof(InsertBelowVisibility));
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void SetDropIndicator(bool above, bool below)
+        {
+            InsertAboveVisibility = above ? Visibility.Visible : Visibility.Collapsed;
+            InsertBelowVisibility = below ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void SetField<T>(ref T field, T value, string propertyName)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value))
+            {
+                return;
+            }
+
+            field = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 
     private sealed class TrackItem : INotifyPropertyChanged

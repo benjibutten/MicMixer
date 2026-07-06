@@ -53,6 +53,10 @@
         <Geometry x:Key="SearchIcon">M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z</Geometry>
         <!-- Close / clear icon -->
         <Geometry x:Key="CloseIcon">M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z</Geometry>
+        <!-- Chevron up icon (queue chip) -->
+        <Geometry x:Key="ChevronUpIcon">M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z</Geometry>
+        <!-- Drag handle icon (two dot columns) -->
+        <Geometry x:Key="DragHandleIcon">M9,3H11V5H9V3M13,3H15V5H13V3M9,8H11V10H9V8M13,8H15V10H13V8M9,13H11V15H9V13M13,13H15V15H13V13</Geometry>
 
         <!-- Shared icon style helper -->
         <Style x:Key="SectionIcon" TargetType="Path">
@@ -535,12 +539,103 @@
                         <TextBlock x:Name="MusicStatusText" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
                                    Text="Dubbelklicka på en låt för att spela. Musiken mixas med micen när routning är aktiv."/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock x:Name="QueueCountText" FontSize="10.5" Foreground="#7C3AED" FontWeight="SemiBold" Margin="8,0,0,0"
-                                       VerticalAlignment="Center" ToolTipService.ShowDuration="30000"/>
+                            <ToggleButton x:Name="QueueChipBtn" Visibility="Collapsed" Cursor="Hand" Margin="8,0,0,0"
+                                          Checked="OnQueueChipChecked" ToolTipService.ShowDuration="30000"
+                                          ToolTip="Visa kön — dra låtarna för att ändra ordning">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="ChipBg" Background="#EDE9FE" CornerRadius="8" Padding="7,2">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{TemplateBinding Content}" FontSize="10.5" FontWeight="SemiBold"
+                                                           Foreground="#7C3AED" VerticalAlignment="Center"/>
+                                                <Path Data="{StaticResource ChevronUpIcon}" Fill="#7C3AED" Width="9" Height="9"
+                                                      Stretch="Uniform" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ChipBg" Property="Background" Value="#DDD6FE"/>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="ChipBg" Property="Background" Value="#DDD6FE"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
                             <Button x:Name="ClearQueueBtn" Height="18" Width="18" Padding="0" Margin="4,0,0,0" Visibility="Collapsed"
                                     Click="OnClearQueueClick" ToolTip="Rensa kön" Background="Transparent" BorderThickness="0">
                                 <Path Data="{StaticResource CloseIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="10" Height="10"/>
                             </Button>
+                            <Popup x:Name="QueuePopup" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+                                   PlacementTarget="{Binding ElementName=QueueChipBtn}" Placement="Top"
+                                   IsOpen="{Binding IsChecked, ElementName=QueueChipBtn, Mode=TwoWay}"
+                                   Closed="OnQueuePopupClosed">
+                                <Border Background="White" BorderBrush="#C9D2DD" BorderThickness="1" CornerRadius="10" Padding="10" Margin="8">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.18"/>
+                                    </Border.Effect>
+                                    <Grid Width="300">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="Kommande låtar" FontWeight="SemiBold" FontSize="11.5" Foreground="#10233A" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Height="20" Padding="6,0" Click="OnClearQueueClick" Content="Rensa"
+                                                    FontSize="10.5" Background="#F3F4F6" Foreground="#6B7280" BorderBrush="#E5E7EB" BorderThickness="1"/>
+                                        </Grid>
+                                        <ListBox x:Name="QueueListBox" Grid.Row="1" MaxHeight="250" BorderThickness="0" Background="Transparent"
+                                                 FontSize="11.5" AllowDrop="True"
+                                                 VirtualizingPanel.IsVirtualizing="False"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 PreviewMouseLeftButtonDown="OnQueueListMouseDown"
+                                                 PreviewMouseMove="OnQueueListMouseMove"
+                                                 DragOver="OnQueueListDragOver" Drop="OnQueueListDrop" DragLeave="OnQueueListDragLeave"
+                                                 MouseDoubleClick="OnQueueListDoubleClick">
+                                            <ListBox.ItemContainerStyle>
+                                                <Style TargetType="ListBoxItem">
+                                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                    <Setter Property="Padding" Value="2,0"/>
+                                                </Style>
+                                            </ListBox.ItemContainerStyle>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel>
+                                                        <Border Height="2" Background="#7C3AED" CornerRadius="1" Visibility="{Binding InsertAboveVisibility}"/>
+                                                        <Grid Margin="0,3">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Path Data="{StaticResource DragHandleIcon}" Fill="#C4B5FD" Width="10" Height="12"
+                                                                  Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0" Cursor="SizeAll"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding NumberText}" Foreground="#7C3AED" FontWeight="SemiBold"
+                                                                       MinWidth="18" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                            <Button Grid.Column="3" Width="18" Height="18" Padding="0" Margin="6,0,0,0"
+                                                                    Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                                    Click="OnQueueRemoveClick" Tag="{Binding}" ToolTip="Ta bort ur kön">
+                                                                <Path Data="{StaticResource CloseIcon}" Fill="#9CA3AF" Width="9" Height="9" Stretch="Uniform"/>
+                                                            </Button>
+                                                        </Grid>
+                                                        <Border Height="2" Background="#7C3AED" CornerRadius="1" Visibility="{Binding InsertBelowVisibility}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="10" Foreground="#9CA3AF" TextWrapping="Wrap"
+                                                   Text="Dra för att ändra ordning · Dubbelklick spelar direkt"/>
+                                    </Grid>
+                                </Border>
+                            </Popup>
                         </StackPanel>
                     </Grid>
                 </Grid>
