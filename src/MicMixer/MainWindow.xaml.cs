@@ -115,6 +115,7 @@ public partial class MainWindow : Window
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
         _isUpdatingMusicUi = false;
         UpdateVolumePercentTexts();
+        _playlist.CustomFolder = _settings.MusicFolderPath;
         RefreshPlaylist(null);
 
         _musicTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -601,6 +602,7 @@ public partial class MainWindow : Window
         _settings.MonitorEnabled = MonitorEnabledCheck.IsChecked == true;
         _settings.MusicVolume = (float)MusicVolumeSlider.Value;
         _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
+        _settings.MusicFolderPath = _playlist.CustomFolder;
 
         try
         {
@@ -1427,6 +1429,69 @@ public partial class MainWindow : Window
         {
             Log.Warning(ex, "Failed to open music folder.");
         }
+    }
+
+    private void OnMusicFolderOptionsClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = MusicFolderOptionsBtn,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom
+        };
+
+        // TextBlock as header so underscores in folder paths aren't eaten as access keys.
+        menu.Items.Add(new System.Windows.Controls.MenuItem
+        {
+            Header = new TextBlock
+            {
+                Text = _playlist.UsesCustomFolder
+                    ? $"Egen mapp: {_playlist.MusicFolder}"
+                    : "Standardmappen används"
+            },
+            IsEnabled = false
+        });
+        menu.Items.Add(new Separator());
+
+        var pickItem = new System.Windows.Controls.MenuItem { Header = "Välj annan musikmapp…" };
+        pickItem.Click += (_, _) => PickMusicFolder();
+        menu.Items.Add(pickItem);
+
+        if (_playlist.UsesCustomFolder)
+        {
+            var resetItem = new System.Windows.Controls.MenuItem { Header = "Använd standardmappen igen" };
+            resetItem.Click += (_, _) => SetMusicFolder(null);
+            menu.Items.Add(resetItem);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private void PickMusicFolder()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Välj mapp med MP3-filer"
+        };
+
+        if (Directory.Exists(_playlist.MusicFolder))
+        {
+            dialog.InitialDirectory = _playlist.MusicFolder;
+        }
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            SetMusicFolder(dialog.FolderName);
+        }
+    }
+
+    private void SetMusicFolder(string? folder)
+    {
+        _playlist.CustomFolder = folder;
+        SaveSettings();
+        RefreshPlaylist(null);
+        MusicStatusText.Text = folder is null
+            ? "Använder standardmusikmappen igen."
+            : $"Musikmapp: {folder}";
     }
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e)

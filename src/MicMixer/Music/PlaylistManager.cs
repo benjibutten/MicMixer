@@ -4,10 +4,16 @@ namespace MicMixer.Music;
 
 public sealed class PlaylistManager
 {
-    public string MusicFolder { get; } = Path.Combine(
+    public static string DefaultMusicFolder { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MicMixer",
         "Music");
+
+    public string? CustomFolder { get; set; }
+
+    public bool UsesCustomFolder => !string.IsNullOrWhiteSpace(CustomFolder);
+
+    public string MusicFolder => UsesCustomFolder ? CustomFolder! : DefaultMusicFolder;
 
     public IReadOnlyList<string> GetTracks()
     {

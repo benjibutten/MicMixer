@@ -21,4 +21,6 @@ public sealed class AppSettings
     public float MusicVolume { get; set; } = 0.5f;
 
     public float MonitorVolume { get; set; } = 0.5f;
+
+    public string? MusicFolderPath { get; set; }
 }
