@@ -43,6 +43,10 @@ public partial class MainWindow : Window
     private string? _lastPlayedTrackPath;
     private string? _acknowledgedNonCableOutputId;
     private bool _musicWasAutoPaused;
+    private ProcessLoopbackCapture? _appCapture;
+    private AudioAppOption? _captureTarget;
+    private bool _isExternalMode;
+    private bool _isCaptureStarting;
     private bool _isSeekDragging;
     private bool _isUpdatingMusicUi;
     private bool _isDownloading;
@@ -117,6 +121,19 @@ public partial class MainWindow : Window
         UpdateVolumePercentTexts();
         _playlist.CustomFolder = _settings.MusicFolderPath;
         RefreshPlaylist(null);
+
+        // Restore the music source mode without letting the radio handler run
+        // (it would save settings before the device combos are populated).
+        _isExternalMode = _settings.ExternalCaptureMode;
+        _isUpdatingMusicUi = true;
+        ExternalModeRadio.IsChecked = _isExternalMode;
+        LibraryModeRadio.IsChecked = !_isExternalMode;
+        _isUpdatingMusicUi = false;
+        ApplyMusicModeUi();
+        if (_isExternalMode)
+        {
+            _ = RefreshAudioAppsAsync();
+        }
 
         _musicTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _musicTimer.Tick += OnMusicTimerTick;
@@ -371,7 +388,7 @@ public partial class MainWindow : Window
                 SetHotkeyMonitoringEnabled(true);
             }
 
-            ToggleBtnText.Text = "Stoppa";
+            ToggleBtnText.Text = "Stoppa routning";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
@@ -379,6 +396,7 @@ public partial class MainWindow : Window
             SaveSettings();
             UpdateStatusText();
             ResumeMusicIfAutoPaused();
+            UpdateExternalCaptureStatusText();
         }
         else
         {
@@ -416,6 +434,7 @@ public partial class MainWindow : Window
         }
 
         UpdateStatusText();
+        UpdateExternalCaptureStatusText();
     }
 
     private void OnRouterError(object? sender, string message)
@@ -436,6 +455,13 @@ public partial class MainWindow : Window
 
     private void OnLevelTimerTick(object? sender, EventArgs e)
     {
+        if (_appCapture is { } capture)
+        {
+            // Peak-hold with decay so short transients stay visible.
+            float peak = capture.ReadAndResetPeak();
+            CaptureLevelMeter.Value = Math.Min(1d, Math.Max(peak, CaptureLevelMeter.Value * 0.82));
+        }
+
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
@@ -580,6 +606,7 @@ public partial class MainWindow : Window
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _router.Dispose();
+        _appCapture?.Dispose();
         _music.Dispose();
         _hotkeyListener.Dispose();
     }
@@ -599,10 +626,21 @@ public partial class MainWindow : Window
         _settings.HotkeyId = _hotkeyBinding.SerializedValue;
         _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
         _settings.MusicMonitorDeviceId = (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
-        _settings.MonitorEnabled = MonitorEnabledCheck.IsChecked == true;
+
+        // The checkbox is force-unchecked in external mode; keep the stored
+        // preference so it comes back when the user returns to library mode.
+        if (!_isExternalMode)
+        {
+            _settings.MonitorEnabled = MonitorEnabledCheck.IsChecked == true;
+        }
         _settings.MusicVolume = (float)MusicVolumeSlider.Value;
         _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
         _settings.MusicFolderPath = _playlist.CustomFolder;
+        _settings.ExternalCaptureMode = _isExternalMode;
+        if ((ExternalAppCombo.SelectedItem as AudioAppOption)?.ProcessName is string externalAppName)
+        {
+            _settings.ExternalAppName = externalAppName;
+        }
 
         try
         {
@@ -910,6 +948,14 @@ public partial class MainWindow : Window
 
     private void UpdateMusicUi()
     {
+        if (_isExternalMode)
+        {
+            // Transport steers the external app via media keys; there is no local
+            // play state or position to reflect.
+            PlayPauseIcon.Data = (Geometry)FindResource("PlayPauseGlyph");
+            return;
+        }
+
         var duration = _music.Duration;
         var position = _music.Position;
 
@@ -1096,7 +1142,7 @@ public partial class MainWindow : Window
 
     private void UpdateQueueUi()
     {
-        if (_musicQueue.Count > 0)
+        if (_musicQueue.Count > 0 && !_isExternalMode)
         {
             QueueChipBtn.Content = $"Kö: {_musicQueue.Count}";
             QueueChipBtn.Visibility = Visibility.Visible;
@@ -1494,8 +1540,309 @@ public partial class MainWindow : Window
             : $"Musikmapp: {folder}";
     }
 
+    // --- External app capture (Spotify m.fl.) ---
+
+    private static readonly System.Windows.Media.Brush CaptureActiveBrush = CreateFrozenBrush(0x0F, 0x76, 0x6E);
+    private static readonly System.Windows.Media.Brush CaptureIdleBrush = CreateFrozenBrush(0x9C, 0xA3, 0xAF);
+
+    // The capture toggle deliberately uses the music panel's purple accent (never the
+    // routing button's dark navy) so "sluta fånga appens ljud" can't be mistaken for
+    // "stoppa routningen" — field testers mixed the two up when both were dark "Stoppa".
+    private static readonly System.Windows.Media.Brush CaptureAccentBrush = CreateFrozenBrush(0x7C, 0x3A, 0xED);
+    private static readonly System.Windows.Media.Brush CaptureAccentTintBrush = CreateFrozenBrush(0xED, 0xE9, 0xFE);
+    private static readonly System.Windows.Media.Brush CaptureAccentTintBorderBrush = CreateFrozenBrush(0xDD, 0xD6, 0xFE);
+
+    private const string CaptureIdleHint =
+        "Välj appen som spelar musik (t.ex. Spotify) och klicka Fånga ljud. Du styr uppspelningen i appen som vanligt — ljudet mixas in i mic-kanalen.";
+    private const string CaptureActiveHint =
+        "Spela, pausa och byt låt i appen som vanligt. Musikvolymen nedan styr hur högt andra hör ljudet — du hör appen direkt, precis som annars.";
+
+    private static System.Windows.Media.Brush CreateFrozenBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    private void OnMusicModeChanged(object sender, RoutedEventArgs e)
+    {
+        // Fires during InitializeComponent (before ExternalModeRadio exists) and
+        // during programmatic restore; both must not re-enter the switch logic.
+        if (_isUpdatingMusicUi || ExternalModeRadio == null || LibraryModeRadio == null)
+        {
+            return;
+        }
+
+        bool external = ExternalModeRadio.IsChecked == true;
+        if (external == _isExternalMode)
+        {
+            return;
+        }
+
+        _isExternalMode = external;
+
+        if (external)
+        {
+            // Local playback cannot follow into app mode; stop it cleanly.
+            _music.Stop();
+            _musicWasAutoPaused = false;
+            MusicStatusText.Text = "Välj appen som spelar musik och starta ljudinfångningen.";
+            _ = RefreshAudioAppsAsync();
+        }
+        else
+        {
+            StopAppCapture();
+            MusicStatusText.Text = "Dubbelklicka på en låt för att spela. Musiken mixas med micen när routning är aktiv.";
+        }
+
+        ApplyMusicModeUi();
+        _ = ApplyMonitorConfigAsync();
+        SaveSettings();
+        UpdateMusicUi();
+    }
+
+    private void ApplyMusicModeUi()
+    {
+        bool external = _isExternalMode;
+        var libraryVisibility = external ? Visibility.Collapsed : Visibility.Visible;
+
+        YoutubeRow.Visibility = libraryVisibility;
+        SearchRow.Visibility = libraryVisibility;
+        PlaylistRow.Visibility = libraryVisibility;
+        ExternalPanel.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
+
+        if (external)
+        {
+            DownloadStatusRow.Visibility = Visibility.Collapsed;
+            QueuePopup.IsOpen = false;
+        }
+        else if (_isDownloading)
+        {
+            DownloadStatusRow.Visibility = Visibility.Visible;
+        }
+
+        SeekSlider.Visibility = libraryVisibility;
+        TrackTimeText.Visibility = libraryVisibility;
+        ExternalTransportHint.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
+
+        // Monitoring is pointless in external mode (the user hears the app directly),
+        // so reflect that fully: unchecked and grayed out, restored from settings on
+        // the way back. SaveSettings skips MonitorEnabled while external, so the
+        // user's real preference survives the round trip.
+        _isUpdatingMusicUi = true;
+        MonitorEnabledCheck.IsChecked = !external && _settings.MonitorEnabled;
+        _isUpdatingMusicUi = false;
+        MonitorEnabledCheck.IsEnabled = !external;
+        MonitorDeviceCombo.IsEnabled = !external;
+        MonitorVolumeSlider.IsEnabled = !external;
+
+        UpdateQueueUi();
+        UpdateCaptureUi();
+    }
+
+    private void OnRefreshAudioAppsClick(object sender, RoutedEventArgs e)
+    {
+        if (_appCapture != null || _isCaptureStarting)
+        {
+            return;
+        }
+
+        _ = RefreshAudioAppsAsync();
+    }
+
+    private async Task RefreshAudioAppsAsync()
+    {
+        IReadOnlyList<AudioAppOption> apps;
+        try
+        {
+            apps = await Task.Run(AudioAppEnumerator.GetAudioApps);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to enumerate audio apps.");
+            MusicStatusText.Text = $"Kunde inte lista appar med ljud: {ex.Message}";
+            return;
+        }
+
+        string? preferredName = (ExternalAppCombo.SelectedItem as AudioAppOption)?.ProcessName
+            ?? _settings.ExternalAppName;
+
+        ExternalAppCombo.ItemsSource = apps;
+        ExternalAppCombo.SelectedItem =
+            apps.FirstOrDefault(app => string.Equals(app.ProcessName, preferredName, StringComparison.OrdinalIgnoreCase))
+            ?? apps.FirstOrDefault(app => app.ProcessName.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+            ?? apps.FirstOrDefault(app => app.IsPlaying)
+            ?? apps.FirstOrDefault();
+
+        if (apps.Count == 0)
+        {
+            MusicStatusText.Text = "Inga appar med ljud hittades — starta t.ex. Spotify, spela något kort och uppdatera.";
+        }
+    }
+
+    private async void OnCaptureToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (_isCaptureStarting)
+        {
+            return;
+        }
+
+        if (_appCapture != null)
+        {
+            StopAppCapture();
+            MusicStatusText.Text = "Ljudinfångning stoppad.";
+            return;
+        }
+
+        if (!ProcessLoopbackCapture.IsSupported)
+        {
+            MusicStatusText.Text = "Ljudinfångning per app kräver Windows 10 version 2004 eller senare.";
+            return;
+        }
+
+        if (ExternalAppCombo.SelectedItem is not AudioAppOption app)
+        {
+            MusicStatusText.Text = "Välj först appen som spelar musik.";
+            return;
+        }
+
+        _isCaptureStarting = true;
+        UpdateCaptureUi();
+
+        var capture = new ProcessLoopbackCapture(app.ProcessId);
+        capture.Error += OnCaptureError;
+
+        try
+        {
+            await Task.Run(capture.Start);
+
+            // The user may have switched back to library mode while the capture
+            // was starting; don't hijack the engine's playback chain in that case.
+            if (!_isExternalMode)
+            {
+                capture.Error -= OnCaptureError;
+                capture.Dispose();
+                return;
+            }
+
+            _music.SetExternalSource(capture.SampleProvider!);
+            _appCapture = capture;
+            _captureTarget = app;
+            SaveSettings();
+            UpdateExternalCaptureStatusText();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to start process loopback capture for {App} (PID {ProcessId}).", app.DisplayName, app.ProcessId);
+            capture.Error -= OnCaptureError;
+            capture.Dispose();
+            MusicStatusText.Text = $"Kunde inte fånga ljudet från {app.DisplayName}: {ex.Message}";
+        }
+        finally
+        {
+            _isCaptureStarting = false;
+            UpdateCaptureUi();
+        }
+    }
+
+    /// <summary>
+    /// Keeps the capture status honest when routing starts or stops: "starta
+    /// routningen så att andra hör" must not linger once routing is running.
+    /// </summary>
+    private void UpdateExternalCaptureStatusText()
+    {
+        if (!_isExternalMode || _appCapture == null || _captureTarget is not { } target)
+        {
+            return;
+        }
+
+        MusicStatusText.Text = _router.IsRouting
+            ? $"Fångar ljud från {target.DisplayName}."
+            : $"Fångar ljud från {target.DisplayName} — starta routningen så att andra hör.";
+    }
+
+    private void StopAppCapture()
+    {
+        var capture = _appCapture;
+        _appCapture = null;
+        _captureTarget = null;
+
+        if (capture != null)
+        {
+            _music.ClearExternalSource();
+            capture.Error -= OnCaptureError;
+            capture.Dispose();
+        }
+
+        UpdateCaptureUi();
+    }
+
+    private void OnCaptureError(object? sender, string message)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!ReferenceEquals(sender, _appCapture))
+            {
+                return;
+            }
+
+            StopAppCapture();
+            MusicStatusText.Text = message;
+        });
+    }
+
+    private void UpdateCaptureUi()
+    {
+        bool capturing = _appCapture != null;
+
+        CaptureToggleBtn.IsEnabled = !_isCaptureStarting;
+        ExternalAppCombo.IsEnabled = !capturing && !_isCaptureStarting;
+
+        if (_isCaptureStarting)
+        {
+            CaptureToggleText.Text = "Startar…";
+            CaptureStateText.Text = "Startar ljudinfångning…";
+            return;
+        }
+
+        if (capturing)
+        {
+            // Light purple "quiet" state while active: clearly not the dark routing button.
+            CaptureToggleText.Text = "Sluta fånga";
+            CaptureToggleIcon.Data = (Geometry)FindResource("StopIcon");
+            CaptureToggleIcon.Fill = CaptureAccentBrush;
+            CaptureToggleBtn.Background = CaptureAccentTintBrush;
+            CaptureToggleBtn.BorderBrush = CaptureAccentTintBorderBrush;
+            CaptureToggleBtn.Foreground = CaptureAccentBrush;
+            CaptureStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
+            CaptureStateIcon.Fill = CaptureActiveBrush;
+            CaptureStateText.Text = $"Fångar ljud från {_captureTarget?.DisplayName}";
+            CaptureHintText.Text = CaptureActiveHint;
+        }
+        else
+        {
+            CaptureToggleText.Text = "Fånga ljud";
+            CaptureToggleIcon.Data = (Geometry)FindResource("PlayIcon");
+            CaptureToggleIcon.Fill = System.Windows.Media.Brushes.White;
+            CaptureToggleBtn.Background = CaptureAccentBrush;
+            CaptureToggleBtn.BorderBrush = CaptureAccentBrush;
+            CaptureToggleBtn.Foreground = System.Windows.Media.Brushes.White;
+            CaptureStateIcon.Data = (Geometry)FindResource("CircleOffIcon");
+            CaptureStateIcon.Fill = CaptureIdleBrush;
+            CaptureStateText.Text = "Ingen ljudinfångning";
+            CaptureHintText.Text = CaptureIdleHint;
+            CaptureLevelMeter.Value = 0;
+        }
+    }
+
     private void OnPlayPauseClick(object sender, RoutedEventArgs e)
     {
+        if (_isExternalMode)
+        {
+            MediaKeySender.SendPlayPause();
+            return;
+        }
+
         if (_music.IsPlaying)
         {
             _music.Pause();
@@ -1544,6 +1891,12 @@ public partial class MainWindow : Window
 
     private void OnPrevTrackClick(object sender, RoutedEventArgs e)
     {
+        if (_isExternalMode)
+        {
+            MediaKeySender.SendPreviousTrack();
+            return;
+        }
+
         if (!_music.HasTrack)
         {
             return;
@@ -1573,6 +1926,12 @@ public partial class MainWindow : Window
 
     private void OnNextTrackClick(object sender, RoutedEventArgs e)
     {
+        if (_isExternalMode)
+        {
+            MediaKeySender.SendNextTrack();
+            return;
+        }
+
         PlayNextTrack();
     }
 
@@ -1653,7 +2012,9 @@ public partial class MainWindow : Window
 
     private async Task ApplyMonitorConfigAsync()
     {
-        bool enabled = MonitorEnabledCheck.IsChecked == true;
+        // In external mode the user already hears the app directly; monitoring
+        // would double the audio with an offset.
+        bool enabled = MonitorEnabledCheck.IsChecked == true && !_isExternalMode;
         string? deviceId = enabled ? (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id : null;
 
         try

@@ -59,6 +59,40 @@
         <Geometry x:Key="ChevronUpIcon">M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z</Geometry>
         <!-- Drag handle icon (two dot columns) -->
         <Geometry x:Key="DragHandleIcon">M9,3H11V5H9V3M13,3H15V5H13V3M9,8H11V10H9V8M13,8H15V10H13V8M9,13H11V15H9V13M13,13H15V15H13V13</Geometry>
+        <!-- Play/pause combined glyph (media key transport in external mode) -->
+        <Geometry x:Key="PlayPauseGlyph">M3,5V19L11,12M13,19H16V5H13M18,5V19H21V5</Geometry>
+
+        <!-- Segmented mode switch (music source) -->
+        <Style x:Key="ModeSegment" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#5B6B7C"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="SegmentBg" Background="Transparent" CornerRadius="6" Padding="10,4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#10233A"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SegmentBg" Property="Background" Value="White"/>
+                                <Setter Property="Foreground" Value="#10233A"/>
+                                <Setter TargetName="SegmentBg" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.12"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- Shared icon style helper -->
         <Style x:Key="SectionIcon" TargetType="Path">
@@ -334,6 +368,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -359,7 +394,7 @@
                                             <TextBlock Style="{StaticResource TipBody}"
                                                        Text="Musiken mixas in i mic-kanalen tillsammans med din röst, så att andra hör den — så länge en låt spelas och routningen är aktiv."/>
                                             <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                       Text="Hämta låtar genom att klistra in en YouTube-länk, eller lägg egna MP3-filer i musikmappen (mappikonen till höger). Via kugghjulet kan du peka appen mot en egen MP3-mapp någon annanstans på datorn."/>
+                                                       Text="I läget MP3 / YouTube hämtar du låtar via YouTube-länk eller lägger egna MP3-filer i musikmappen (mappikonen till höger; kugghjulet låter dig välja en egen mapp). I läget Spotify / annan app fångas ljudet från en app som spelar musik och mixas in direkt."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </Border.ToolTip>
@@ -367,8 +402,8 @@
                         </StackPanel>
                         <CheckBox x:Name="MonitorEnabledCheck" Grid.Column="1" VerticalAlignment="Center" FontSize="11.5" Foreground="#10233A"
                                   Checked="OnMonitorConfigChanged" Unchecked="OnMonitorConfigChanged"
-                                  ToolTipService.ShowDuration="60000"
-                                  ToolTip="Spela musiken även i dina egna hörlurar/högtalare, så att du själv hör vad som spelas. Påverkar inte vad andra hör.">
+                                  ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True"
+                                  ToolTip="Spela musiken även i dina egna hörlurar/högtalare, så att du själv hör vad som spelas. Påverkar inte vad andra hör. I app-läget behövs ingen medhörning — du hör appen direkt.">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource HeadphonesIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,4,0"/>
                                 <TextBlock Text="Medhörning" VerticalAlignment="Center"/>
@@ -380,8 +415,20 @@
                                   ToolTip="Utgången där du själv vill höra musiken — välj dina hörlurar eller högtalare, inte den virtuella kabeln. Andra hör musiken via mic-kanalen oavsett."/>
                     </Grid>
 
+                    <!-- Source mode switch: local library vs external app capture -->
+                    <Border Grid.Row="1" Margin="0,0,0,8" Background="#E8EEF5" CornerRadius="8" Padding="2">
+                        <UniformGrid Rows="1" Columns="2">
+                            <RadioButton x:Name="LibraryModeRadio" Style="{StaticResource ModeSegment}" GroupName="MusicMode"
+                                         IsChecked="True" Checked="OnMusicModeChanged" Content="MP3 / YouTube"
+                                         ToolTip="Spela nedladdade MP3-filer från musikmappen."/>
+                            <RadioButton x:Name="ExternalModeRadio" Style="{StaticResource ModeSegment}" GroupName="MusicMode"
+                                         Checked="OnMusicModeChanged" Content="Spotify / annan app"
+                                         ToolTip="Fånga ljudet från en app som spelar musik (t.ex. Spotify) och mixa in det i mic-kanalen. Du styr uppspelningen i appen."/>
+                        </UniformGrid>
+                    </Border>
+
                     <!-- YouTube URL row -->
-                    <Grid Grid.Row="1" Margin="0,0,0,6">
+                    <Grid x:Name="YoutubeRow" Grid.Row="2" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -403,7 +450,7 @@
                     </Grid>
 
                     <!-- Download progress -->
-                    <Grid Grid.Row="2" x:Name="DownloadStatusRow" Visibility="Collapsed" Margin="0,0,0,6">
+                    <Grid Grid.Row="3" x:Name="DownloadStatusRow" Visibility="Collapsed" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -414,7 +461,7 @@
                     </Grid>
 
                     <!-- Search / filter -->
-                    <Grid Grid.Row="3" Margin="0,0,0,6">
+                    <Grid x:Name="SearchRow" Grid.Row="4" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -429,7 +476,7 @@
                     </Grid>
 
                     <!-- Playlist (fills remaining height) -->
-                    <Grid Grid.Row="4" Margin="0,0,0,8">
+                    <Grid x:Name="PlaylistRow" Grid.Row="5" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -485,8 +532,60 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- External app capture (replaces the library rows in external mode) -->
+                    <Grid x:Name="ExternalPanel" Grid.Row="2" Grid.RowSpan="4" Margin="0,0,0,8" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- App picker + capture toggle -->
+                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="ExternalAppCombo" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
+                                      DisplayMemberPath="FriendlyName" ToolTipService.ShowDuration="60000"
+                                      ToolTip="Appar som har en ljudkanal just nu. Saknas din app? Starta den, spela något kort och uppdatera listan."/>
+                            <Button Grid.Column="1" Height="28" Width="28" Margin="6,0,0,0" Padding="0"
+                                    Click="OnRefreshAudioAppsClick" ToolTip="Uppdatera applistan"
+                                    Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                                <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
+                            </Button>
+                            <Button x:Name="CaptureToggleBtn" Grid.Column="2" Height="28" Margin="8,0,0,0" Padding="10,0"
+                                    Click="OnCaptureToggleClick" FontSize="11.5" FontWeight="SemiBold"
+                                    Background="#7C3AED" Foreground="White" BorderBrush="#7C3AED" BorderThickness="1"
+                                    ToolTipService.ShowDuration="60000"
+                                    ToolTip="Startar eller stoppar bara ljudinfångningen från appen. Routningen (knappen uppe till höger) påverkas inte.">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path x:Name="CaptureToggleIcon" Data="{StaticResource PlayIcon}" Fill="White"
+                                          Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,6,0"/>
+                                    <TextBlock x:Name="CaptureToggleText" Text="Fånga ljud" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <!-- Capture status card -->
+                        <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1" CornerRadius="8" Padding="16">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Path x:Name="CaptureStateIcon" Data="{StaticResource CircleOffIcon}" Fill="#9CA3AF"
+                                      Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="CaptureStateText" Text="Ingen ljudinfångning" FontWeight="SemiBold" FontSize="12.5"
+                                           Foreground="#10233A" HorizontalAlignment="Center" TextAlignment="Center"
+                                           TextWrapping="Wrap" MaxWidth="340"/>
+                                <ProgressBar x:Name="CaptureLevelMeter" Width="220" Height="8" Minimum="0" Maximum="1"
+                                             Margin="0,10,0,0" Foreground="#7C3AED" Background="#E5E7EB"/>
+                                <TextBlock x:Name="CaptureHintText" Margin="0,10,0,0" FontSize="10.5" Foreground="#9CA3AF"
+                                           TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
+                                           Text="Välj appen som spelar musik (t.ex. Spotify) och klicka Fånga ljud. Du styr uppspelningen i appen som vanligt — ljudet mixas in i mic-kanalen."/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
                     <!-- Transport -->
-                    <Grid Grid.Row="5" Margin="0,0,0,6">
+                    <Grid Grid.Row="6" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -509,12 +608,15 @@
                         <Slider x:Name="SeekSlider" Grid.Column="3" Margin="12,0,8,0" VerticalAlignment="Center"
                                 Minimum="0" Maximum="1" IsMoveToPointEnabled="True"
                                 Thumb.DragStarted="OnSeekDragStarted" Thumb.DragCompleted="OnSeekDragCompleted" ValueChanged="OnSeekValueChanged"/>
+                        <TextBlock x:Name="ExternalTransportHint" Grid.Column="3" Margin="12,0,8,0" VerticalAlignment="Center"
+                                   FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap" Visibility="Collapsed"
+                                   Text="Knapparna skickar medietangenter till appen som spelar."/>
                         <TextBlock x:Name="TrackTimeText" Grid.Column="4" Text="0:00 / 0:00" FontSize="11" Foreground="#6B7280"
                                    VerticalAlignment="Center" MinWidth="76" TextAlignment="Right"/>
                     </Grid>
 
                     <!-- Volumes (drag only — no jump on track click) -->
-                    <Grid Grid.Row="6">
+                    <Grid Grid.Row="7">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -539,7 +641,7 @@
                     </Grid>
 
                     <!-- Now playing + hints -->
-                    <Grid Grid.Row="7" Margin="0,6,0,0">
+                    <Grid Grid.Row="8" Margin="0,6,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
