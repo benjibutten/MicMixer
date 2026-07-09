@@ -37,6 +37,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private ISampleProvider? _playbackChain;
     private string? _currentTrackPath;
     private bool _isPaused;
+    private bool _isExternalSource;
     private bool _disposed;
 
     private WasapiOut? _monitorOut;
@@ -80,6 +81,11 @@ public sealed class MusicPlaybackEngine : IDisposable
     public bool HasMonitorOutput
     {
         get { lock (_syncRoot) return _monitorOut != null; }
+    }
+
+    public bool IsExternalSourceActive
+    {
+        get { lock (_syncRoot) return _isExternalSource; }
     }
 
     public string? CurrentTrackPath
@@ -141,10 +147,49 @@ public sealed class MusicPlaybackEngine : IDisposable
             _playbackChain = FormatNormalizer.Normalize(newReader, InternalSampleRate, InternalChannels);
             _currentTrackPath = path;
             _isPaused = false;
+            _isExternalSource = false;
             _mixBuffer.ClearBuffer();
         }
 
         oldReader?.Dispose();
+    }
+
+    /// <summary>
+    /// Replaces file playback with a live external source (e.g. process loopback capture).
+    /// The source may return short reads; the pipeline heads fill the remainder with
+    /// silence, and it is never treated as "track ended".
+    /// </summary>
+    public void SetExternalSource(ISampleProvider source)
+    {
+        AudioFileReader? oldReader;
+
+        lock (_syncRoot)
+        {
+            oldReader = _reader;
+            _reader = null;
+            _playbackChain = FormatNormalizer.Normalize(source, InternalSampleRate, InternalChannels);
+            _currentTrackPath = null;
+            _isPaused = false;
+            _isExternalSource = true;
+            _mixBuffer.ClearBuffer();
+        }
+
+        oldReader?.Dispose();
+    }
+
+    public void ClearExternalSource()
+    {
+        lock (_syncRoot)
+        {
+            if (!_isExternalSource)
+            {
+                return;
+            }
+
+            _isExternalSource = false;
+            _playbackChain = null;
+            _mixBuffer.ClearBuffer();
+        }
     }
 
     public void Pause()
@@ -180,6 +225,7 @@ public sealed class MusicPlaybackEngine : IDisposable
             _playbackChain = null;
             _currentTrackPath = null;
             _isPaused = false;
+            _isExternalSource = false;
             _mixBuffer.ClearBuffer();
         }
 
@@ -400,14 +446,16 @@ public sealed class MusicPlaybackEngine : IDisposable
 
         lock (_syncRoot)
         {
-            if (_reader == null || _playbackChain == null || _isPaused)
+            if (_playbackChain == null || _isPaused)
             {
                 return 0;
             }
 
             samplesRead = _playbackChain.Read(buffer, offset, count);
 
-            if (samplesRead == 0)
+            // A short read from an external source just means "nothing captured yet";
+            // only file playback interprets an empty read as end of track.
+            if (samplesRead == 0 && _reader != null)
             {
                 endedReader = _reader;
                 _reader = null;
