@@ -22,6 +22,8 @@ public sealed class AppSettings
 
     public float MonitorVolume { get; set; } = 0.5f;
 
+    public bool LinkVolumes { get; set; }
+
     public string? MusicFolderPath { get; set; }
 
     public bool ExternalCaptureMode { get; set; }
