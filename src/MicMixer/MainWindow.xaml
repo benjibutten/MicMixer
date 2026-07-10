@@ -5,8 +5,7 @@
         ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
         Background="#F3F5F7"
         PreviewKeyDown="OnPreviewHotkeyKeyDown"
-        PreviewMouseDown="OnPreviewHotkeyMouseDown"
-        StateChanged="OnWindowStateChanged">
+        PreviewMouseDown="OnPreviewHotkeyMouseDown">
 
     <Window.Resources>
         <!-- Mic icon (clean cardioid mic outline) -->
@@ -61,6 +60,8 @@
         <Geometry x:Key="DragHandleIcon">M9,3H11V5H9V3M13,3H15V5H13V3M9,8H11V10H9V8M13,8H15V10H13V8M9,13H11V15H9V13M13,13H15V15H13V13</Geometry>
         <!-- Play/pause combined glyph (media key transport in external mode) -->
         <Geometry x:Key="PlayPauseGlyph">M3,5V19L11,12M13,19H16V5H13M18,5V19H21V5</Geometry>
+        <!-- Chain link icon (volume sync) -->
+        <Geometry x:Key="LinkIcon">M3.9,12C3.9,10.29 5.29,8.9 7,8.9H11V7H7A5,5 0 0,0 2,12A5,5 0 0,0 7,17H11V15.1H7C5.29,15.1 3.9,13.71 3.9,12M8,13H16V11H8V13M17,7H13V8.9H17C18.71,8.9 20.1,10.29 20.1,12C20.1,13.71 18.71,15.1 17,15.1H13V17H17A5,5 0 0,0 22,12A5,5 0 0,0 17,7Z</Geometry>
 
         <!-- Segmented mode switch (music source) -->
         <Style x:Key="ModeSegment" TargetType="RadioButton">
@@ -621,7 +622,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -632,6 +633,31 @@
                                 ValueChanged="OnMusicVolumeChanged" ToolTip="Hur högt musiken hörs för andra (i mic-kanalen)"/>
                         <TextBlock x:Name="MusicVolumePercentText" Grid.Column="2" Text="50 %" FontSize="11" Foreground="#10233A"
                                    FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
+                        <ToggleButton x:Name="VolumeLinkToggle" Grid.Column="3" Width="24" Height="24" Margin="6,0" Cursor="Hand"
+                                      Checked="OnVolumeLinkChanged" Unchecked="OnVolumeLinkChanged"
+                                      ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True"
+                                      ToolTip="Synka volymerna — dra i ena reglaget så följer det andra med och behåller skillnaden mellan dem. Når ett reglage 0 eller max stannar det där, men skillnaden kommer tillbaka när du drar åt andra hållet.">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="LinkBg" Background="Transparent" CornerRadius="6">
+                                        <Path x:Name="LinkIconPath" Data="{StaticResource LinkIcon}" Fill="#9CA3AF" Width="14" Height="14"
+                                              Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="LinkBg" Property="Background" Value="#E8EEF5"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="LinkBg" Property="Background" Value="#EDE9FE"/>
+                                            <Setter TargetName="LinkIconPath" Property="Fill" Value="#7C3AED"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
                         <TextBlock Grid.Column="4" Text="Medhörning" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Slider x:Name="MonitorVolumeSlider" Grid.Column="5" Minimum="0" Maximum="1" VerticalAlignment="Center"
                                 LargeChange="0" SmallChange="0.05"

@@ -49,6 +49,9 @@ public partial class MainWindow : Window
     private bool _isCaptureStarting;
     private bool _isSeekDragging;
     private bool _isUpdatingMusicUi;
+    private bool _isSyncingLinkedVolume;
+    private double _volumeLinkOffset;
+    private bool _trayBalloonShown;
     private bool _isDownloading;
     private AppSettings _settings;
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
@@ -117,7 +120,9 @@ public partial class MainWindow : Window
         MusicVolumeSlider.Value = _music.MusicVolume;
         MonitorVolumeSlider.Value = _music.MonitorVolume;
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
+        VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
         _isUpdatingMusicUi = false;
+        _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
         _playlist.CustomFolder = _settings.MusicFolderPath;
         RefreshPlaylist(null);
@@ -596,7 +601,15 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             Hide();
-            _trayIcon.Visible = true;
+
+            if (!_trayBalloonShown)
+            {
+                _trayBalloonShown = true;
+                _trayIcon.ShowBalloonTip(3000, "MicMixer körs kvar",
+                    "Appen ligger i systemfältet. Dubbelklicka på ikonen för att öppna igen, eller högerklicka och välj Avsluta.",
+                    System.Windows.Forms.ToolTipIcon.Info);
+            }
+
             return;
         }
 
@@ -635,6 +648,7 @@ public partial class MainWindow : Window
         }
         _settings.MusicVolume = (float)MusicVolumeSlider.Value;
         _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
+        _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
         _settings.MusicFolderPath = _playlist.CustomFolder;
         _settings.ExternalCaptureMode = _isExternalMode;
         if ((ExternalAppCombo.SelectedItem as AudioAppOption)?.ProcessName is string externalAppName)
@@ -1635,6 +1649,7 @@ public partial class MainWindow : Window
         MonitorEnabledCheck.IsEnabled = !external;
         MonitorDeviceCombo.IsEnabled = !external;
         MonitorVolumeSlider.IsEnabled = !external;
+        VolumeLinkToggle.IsEnabled = !external;
 
         UpdateQueueUi();
         UpdateCaptureUi();
@@ -1966,6 +1981,17 @@ public partial class MainWindow : Window
         }
 
         _music.MusicVolume = (float)e.NewValue;
+
+        // Linked mode keeps a fixed offset between the sliders. The follower is
+        // clamped at its edge, but the offset itself is preserved so the gap
+        // comes back when the user drags in the other direction.
+        if (VolumeLinkToggle.IsChecked == true && !_isSyncingLinkedVolume)
+        {
+            _isSyncingLinkedVolume = true;
+            MonitorVolumeSlider.Value = Math.Clamp(e.NewValue + _volumeLinkOffset, 0d, 1d);
+            _isSyncingLinkedVolume = false;
+        }
+
         UpdateVolumePercentTexts();
         SaveSettings();
     }
@@ -1978,7 +2004,31 @@ public partial class MainWindow : Window
         }
 
         _music.MonitorVolume = (float)e.NewValue;
+
+        if (VolumeLinkToggle.IsChecked == true && !_isSyncingLinkedVolume)
+        {
+            _isSyncingLinkedVolume = true;
+            MusicVolumeSlider.Value = Math.Clamp(e.NewValue - _volumeLinkOffset, 0d, 1d);
+            _isSyncingLinkedVolume = false;
+        }
+
         UpdateVolumePercentTexts();
+        SaveSettings();
+    }
+
+    private void OnVolumeLinkChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingMusicUi)
+        {
+            return;
+        }
+
+        // Lock in whatever gap the sliders have right now as the linked offset.
+        if (VolumeLinkToggle.IsChecked == true)
+        {
+            _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
+        }
+
         SaveSettings();
     }
 
@@ -2233,15 +2283,9 @@ public partial class MainWindow : Window
     }
 
     // --- System tray support ---
-
-    private void OnWindowStateChanged(object? sender, EventArgs e)
-    {
-        if (WindowState == WindowState.Minimized)
-        {
-            Hide();
-            _trayIcon.Visible = true;
-        }
-    }
+    // The tray icon is always visible: minimize keeps the app in the taskbar as
+    // usual, while the close button (X) hides the window to the tray instead of
+    // exiting. "Avsluta" in the tray menu quits for real.
 
     private System.Windows.Forms.NotifyIcon CreateTrayIcon()
     {
@@ -2249,7 +2293,7 @@ public partial class MainWindow : Window
         {
             Text = "MicMixer",
             Icon = RenderTrayIcon(TrayIconState.Stopped),
-            Visible = false
+            Visible = true
         };
 
         trayIcon.DoubleClick += OnTrayIconDoubleClick;
@@ -2284,7 +2328,6 @@ public partial class MainWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
-        _trayIcon.Visible = false;
     }
 
     private void UpdateTrayIcon()
