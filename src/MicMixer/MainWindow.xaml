@@ -1,7 +1,7 @@
 <Window x:Class="MicMixer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MicMixer" Height="640" Width="1100" MinHeight="600" MinWidth="1040"
+        Title="MicMixer" Height="690" Width="1100" MinHeight="650" MinWidth="1040"
         ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
         Background="#F3F5F7"
         PreviewKeyDown="OnPreviewHotkeyKeyDown"
@@ -18,6 +18,8 @@
         <Geometry x:Key="HotkeyIcon">M19,10H17V8H19M19,13H17V11H19M16,10H14V8H16M16,13H14V11H16M16,17H8V14H16M7,10H5V8H7M7,13H5V11H7M8,11H10V13H8M8,8H10V10H8M11,11H13V13H11M11,8H13V10H11M20,5H4C2.89,5 2,5.89 2,7V17A2,2 0 0,0 4,19H20A2,2 0 0,0 22,17V7C22,5.89 21.1,5 20,5Z</Geometry>
         <!-- Clock / delay icon -->
         <Geometry x:Key="ClockIcon">M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.2,16.2L11,13V7H12.5V12.2L17,14.9L16.2,16.2Z</Geometry>
+        <!-- Mic off / push-to-talk icon -->
+        <Geometry x:Key="MicOffIcon">M19,11C19,12.19 18.66,13.3 18.1,14.28L16.87,13.05C17.14,12.43 17.3,11.74 17.3,11H19M15,11.16L9,5.18V5A3,3 0 0,1 12,2A3,3 0 0,1 15,5V11L15,11.16M4.27,3L21,19.73L19.73,21L15.54,16.81C14.77,17.27 13.91,17.58 13,17.72V21H11V17.72C7.72,17.23 5,14.41 5,11H6.7C6.7,14 9.24,16.1 12,16.1C12.81,16.1 13.6,15.91 14.31,15.58L12.65,13.92L12,14A3,3 0 0,1 9,11V10.28L3,4.27L4.27,3Z</Geometry>
         <!-- Play icon -->
         <Geometry x:Key="PlayIcon">M8,5.14V19.14L19,12.14L8,5.14Z</Geometry>
         <!-- Stop icon -->
@@ -266,6 +268,12 @@
                 <!-- Hotkey + delay row -->
                 <Border x:Name="HotkeyDelayCard" Grid.Row="1" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
                     <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid x:Name="HotkeyConfigPanel" Grid.Row="0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -303,6 +311,53 @@
                             </StackPanel>
                             <TextBlock Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" Text="0 = direkt återgång"/>
                         </StackPanel>
+                        </Grid>
+
+                        <!-- Push-to-talk: gate for the whole outgoing mix. Lives outside
+                             HotkeyConfigPanel so it stays clickable when the hotkey config
+                             is dimmed for "Ingen moddad mic". -->
+                        <Border Grid.Row="1" Margin="0,10,0,0" Padding="0,10,0,0" BorderBrush="#E9EEF3" BorderThickness="0,1,0,0">
+                            <StackPanel>
+                                <CheckBox x:Name="PushToTalkCheck" FontSize="11.5" Foreground="#10233A"
+                                          Checked="OnPushToTalkChanged" Unchecked="OnPushToTalkChanged"
+                                          ToolTipService.ShowDuration="60000">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Data="{StaticResource MicOffIcon}" Fill="#B91C1C" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Push-to-talk — allt är tyst tills hotkeyn hålls in" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <CheckBox.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Push-to-talk för hela mixen"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="När det här är på skickas bara tystnad till den virtuella kabeln — varken mic eller musik hörs — tills du håller in hotkeyn. Fungerar även med 'Ingen moddad mic': då hörs din vanliga mic bara medan hotkeyn hålls."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Återgångsdelayn gäller även här: ljudet ligger kvar en stund efter att du släppt. Medhörningen i dina egna hörlurar påverkas inte, så du hör musiken själv hela tiden."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
+                                <CheckBox x:Name="OverlayIndicatorCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A"
+                                          Checked="OnOverlayIndicatorChanged" Unchecked="OnOverlayIndicatorChanged"
+                                          ToolTipService.ShowDuration="60000">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Data="{StaticResource MicIcon}" Fill="#0F766E" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
+                                        <TextBlock Text="Overlay-indikator — statusprick uppe till höger, även över spel" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <CheckBox.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Statusindikator på skärmen"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Visar en liten halvtransparent prick uppe i högra hörnet medan routningen är igång — samma färger som ikonen i systemfältet: grön = vanlig mic, orange = moddad mic (hotkeyn hålls), röd = tyst (push-to-talk)."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Pricken går inte att klicka på — musklick går rakt igenom — och den syns även ovanpå spel i fönster/borderless-läge. Spel i exklusivt helskärmsläge kan dock inte visa overlays."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
@@ -395,7 +450,7 @@
                                             <TextBlock Style="{StaticResource TipBody}"
                                                        Text="Musiken mixas in i mic-kanalen tillsammans med din röst, så att andra hör den — så länge en låt spelas och routningen är aktiv."/>
                                             <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                       Text="I läget MP3 / YouTube hämtar du låtar via YouTube-länk eller lägger egna MP3-filer i musikmappen (mappikonen till höger; kugghjulet låter dig välja en egen mapp). I läget Spotify / annan app fångas ljudet från en app som spelar musik och mixas in direkt."/>
+                                                       Text="I läget MP3 / YouTube hämtar du låtar via YouTube-länk eller lägger egna MP3-filer i musikmappen (mappikonen till höger; kugghjulet låter dig lägga till flera musikmappar). I läget Spotify / annan app fångas ljudet från en app som spelar musik och mixas in direkt."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </Border.ToolTip>
@@ -433,6 +488,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Grid>
                             <TextBox x:Name="YoutubeUrlBox" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
@@ -440,7 +496,24 @@
                             <TextBlock x:Name="YoutubeUrlHintText" Text="Klistra in YouTube-länk här..." FontSize="11.5"
                                        Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Grid>
-                        <Button x:Name="DownloadBtn" Grid.Column="1" Height="28" Margin="8,0,0,0" Padding="10,0"
+                        <!-- Download target folder — only shown when more than one music folder is active -->
+                        <ComboBox x:Name="DownloadFolderCombo" Grid.Column="1" Height="28" MaxWidth="150" Margin="8,0,0,0"
+                                  Visibility="Collapsed" FontSize="11" VerticalContentAlignment="Center"
+                                  SelectionChanged="OnDownloadFolderChanged"
+                                  ToolTipService.ShowDuration="60000"
+                                  ToolTip="Mapp som nya nedladdningar hamnar i">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}" ToolTipService.ShowDuration="60000">
+                                        <Border Background="{Binding Tint}" CornerRadius="6" Padding="5,0" Margin="0,0,5,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Letter}" FontSize="9.5" FontWeight="SemiBold" Foreground="{Binding Accent}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button x:Name="DownloadBtn" Grid.Column="2" Height="28" Margin="8,0,0,0" Padding="10,0"
                                 Click="OnDownloadClick" FontSize="11.5" FontWeight="SemiBold"
                                 Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
@@ -466,6 +539,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Path Data="{StaticResource SearchIcon}" Fill="#9CA3AF" Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,6,0"/>
                         <Grid Grid.Column="1">
@@ -474,6 +548,31 @@
                             <TextBlock x:Name="PlaylistFilterHintText" Text="Sök i spellistan..." FontSize="11.5"
                                        Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Grid>
+                        <!-- Folder filter chips — one per music folder, shown when several folders are active.
+                             Toggling a chip narrows the list to that folder; no active chip shows everything. -->
+                        <ItemsControl x:Name="FolderChipsPanel" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <ToggleButton IsChecked="{Binding IsActive, Mode=TwoWay}" Click="OnFolderChipClick" Cursor="Hand"
+                                                  Margin="4,0,0,0" Opacity="{Binding ChipOpacity}"
+                                                  ToolTip="{Binding ToolTipText}" ToolTipService.ShowDuration="60000">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{Binding ChipBackground}" CornerRadius="9" MinWidth="18" Height="18" Padding="5,0">
+                                                    <TextBlock Text="{Binding Letter}" FontSize="10" FontWeight="SemiBold" Foreground="{Binding ChipForeground}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
 
                     <!-- Playlist (fills remaining height) -->
@@ -496,13 +595,20 @@
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <Path Data="{StaticResource PlayIcon}" Fill="#7C3AED" Width="9" Height="9" Stretch="Uniform"
                                               VerticalAlignment="Center" Margin="0,0,5,0" Visibility="{Binding PlayingVisibility}"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                        <Border Grid.Column="2" Background="#EDE9FE" CornerRadius="8" Padding="6,1" Margin="8,0,0,0"
+                                        <!-- Folder badge: first letter of the source folder, shown when several folders are active -->
+                                        <Border Grid.Column="1" Background="{Binding FolderBadgeBackground}" CornerRadius="6" Padding="5,1" Margin="0,0,6,0"
+                                                VerticalAlignment="Center" Visibility="{Binding FolderBadgeVisibility}"
+                                                ToolTip="{Binding FolderPath}" ToolTipService.ShowDuration="60000">
+                                            <TextBlock Text="{Binding FolderLetter}" FontSize="9.5" FontWeight="SemiBold" Foreground="{Binding FolderBadgeForeground}"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <Border Grid.Column="3" Background="#EDE9FE" CornerRadius="8" Padding="6,1" Margin="8,0,0,0"
                                                 VerticalAlignment="Center" Visibility="{Binding QueueVisibility}"
                                                 ToolTip="Plats i kön">
                                             <TextBlock Text="{Binding QueueText}" FontSize="10" FontWeight="SemiBold" Foreground="#7C3AED"/>
@@ -520,13 +626,13 @@
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                             </Button>
-                            <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Öppna musikmappen"
+                            <Button x:Name="OpenMusicFolderBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Öppna musikmappen"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource FolderIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                             </Button>
                             <Button x:Name="MusicFolderOptionsBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0"
                                     Click="OnMusicFolderOptionsClick" ToolTipService.ShowDuration="30000"
-                                    ToolTip="Musikmapp — välj vilken mapp låtarna läses från"
+                                    ToolTip="Musikmappar — lägg till eller ta bort mappar som låtar läses från"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource CogIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                             </Button>

@@ -12,10 +12,12 @@ public sealed class AudioRouter : IDisposable
     private InputRoute? _normalRoute;
     private InputRoute? _moddedRoute;
     private bool _useModdedInput;
+    private bool _outputGateOpen = true;
     private bool _disposed;
 
     public bool IsRouting => _player?.PlaybackState == PlaybackState.Playing;
     public bool UseModdedInput => Volatile.Read(ref _useModdedInput);
+    public bool OutputGateOpen => Volatile.Read(ref _outputGateOpen);
     public float NormalPeak => _normalRoute?.CurrentPeak ?? 0f;
     public float ModdedPeak => _moddedRoute?.CurrentPeak ?? 0f;
 
@@ -59,6 +61,10 @@ public sealed class AudioRouter : IDisposable
                 source = mixer;
             }
 
+            // The gate sits last in the chain so push-to-talk silences the entire
+            // outgoing mix (mic and music) while upstream sources keep advancing.
+            source = new GateSampleProvider(source, () => OutputGateOpen);
+
             player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 50);
             player.PlaybackStopped += OnPlaybackStopped;
             player.Init(new SampleToTargetWaveProvider(source, targetFormat));
@@ -94,6 +100,15 @@ public sealed class AudioRouter : IDisposable
     public void SetUseModdedInput(bool useModdedInput)
     {
         Volatile.Write(ref _useModdedInput, useModdedInput);
+    }
+
+    /// <summary>
+    /// Opens or closes the outgoing mix (push-to-talk). Closed means the virtual
+    /// cable receives silence; capture and music keep running underneath.
+    /// </summary>
+    public void SetOutputGateOpen(bool isOpen)
+    {
+        Volatile.Write(ref _outputGateOpen, isOpen);
     }
 
     public void Stop()
@@ -136,6 +151,7 @@ public sealed class AudioRouter : IDisposable
         moddedRoute?.Dispose();
 
         Volatile.Write(ref _useModdedInput, false);
+        Volatile.Write(ref _outputGateOpen, true);
     }
 
     public void Dispose()
@@ -252,6 +268,55 @@ public sealed class AudioRouter : IDisposable
         {
             float peak = e.MaxSampleValues.Length == 0 ? 0f : e.MaxSampleValues.Max();
             Volatile.Write(ref _currentPeak, Math.Clamp(peak, 0f, 1f));
+        }
+    }
+
+    /// <summary>
+    /// Multiplies the stream by 0 or 1 depending on the gate state, with a short
+    /// gain ramp on transitions so open/close never produces an audible click.
+    /// </summary>
+    private sealed class GateSampleProvider : ISampleProvider
+    {
+        private readonly ISampleProvider _source;
+        private readonly Func<bool> _isOpen;
+        private readonly float _gainStepPerSample;
+        private float _gain;
+
+        public GateSampleProvider(ISampleProvider source, Func<bool> isOpen)
+        {
+            _source = source;
+            _isOpen = isOpen;
+            // ~8 ms full-range ramp at the stream's interleaved sample rate.
+            _gainStepPerSample = 1f / Math.Max(0.008f * source.WaveFormat.SampleRate * source.WaveFormat.Channels, 1f);
+            _gain = isOpen() ? 1f : 0f;
+        }
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            int samplesRead = _source.Read(buffer, offset, count);
+            float target = _isOpen() ? 1f : 0f;
+
+            if (_gain == target)
+            {
+                if (target == 0f)
+                {
+                    Array.Clear(buffer, offset, samplesRead);
+                }
+
+                return samplesRead;
+            }
+
+            for (int i = 0; i < samplesRead; i++)
+            {
+                _gain = _gain < target
+                    ? Math.Min(target, _gain + _gainStepPerSample)
+                    : Math.Max(target, _gain - _gainStepPerSample);
+                buffer[offset + i] *= _gain;
+            }
+
+            return samplesRead;
         }
     }
 
