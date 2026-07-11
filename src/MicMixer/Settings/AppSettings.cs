@@ -42,4 +42,11 @@ public sealed class AppSettings
     public bool OverlayVolumeMeterEnabled { get; set; } = true;
 
     public string? ExternalAppName { get; set; }
+
+    /// <summary>Last window size; 0 means never saved, so the XAML default is used.</summary>
+    public double WindowWidth { get; set; }
+
+    public double WindowHeight { get; set; }
+
+    public bool WindowMaximized { get; set; }
 }
