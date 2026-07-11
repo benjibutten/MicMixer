@@ -13,6 +13,7 @@ public sealed class AudioRouter : IDisposable
     private InputRoute? _moddedRoute;
     private bool _useModdedInput;
     private bool _outputGateOpen = true;
+    private bool _outputMeteringEnabled;
     private float _outputPeak;
     private float _outputRms;
     private bool _disposed;
@@ -104,20 +105,37 @@ public sealed class AudioRouter : IDisposable
     }
 
     /// <summary>
+    /// Gates the per-sample output level computation. Off means the tap is a pure
+    /// pass-through — no reason to scan the whole stream while no meter is shown.
+    /// </summary>
+    public bool OutputMeteringEnabled
+    {
+        get => Volatile.Read(ref _outputMeteringEnabled);
+        set
+        {
+            Volatile.Write(ref _outputMeteringEnabled, value);
+            if (!value)
+            {
+                Interlocked.Exchange(ref _outputPeak, 0f);
+                Interlocked.Exchange(ref _outputRms, 0f);
+            }
+        }
+    }
+
+    /// <summary>
     /// Levels of the complete outgoing mix (mic + music, after the push-to-talk
     /// gate) since the last call, then resets. Peak is the max absolute sample
     /// (clipping detection); Rms is the highest block RMS (perceived loudness —
     /// what a volume indicator should judge, since limited music runs peaks near
     /// full scale while sounding far louder than speech at the same peak).
-    /// Both are 0 while routing is stopped or the gate is closed.
+    /// Both are 0 while routing is stopped, the gate is closed, or
+    /// <see cref="OutputMeteringEnabled"/> is off.
     /// </summary>
     public (float Peak, float Rms) ReadAndResetOutputLevels()
     {
-        float peak = Volatile.Read(ref _outputPeak);
-        float rms = Volatile.Read(ref _outputRms);
-        Volatile.Write(ref _outputPeak, 0f);
-        Volatile.Write(ref _outputRms, 0f);
-        return (peak, rms);
+        // Exchange makes each read/reset atomic so an audio-thread write landing
+        // between them is never wiped.
+        return (Interlocked.Exchange(ref _outputPeak, 0f), Interlocked.Exchange(ref _outputRms, 0f));
     }
 
     public void SetUseModdedInput(bool useModdedInput)
@@ -317,9 +335,9 @@ public sealed class AudioRouter : IDisposable
         public int Read(float[] buffer, int offset, int count)
         {
             int samplesRead = _source.Read(buffer, offset, count);
-            if (samplesRead == 0)
+            if (samplesRead == 0 || !_router.OutputMeteringEnabled)
             {
-                return 0;
+                return samplesRead;
             }
 
             float max = 0f;

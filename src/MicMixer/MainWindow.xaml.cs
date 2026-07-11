@@ -2950,9 +2950,20 @@ public partial class MainWindow : Window
     /// <summary>True while music actually reaches the virtual cable: routing runs, the push-to-talk gate is open and a source plays.</summary>
     private bool IsMusicRoutedOut()
     {
-        return _router.IsRouting
-            && _router.OutputGateOpen
-            && (_isExternalMode ? _appCapture != null : _music.IsPlaying);
+        if (!_router.IsRouting || !_router.OutputGateOpen)
+        {
+            return false;
+        }
+
+        if (!_isExternalMode)
+        {
+            return _music.IsPlaying;
+        }
+
+        // The capture object exists as long as external mode runs, even while the
+        // app is paused or silent — require recently measured audio. The capture
+        // meter holds peaks with ~1 s decay, so this also bridges short gaps.
+        return _appCapture != null && CaptureLevelMeter.Value > 0.02;
     }
 
     private void OnOverlayIndicatorChanged(object sender, RoutedEventArgs e)
@@ -2978,7 +2989,17 @@ public partial class MainWindow : Window
             overlay.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         }
 
+        UpdateOutputMeteringEnabled();
         SaveSettings();
+    }
+
+    /// <summary>
+    /// The audio-thread level computation only runs while something can display
+    /// it; otherwise the tap is a pure pass-through.
+    /// </summary>
+    private void UpdateOutputMeteringEnabled()
+    {
+        _router.OutputMeteringEnabled = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
     }
 
     private void ApplyOverlayIndicatorSetting(bool enabled)
@@ -3004,6 +3025,8 @@ public partial class MainWindow : Window
             _overlayIndicator = null;
             overlay.Close();
         }
+
+        UpdateOutputMeteringEnabled();
     }
 
     private sealed record AudioDeviceOption(string Id, string FriendlyName);
