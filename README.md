@@ -1,173 +1,190 @@
 # MicMixer
 
-MicMixer är en Windows-app som skickar mikrofon och musik till en virtuell
-mikrofonkanal. Den är byggd för lägen där andra program bara kan välja en enda
-mikrofon, men du vill kunna prata, byta till en röstmoddad mic med hotkey och
-mixa in MP3-musik i samma kanal.
+MicMixer is a Windows application that routes microphone audio and music into a
+single virtual microphone channel. It is intended for applications that only
+allow one microphone input while you want to speak normally, temporarily switch
+to a voice-modified microphone, and mix music into the same channel.
 
-Appen är en WPF-app för Windows och använder NAudio för ljudroutning.
+MicMixer is built with WPF and uses NAudio for audio capture, playback, and
+routing.
 
-## Funktioner
+## Features
 
-- Routar din vanliga mikrofon till en virtuell kabel, till exempel VB-CABLE.
-- Växlar till en moddad mikrofon medan en global hotkey hålls nere.
-- Kan köras utan moddad mikrofon via valet `Ingen moddad mic`.
-- Har återgångsdelay så moddad mic kan ligga kvar kort efter att hotkeyn släpps.
-- Har push-to-talk-läge som mutar allt utgående ljud (mic och musik) tills
-  hotkeyn hålls in — fungerar även utan moddad mic.
-- Mäter ljudnivå för vanlig och moddad mikrofon.
-- Spelar MP3-filer och mixar musiken in i mikrofonkanalen.
-- Kan hämta ljud från YouTube-länkar och konvertera till MP3.
-- Har separat medhörning så du kan höra musiken i egna hörlurar.
-- Har spellista, sök, kö, nästa/föregående och volymreglage.
-- Minimeras till system tray och öppnar befintlig instans om appen redan kör.
-- Skriver loggar för felsökning.
+- Routes a normal microphone to a virtual audio cable such as VB-CABLE.
+- Switches to a voice-modified microphone while a global hotkey is held.
+- Supports setups without a modified microphone.
+- Supports a configurable release delay before switching back to the normal mic.
+- Provides push-to-talk for the complete outgoing mix, including music.
+- Displays input levels for the normal and modified microphones.
+- Plays MP3 files and mixes them into the virtual microphone channel.
+- Captures audio directly from an external application such as Spotify.
+- Downloads audio from supported video URLs and converts it to MP3.
+- Provides optional local monitoring with independent output and volume controls.
+- Includes playlist search, multiple music folders, a queue, and transport controls.
+- Provides a click-through status overlay with mic state, music animation, and an
+  optional outgoing level meter.
+- Uses a responsive, resizable window layout and remembers its size and state.
+- Runs in the system tray and redirects additional launches to the existing instance.
+- Writes rotating logs for troubleshooting.
 
-## Krav
+## Requirements
 
-- Windows 10 eller Windows 11, x64.
-- En vanlig mikrofon.
-- En virtuell kabel, rekommenderat VB-CABLE.
-- Valfritt: Voicemod eller annat röstmodd-program som exponerar en egen
-  mikrofonenhet.
-- Internet vid första YouTube/MP3-hämtningen. MicMixer laddar då ner `yt-dlp`
-  och `ffmpeg` till sin lokala appdata-mapp och verifierar filerna med SHA-256.
+- Windows 10 or Windows 11, x64.
+- A microphone.
+- A virtual audio cable; [VB-CABLE](https://vb-audio.com/Cable/) is recommended.
+- Optional: Voicemod or another voice modifier that exposes a microphone device.
+- Internet access for the first media download. MicMixer downloads `yt-dlp` and
+  `ffmpeg` to its local application-data directory and verifies the files using
+  SHA-256.
 
-Release-zippen är self-contained, så användare behöver normalt inte installera
-.NET separat.
+Release archives are self-contained, so users normally do not need to install
+.NET separately.
 
-## Ladda ner
+## Download
 
-Senaste byggda version finns på GitHub Releases:
+Download the latest `MicMixer-win-x64.zip` archive from
+[GitHub Releases](https://github.com/benjibutten/MicMixer/releases/latest), extract
+it, and run `MicMixer.exe`.
 
-https://github.com/benjibutten/MicMixer/releases/latest
+## Basic setup
 
-Ladda ner `MicMixer-win-x64.zip`, packa upp den och starta `MicMixer.exe`.
+1. Install [VB-CABLE](https://vb-audio.com/Cable/).
+2. Restart Windows if requested by the VB-CABLE installer.
+3. Start `MicMixer.exe`.
+4. Select your physical microphone under **Vanlig mic**.
+5. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
+   choose **Ingen moddad mic**.
+6. Select **CABLE Input (VB-Audio Virtual Cable)** under **Virtuell kabel ut**.
+7. In Discord, OBS, FiveM, or your game, select **CABLE Output** as the microphone.
+8. Click **Aktivera**.
 
-## Grundsetup
+If the selected output does not look like a virtual cable, MicMixer displays a
+warning. Click **Aktivera** again to continue with another cable driver or an
+intentional non-cable output.
 
-1. Installera VB-CABLE från https://vb-audio.com/Cable/.
-2. Starta om Windows om VB-CABLE-installationen ber om det.
-3. Starta `MicMixer.exe`.
-4. Välj din riktiga mikrofon som `Vanlig mic`.
-5. Välj en moddad mikrofon, till exempel `Voicemod Virtual Audio Device`, eller
-   välj `Ingen moddad mic`.
-6. Välj `CABLE Input (VB-Audio Virtual Cable)` som `Virtuell kabel ut`.
-7. I Discord, OBS, FiveM eller spelet väljer du `CABLE Output` som mikrofon.
-8. Klicka `Aktivera`.
+## Hotkey and push-to-talk
 
-Om du väljer en utgång som inte ser ut som en virtuell kabel visar appen en
-varning. Du kan starta ändå genom att klicka `Aktivera` en gång till, vilket är
-praktiskt för andra kabeldrivrutiner.
+Click **Ändra** under **Global hotkey**, then press the keyboard key or mouse
+button that should select the modified mic while routing is active:
 
-## Hotkey
+- Hotkey held: the modified mic is routed.
+- Hotkey released: the normal mic is routed.
+- Release delay above `0 ms`: the modified mic remains active until the delay ends.
+- **Ingen moddad mic**: the hotkey is disabled unless push-to-talk is enabled.
 
-Klicka `Ändra` under `Global hotkey` och tryck den tangent eller musknapp som
-ska växla till moddad mic. När routningen är aktiv gäller:
+Push-to-talk reverses the idle behavior: while the hotkey is not held, the virtual
+cable receives silence. Neither microphone audio nor music is sent.
 
-- Hotkey nere: moddad mic hörs.
-- Hotkey släppt: vanlig mic hörs.
-- Återgångsdelay över `0 ms`: moddad mic ligger kvar tills delayn löpt ut.
-- `Ingen moddad mic`: hotkeyn stängs av och vanlig mic används hela tiden.
+- It also works with **Ingen moddad mic**, in which case the hotkey gates the normal mic.
+- With a modified mic selected, holding the hotkey both opens the gate and selects it.
+- The release delay applies to push-to-talk as well.
+- Local music monitoring is not muted by push-to-talk.
+- The tray icon and overlay turn red while the outgoing mix is muted.
 
-### Push-to-talk
+## Music sources
 
-Kryssrutan `Push-to-talk` under hotkey-inställningen vänder på beteendet: så
-länge hotkeyn inte hålls in skickas bara tystnad till den virtuella kabeln —
-varken mic eller musik hörs. Håll in hotkeyn för att sända.
+MicMixer can use its built-in MP3 library or capture audio from another application.
+In either mode, the audio is mixed into the same virtual microphone channel as your
+voice.
 
-- Fungerar även med `Ingen moddad mic`: hotkeyn aktiveras då ändå och styr om
-  din vanliga mic hörs.
-- Med moddad mic vald hörs den moddade micen medan hotkeyn hålls, precis som
-  vanligt — skillnaden är att inget hörs alls när den släpps.
-- Återgångsdelayn gäller även här: ljudet ligger kvar tills delayn löpt ut.
-- Medhörningen i dina egna hörlurar påverkas inte, så du hör musiken själv
-  hela tiden.
-- Tray-ikonen blir röd när mixen är mutad av push-to-talk.
+### MP3 library
 
-## Musik och MP3
+Add music by either:
 
-Musiken mixas in i samma virtuella mikrofonkanal som rösten. Det betyder att
-mottagaren hör både mic och musik via `CABLE Output`.
+- Pasting a supported video URL and clicking **Hämta MP3**.
+- Opening a configured music folder and adding your own `.mp3` files.
 
-Du kan lägga till musik på två sätt:
+The first download installs local copies of `yt-dlp` and `ffmpeg`. The ffmpeg
+package is relatively large, so the first download may take longer. The tools are
+reused for subsequent downloads.
 
-- Klistra in en YouTube-länk i fältet och klicka `Hämta MP3`.
-- Klicka mappikonen och lägg egna `.mp3`-filer i musikmappen.
+The library supports search, playback controls, a queue, and multiple music folders.
+When multiple folders are configured:
 
-Första gången du hämtar en länk laddar MicMixer ner `yt-dlp` och `ffmpeg`.
-`ffmpeg`-paketet är stort, så första hämtningen kan ta en stund. Efteråt ligger
-verktygen kvar lokalt och återanvänds.
+- Each track has a colored folder badge; hover over it to see the full path.
+- Folder chips beside the search field filter the visible tracks.
+- The download destination can be selected separately.
+- Folders can be added or removed from the folder menu; at least one folder remains
+  configured.
 
-### Flera musikmappar
+Music can play while routing or local monitoring provides an audio clock. If neither
+is active, playback pauses instead of appearing to play without advancing.
 
-Via kugghjulet bredvid spellistan kan du lägga till flera musikmappar. Låtarna
-från alla mappar visas då tillsammans i spellistan:
+### External application capture
 
-- Varje låt får en liten färgad bokstavssymbol före namnet som visar vilken
-  mapp den kommer från. Hovra över symbolen för att se hela sökvägen.
-- Bredvid sökfältet visas en chip per mapp — klicka på en chip för att bara
-  visa låtar från den mappen, klicka igen för att visa alla.
-- Bredvid `Hämta MP3` väljer du vilken mapp nya nedladdningar hamnar i.
-- Avmarkera en mapp i kugghjulsmenyn för att ta bort den ur listan; minst en
-  mapp måste alltid finnas kvar.
+Select the external-application source mode to capture audio from a running
+application such as Spotify and route it through MicMixer. Refresh the application
+list when a newly started app is not shown. Transport buttons send system media-key
+commands to the active media application.
 
-Musik kan spelas när routningen är aktiv eller när medhörning är aktiverad. Om
-båda saknas finns ingen ljudklocka som driver uppspelningen, så appen pausar i
-stället för att visa en låt som ser ut att spela men står still.
+External capture availability depends on the Windows process-loopback APIs and the
+selected application producing audio.
 
-Mottagande appar kan dämpa musik om brusreducering, echo cancellation eller
-automatic gain control är aktiverat. Stäng av sådana funktioner i Discord,
-FiveM, OBS eller spelet om musiken låter hackig eller försvinner.
+## Local monitoring
 
-## Medhörning
+Monitoring plays library music through your own headphones or speakers. It has a
+separate device and volume control and does not change the level sent to other
+people through the virtual microphone. Select a physical playback device rather
+than the virtual cable.
 
-Medhörning spelar musiken i dina egna hörlurar eller högtalare. Den påverkar
-inte vad andra hör i mic-kanalen. Välj en fysisk ljudutgång som monitor-enhet,
-inte den virtuella kabeln.
+## Overlay indicator
 
-## Lokal data
+The optional click-through overlay remains visible above borderless/windowed games
+without stealing focus or intercepting mouse input. Its color mirrors the routing
+state:
 
-MicMixer sparar inställningar, musik, verktyg och loggar under:
+- Teal: normal microphone.
+- Orange: modified microphone.
+- Red: push-to-talk is muted.
+
+Animated rings indicate that music is being routed. The optional meter shows the
+level of the complete outgoing mix after the push-to-talk gate. Exclusive fullscreen
+applications may prevent desktop overlays from being visible.
+
+## Local data
+
+MicMixer stores settings, its default music folder, downloaded tools, and logs in:
 
 ```text
 %LocalAppData%\MicMixer
 ```
 
-Viktiga undermappar och filer:
+Important files and directories:
 
-- `settings.json`: valda enheter, hotkey, volymer och övriga inställningar.
-- `Music\`: MP3-filer som visas i spellistan.
-- `tools\`: nedladdade `yt-dlp` och `ffmpeg`.
-- `logs\micmixer-YYYYMMDD.log`: runtime-loggar.
-- `startup-timeline.log`: enkel tidslinje för uppstart.
+- `settings.json`: devices, hotkey, volumes, folders, window state, and other settings.
+- `Music\`: the default MP3 library folder.
+- `tools\`: downloaded `yt-dlp` and `ffmpeg` binaries.
+- `logs\micmixer-YYYYMMDD.log`: runtime logs.
+- `startup-timeline.log`: a basic startup timeline.
 
-Loggar roteras dagligen, rullas vid 5 MB och behålls i 14 dagar.
+Runtime logs roll at 5 MB, rotate daily, and are retained for 14 days.
 
-## Felsökning
+## Troubleshooting
 
-- Om andra inte hör något: kontrollera att MicMixer skickar till `CABLE Input`
-  och att mottagande app använder `CABLE Output`.
-- Om musiken inte hörs hos andra: kontrollera att routningen är aktiv och att
-  mottagande app inte filtrerar bort musik med brusreducering.
-- Om du inte själv hör musiken: aktivera `Medhörning` och välj hörlurar eller
-  högtalare.
-- Om YouTube-hämtning misslyckas: kontrollera internetanslutning och titta i
-  loggen under `%LocalAppData%\MicMixer\logs`.
-- Om en ljudenhet har kopplats ur: klicka uppdatera-knappen i appen och välj
-  enheterna igen.
+- If nobody can hear anything, confirm that MicMixer outputs to **CABLE Input** and
+  that the receiving application uses **CABLE Output** as its microphone.
+- If others cannot hear music, confirm that routing is active and disable noise
+  suppression, echo cancellation, and automatic gain control in the receiving app.
+- If local monitoring is silent, enable monitoring and select your headphones or
+  speakers as the monitor device.
+- If external application capture is silent, make sure the selected app is actively
+  producing audio and refresh the application list.
+- If a download fails, check the internet connection and inspect the logs under
+  `%LocalAppData%\MicMixer\logs`.
+- If an audio device was disconnected, refresh the device list and select it again.
 
-## Utveckling
+## Development
 
-Projektet ligger i `src/MicMixer` och targetar `net10.0-windows`.
+The application project is located in `src/MicMixer` and targets `net10.0-windows`.
 
-Bygg lokalt:
+Build and test locally:
 
 ```powershell
-dotnet build .\src\MicMixer\MicMixer.csproj
+dotnet build .\MicMixer.slnx
+dotnet test .\MicMixer.slnx --no-build
 ```
 
-Publicera en lokal win-x64-build:
+Create a self-contained Windows x64 build:
 
 ```powershell
 dotnet publish .\src\MicMixer\MicMixer.csproj `
@@ -179,17 +196,16 @@ dotnet publish .\src\MicMixer\MicMixer.csproj `
 
 ## CI/CD
 
-Pull requests mot `main` kör `.github/workflows/pr-build.yml`, som återställer
-paket och bygger appen i Release-konfiguration på Windows.
+Pull requests targeting `main` run `.github/workflows/pr-build.yml`, which restores
+dependencies and builds the application in Release configuration on Windows.
 
-Pushar till `main` som ändrar appens källkod eller projektfiler kör
-`.github/workflows/release.yml`, som publicerar en self-contained
-`win-x64`-build, zippar den och skapar eller uppdaterar senaste GitHub Release.
+Pushes to `main` that change application source or project files run
+`.github/workflows/release.yml`. The workflow publishes a self-contained `win-x64`
+build, creates a zip archive, and creates or updates the latest GitHub Release.
 
-README-, dokumentations- och workflow-only-pushar startar inte release-workflowen
-och skapar därför ingen ny version. Manuell release kan fortfarande köras via
-`workflow_dispatch`.
+Documentation- and workflow-only pushes do not trigger an application release. A
+release can also be started manually through `workflow_dispatch`.
 
-## Licens
+## License
 
-Se [LICENSE](LICENSE).
+See [LICENSE](LICENSE).
