@@ -38,5 +38,8 @@ public sealed class AppSettings
     /// <summary>Shows a small click-through status dot in the top-right screen corner while routing runs.</summary>
     public bool OverlayIndicatorEnabled { get; set; }
 
+    /// <summary>Shows a small level meter next to the overlay dot with the outgoing mix level (mic + music).</summary>
+    public bool OverlayVolumeMeterEnabled { get; set; } = true;
+
     public string? ExternalAppName { get; set; }
 }

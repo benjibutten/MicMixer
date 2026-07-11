@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private DateTime _queuePopupClosedAt = DateTime.MinValue;
     private string? _lastPlayedTrackPath;
     private string? _acknowledgedNonCableOutputId;
+    private string? _acknowledgedSameMicId;
     private bool _musicWasAutoPaused;
     private ProcessLoopbackCapture? _appCapture;
     private AudioAppOption? _captureTarget;
@@ -129,6 +130,7 @@ public partial class MainWindow : Window
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
         PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
+        OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         _isUpdatingMusicUi = false;
         _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
@@ -370,9 +372,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!skipModded && dryInput.Id == moddedInput!.Id)
+        // Same device for both mics works technically (two shared-mode captures),
+        // the hotkey just switches between two identical signals. Warn instead of
+        // hard-blocking — a silent refusal looks like a dead button.
+        if (!skipModded && dryInput.Id == moddedInput!.Id && _acknowledgedSameMicId != dryInput.Id)
         {
-            StatusText.Text = "Vanlig mic och moddad mic måste vara två olika enheter.";
+            _acknowledgedSameMicId = dryInput.Id;
+            StatusText.Text = "Vanlig och moddad mic är samma enhet — hotkeyn gör då ingen hörbar skillnad. Menade du 'Ingen moddad mic'? Klicka Aktivera igen för att starta ändå.";
             return;
         }
 
@@ -484,6 +490,14 @@ public partial class MainWindow : Window
 
     private void OnLevelTimerTick(object? sender, EventArgs e)
     {
+        // Feeds the overlay volume meter; SetOutputLevel no-ops while it is hidden,
+        // and the read itself resets the levels so stale values never linger.
+        if (_overlayIndicator is { } overlay)
+        {
+            var (outputPeak, outputRms) = _router.ReadAndResetOutputLevels();
+            overlay.SetOutputLevel(outputPeak, outputRms);
+        }
+
         if (_appCapture is { } capture)
         {
             // Peak-hold with decay so short transients stay visible.
@@ -712,6 +726,7 @@ public partial class MainWindow : Window
         _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
         _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
+        _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         _settings.MusicFolderPaths = _playlist.Folders.ToList();
         // Keep the legacy field pointing at the first custom folder so an older
         // app version reading these settings degrades gracefully.
@@ -1049,6 +1064,7 @@ public partial class MainWindow : Window
     private void UpdateMusicUi()
     {
         UpdateMusicRoutingWarning();
+        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
 
         if (_isExternalMode)
         {
@@ -2833,6 +2849,7 @@ public partial class MainWindow : Window
 
         // The overlay mirrors the tray state; SetState no-ops when unchanged.
         _overlayIndicator?.SetState(ToOverlayIndicatorState(newState));
+        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
 
         if (newState == _lastTrayState)
             return;
@@ -2930,6 +2947,14 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>True while music actually reaches the virtual cable: routing runs, the push-to-talk gate is open and a source plays.</summary>
+    private bool IsMusicRoutedOut()
+    {
+        return _router.IsRouting
+            && _router.OutputGateOpen
+            && (_isExternalMode ? _appCapture != null : _music.IsPlaying);
+    }
+
     private void OnOverlayIndicatorChanged(object sender, RoutedEventArgs e)
     {
         if (_isUpdatingMusicUi || _isUpdatingUi)
@@ -2941,6 +2966,21 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    private void OnOverlayVolumeMeterChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        if (_overlayIndicator is { } overlay)
+        {
+            overlay.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
+        }
+
+        SaveSettings();
+    }
+
     private void ApplyOverlayIndicatorSetting(bool enabled)
     {
         if (enabled)
@@ -2948,7 +2988,9 @@ public partial class MainWindow : Window
             try
             {
                 _overlayIndicator ??= new OverlayIndicatorWindow();
+                _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
                 _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeTrayIconState()));
+                _overlayIndicator.SetMusicActive(IsMusicRoutedOut());
             }
             catch (Exception ex)
             {
