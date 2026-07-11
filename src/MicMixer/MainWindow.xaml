@@ -429,6 +429,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- Header + monitor selection -->
@@ -691,8 +692,27 @@
                         </Border>
                     </Grid>
 
+                    <!-- Contextual warning: playback/capture can be audible locally even though
+                         nothing is currently being sent to the mic channel. -->
+                    <Border x:Name="MusicRoutingWarning" Grid.Row="6" Margin="0,0,0,8" Padding="10,7"
+                            Background="#FFF7ED" BorderBrush="#FDBA74" BorderThickness="1"
+                            CornerRadius="7" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="!" Width="18" Height="18" Margin="0,0,8,0"
+                                       VerticalAlignment="Top" TextAlignment="Center"
+                                       FontSize="11" FontWeight="Bold" Foreground="#9A3412"
+                                       Background="#FFEDD5"/>
+                            <TextBlock Grid.Column="1" FontSize="11" Foreground="#9A3412" TextWrapping="Wrap"
+                                       Text="Routningen är avstängd. Musiken hörs bara lokalt och skickas inte till mic-kanalen — aktivera routningen för att låta andra höra den."/>
+                        </Grid>
+                    </Border>
+
                     <!-- Transport -->
-                    <Grid Grid.Row="6" Margin="0,0,0,6">
+                    <Grid Grid.Row="7" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -723,7 +743,7 @@
                     </Grid>
 
                     <!-- Volumes (drag only — no jump on track click) -->
-                    <Grid Grid.Row="7">
+                    <Grid Grid.Row="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
@@ -773,7 +793,7 @@
                     </Grid>
 
                     <!-- Now playing + hints -->
-                    <Grid Grid.Row="8" Margin="0,6,0,0">
+                    <Grid Grid.Row="9" Margin="0,6,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>

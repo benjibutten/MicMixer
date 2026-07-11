@@ -1048,6 +1048,8 @@ public partial class MainWindow : Window
 
     private void UpdateMusicUi()
     {
+        UpdateMusicRoutingWarning();
+
         if (_isExternalMode)
         {
             // Transport steers the external app via media keys; there is no local
@@ -1082,6 +1084,21 @@ public partial class MainWindow : Window
             track.SetIsPlaying(playingPath != null
                 && string.Equals(track.Path, playingPath, StringComparison.OrdinalIgnoreCase));
         }
+    }
+
+    /// <summary>
+    /// Local monitoring and external apps can remain audible while routing is
+    /// stopped. Keep that distinction visible next to the transport controls.
+    /// </summary>
+    private void UpdateMusicRoutingWarning()
+    {
+        bool hasActiveMusic = _isExternalMode
+            ? _appCapture != null
+            : _music.IsPlaying;
+
+        MusicRoutingWarning.Visibility = hasActiveMusic && !_router.IsRouting
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private static string FormatTrackTime(TimeSpan time)
@@ -2127,7 +2144,7 @@ public partial class MainWindow : Window
 
         MusicStatusText.Text = _router.IsRouting
             ? $"Fångar ljud från {target.DisplayName}."
-            : $"Fångar ljud från {target.DisplayName} — starta routningen så att andra hör.";
+            : $"Fångar ljud från {target.DisplayName} — aktivera routningen så att andra hör.";
     }
 
     private void StopAppCapture()
