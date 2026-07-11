@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private DateTime _queuePopupClosedAt = DateTime.MinValue;
     private string? _lastPlayedTrackPath;
     private string? _acknowledgedNonCableOutputId;
+    private string? _acknowledgedSameMicId;
     private bool _musicWasAutoPaused;
     private ProcessLoopbackCapture? _appCapture;
     private AudioAppOption? _captureTarget;
@@ -73,6 +74,7 @@ public partial class MainWindow : Window
     private bool _devicesLoaded;
     private string? _deviceLoadError;
     private TrayIconState _lastTrayState = TrayIconState.Stopped;
+    private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
 
     public MainWindow()
     {
@@ -100,6 +102,11 @@ public partial class MainWindow : Window
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         InitializeComponent();
         App.StartupTrace("InitializeComponent done");
+        RestoreWindowBounds();
+        _lastNonMinimizedWindowState = WindowState == WindowState.Maximized
+            ? WindowState.Maximized
+            : WindowState.Normal;
+        StateChanged += OnWindowStateChanged;
 
         using var windowIcon = RenderTrayIcon(TrayIconState.Normal);
         Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
@@ -129,6 +136,7 @@ public partial class MainWindow : Window
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
         PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
+        OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         _isUpdatingMusicUi = false;
         _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
@@ -370,9 +378,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!skipModded && dryInput.Id == moddedInput!.Id)
+        // Same device for both mics works technically (two shared-mode captures),
+        // the hotkey just switches between two identical signals. Warn instead of
+        // hard-blocking — a silent refusal looks like a dead button.
+        if (!skipModded && dryInput.Id == moddedInput!.Id && _acknowledgedSameMicId != dryInput.Id)
         {
-            StatusText.Text = "Vanlig mic och moddad mic måste vara två olika enheter.";
+            _acknowledgedSameMicId = dryInput.Id;
+            StatusText.Text = "Vanlig och moddad mic är samma enhet — hotkeyn gör då ingen hörbar skillnad. Menade du 'Ingen moddad mic'? Klicka Aktivera igen för att starta ändå.";
             return;
         }
 
@@ -484,6 +496,14 @@ public partial class MainWindow : Window
 
     private void OnLevelTimerTick(object? sender, EventArgs e)
     {
+        // Feeds the overlay volume meter; SetOutputLevel no-ops while it is hidden,
+        // and the read itself resets the levels so stale values never linger.
+        if (_overlayIndicator is { } overlay)
+        {
+            var (outputPeak, outputRms) = _router.ReadAndResetOutputLevels();
+            overlay.SetOutputLevel(outputPeak, outputRms);
+        }
+
         if (_appCapture is { } capture)
         {
             // Peak-hold with decay so short transients stay visible.
@@ -656,6 +676,8 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
+        PersistWindowBounds();
+
         if (!_isReallyClosing && !App.StartupBenchmarkMode)
         {
             e.Cancel = true;
@@ -712,6 +734,7 @@ public partial class MainWindow : Window
         _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
         _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
+        _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         _settings.MusicFolderPaths = _playlist.Folders.ToList();
         // Keep the legacy field pointing at the first custom folder so an older
         // app version reading these settings degrades gracefully.
@@ -790,6 +813,7 @@ public partial class MainWindow : Window
 
             StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
 
+            UpdateCompactStatus();
             UpdateTrayIcon();
             return;
         }
@@ -814,6 +838,7 @@ public partial class MainWindow : Window
                 ? "Laddar ljudenheter..."
                 : _deviceLoadError ?? "Laddar ljudenheter...";
 
+        UpdateCompactStatus();
         UpdateTrayIcon();
     }
 
@@ -1049,6 +1074,7 @@ public partial class MainWindow : Window
     private void UpdateMusicUi()
     {
         UpdateMusicRoutingWarning();
+        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
 
         if (_isExternalMode)
         {
@@ -2814,7 +2840,10 @@ public partial class MainWindow : Window
     private void RestoreFromTray()
     {
         Show();
-        WindowState = WindowState.Normal;
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = _lastNonMinimizedWindowState;
+        }
         Activate();
     }
 
@@ -2833,6 +2862,7 @@ public partial class MainWindow : Window
 
         // The overlay mirrors the tray state; SetState no-ops when unchanged.
         _overlayIndicator?.SetState(ToOverlayIndicatorState(newState));
+        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
 
         if (newState == _lastTrayState)
             return;
@@ -2930,6 +2960,25 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>True while music actually reaches the virtual cable: routing runs, the push-to-talk gate is open and a source plays.</summary>
+    private bool IsMusicRoutedOut()
+    {
+        if (!_router.IsRouting || !_router.OutputGateOpen)
+        {
+            return false;
+        }
+
+        if (!_isExternalMode)
+        {
+            return _music.IsPlaying;
+        }
+
+        // The capture object exists as long as external mode runs, even while the
+        // app is paused or silent — require recently measured audio. The capture
+        // meter holds peaks with ~1 s decay, so this also bridges short gaps.
+        return _appCapture != null && CaptureLevelMeter.Value > 0.02;
+    }
+
     private void OnOverlayIndicatorChanged(object sender, RoutedEventArgs e)
     {
         if (_isUpdatingMusicUi || _isUpdatingUi)
@@ -2941,6 +2990,31 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    private void OnOverlayVolumeMeterChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        if (_overlayIndicator is { } overlay)
+        {
+            overlay.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
+        }
+
+        UpdateOutputMeteringEnabled();
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// The audio-thread level computation only runs while something can display
+    /// it; otherwise the tap is a pure pass-through.
+    /// </summary>
+    private void UpdateOutputMeteringEnabled()
+    {
+        _router.OutputMeteringEnabled = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
+    }
+
     private void ApplyOverlayIndicatorSetting(bool enabled)
     {
         if (enabled)
@@ -2948,7 +3022,9 @@ public partial class MainWindow : Window
             try
             {
                 _overlayIndicator ??= new OverlayIndicatorWindow();
+                _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
                 _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeTrayIconState()));
+                _overlayIndicator.SetMusicActive(IsMusicRoutedOut());
             }
             catch (Exception ex)
             {
@@ -2962,7 +3038,351 @@ public partial class MainWindow : Window
             _overlayIndicator = null;
             overlay.Close();
         }
+
+        UpdateOutputMeteringEnabled();
     }
+
+    #region Responsive layout
+
+    private enum LayoutMode
+    {
+        /// <summary>Routing and music side by side, equal width (the original layout).</summary>
+        Wide,
+
+        /// <summary>Still two columns, but the music player gets the larger share.</summary>
+        Medium,
+
+        /// <summary>Music player fills the window; routing folds into a status bar below.</summary>
+        Narrow
+    }
+
+    private const double NarrowBreakpoint = 830;
+    private const double WideBreakpoint = 1010;
+
+    private LayoutMode _layoutMode = LayoutMode.Wide;
+    private bool _layoutModeApplied;
+    private bool _deviceGridStacked;
+    private bool _delayPanelWrapped;
+    private bool _musicHeaderCompact;
+    private bool _volumesStacked;
+    private bool _playlistButtonsCompact;
+
+    private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var mode = ActualWidth < NarrowBreakpoint
+            ? LayoutMode.Narrow
+            : ActualWidth < WideBreakpoint
+                ? LayoutMode.Medium
+                : LayoutMode.Wide;
+
+        if (mode != _layoutMode || !_layoutModeApplied)
+        {
+            _layoutMode = mode;
+            _layoutModeApplied = true;
+            ApplyLayoutMode();
+        }
+
+        if (_layoutMode == LayoutMode.Narrow)
+        {
+            UpdateNarrowRoutingHeight();
+        }
+    }
+
+    private void ApplyLayoutMode()
+    {
+        bool narrow = _layoutMode == LayoutMode.Narrow;
+
+        if (narrow)
+        {
+            // Music on top, full width — the part used most when space is scarce.
+            Grid.SetRow(MusicCard, 0);
+            Grid.SetColumn(MusicCard, 0);
+            Grid.SetColumnSpan(MusicCard, 3);
+
+            Grid.SetRow(RoutingScroll, 2);
+            Grid.SetColumn(RoutingScroll, 0);
+            Grid.SetColumnSpan(RoutingScroll, 3);
+            RoutingScroll.Margin = new Thickness(0, 8, 0, 0);
+
+            CompactStatusToggle.Visibility = Visibility.Visible;
+            UpdateNarrowRoutingVisibility();
+            UpdateNarrowRoutingHeight();
+        }
+        else
+        {
+            // The music player keeps the larger share as space shrinks.
+            RoutingColumn.Width = _layoutMode == LayoutMode.Medium
+                ? new GridLength(2, GridUnitType.Star)
+                : new GridLength(1, GridUnitType.Star);
+            MusicColumn.Width = _layoutMode == LayoutMode.Medium
+                ? new GridLength(3, GridUnitType.Star)
+                : new GridLength(1, GridUnitType.Star);
+
+            Grid.SetRow(MusicCard, 0);
+            Grid.SetColumn(MusicCard, 2);
+            Grid.SetColumnSpan(MusicCard, 1);
+
+            Grid.SetRow(RoutingScroll, 0);
+            Grid.SetColumn(RoutingScroll, 0);
+            Grid.SetColumnSpan(RoutingScroll, 1);
+            RoutingScroll.Margin = new Thickness(0);
+            RoutingScroll.MaxHeight = double.PositiveInfinity;
+            RoutingScroll.Visibility = Visibility.Visible;
+
+            CompactStatusToggle.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnCompactStatusToggled(object sender, RoutedEventArgs e)
+    {
+        UpdateNarrowRoutingVisibility();
+    }
+
+    private void UpdateNarrowRoutingVisibility()
+    {
+        if (_layoutMode != LayoutMode.Narrow)
+        {
+            return;
+        }
+
+        bool expanded = CompactStatusToggle.IsChecked == true;
+        RoutingScroll.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        CompactStatusHint.Text = expanded ? "Dölj inställningar" : "Visa inställningar";
+        CompactChevronRotate.Angle = expanded ? 0 : 180;
+    }
+
+    /// <summary>Caps the folded-out routing panel so the music player always keeps
+    /// enough height for all its controls in narrow mode; the routing panel
+    /// scrolls internally instead.</summary>
+    private void UpdateNarrowRoutingHeight()
+    {
+        RoutingScroll.MaxHeight = Math.Clamp(ActualHeight - 470, 150, 420);
+    }
+
+    private void UpdateCompactStatus()
+    {
+        CompactStatusDot.Fill = RoutingStateIcon.Fill;
+        var source = ActiveSourceText.Text.Replace("Aktiv källa: ", string.Empty);
+        CompactStatusText.Text = _router.IsRouting
+            ? $"Routning aktiv · {source}"
+            : "Routning stoppad";
+    }
+
+    /// <summary>Stacks the three device pickers vertically when the card is too
+    /// narrow for three columns side by side.</summary>
+    private void OnDeviceGridSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool stacked = e.NewSize.Width < 430;
+        if (stacked == _deviceGridStacked)
+        {
+            return;
+        }
+
+        _deviceGridStacked = stacked;
+        var panels = new[] { DryDevicePanel, ModdedDevicePanel, OutputDevicePanel };
+        for (int i = 0; i < panels.Length; i++)
+        {
+            if (stacked)
+            {
+                Grid.SetRow(panels[i], i);
+                Grid.SetColumn(panels[i], 0);
+                Grid.SetColumnSpan(panels[i], 3);
+                panels[i].Margin = new Thickness(0, i == 0 ? 0 : 10, 0, 0);
+            }
+            else
+            {
+                Grid.SetRow(panels[i], 0);
+                Grid.SetColumn(panels[i], i);
+                Grid.SetColumnSpan(panels[i], 1);
+                panels[i].Margin = new Thickness(i == 0 ? 0 : 8, 0, i == panels.Length - 1 ? 0 : 8, 0);
+            }
+        }
+    }
+
+    /// <summary>Moves the release-delay field below the hotkey picker when the card
+    /// cannot fit them side by side.</summary>
+    private void OnHotkeyConfigSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool wrapped = e.NewSize.Width < 350;
+        if (wrapped == _delayPanelWrapped)
+        {
+            return;
+        }
+
+        _delayPanelWrapped = wrapped;
+        Grid.SetRow(DelayPanel, wrapped ? 1 : 0);
+        Grid.SetColumn(DelayPanel, wrapped ? 0 : 1);
+        DelayPanel.Margin = wrapped ? new Thickness(0, 12, 0, 0) : new Thickness(0);
+        DelayPanel.HorizontalAlignment = wrapped ? System.Windows.HorizontalAlignment.Left : System.Windows.HorizontalAlignment.Right;
+    }
+
+    /// <summary>Drops the monitor-device combo to its own full-width row when the
+    /// music card header gets cramped.</summary>
+    private void OnMusicHeaderSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool compact = e.NewSize.Width < 470;
+        if (compact == _musicHeaderCompact)
+        {
+            return;
+        }
+
+        _musicHeaderCompact = compact;
+        if (compact)
+        {
+            Grid.SetRow(MonitorDeviceCombo, 1);
+            Grid.SetColumn(MonitorDeviceCombo, 0);
+            Grid.SetColumnSpan(MonitorDeviceCombo, 3);
+            MonitorDeviceCombo.Width = double.NaN;
+            MonitorDeviceCombo.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
+            MonitorDeviceCombo.Margin = new Thickness(0, 6, 0, 0);
+        }
+        else
+        {
+            Grid.SetRow(MonitorDeviceCombo, 0);
+            Grid.SetColumn(MonitorDeviceCombo, 2);
+            Grid.SetColumnSpan(MonitorDeviceCombo, 1);
+            MonitorDeviceCombo.Width = 170;
+            MonitorDeviceCombo.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+            MonitorDeviceCombo.Margin = new Thickness(10, 0, 0, 0);
+        }
+    }
+
+    /// <summary>Stacks the two volume sliders on top of each other when a single row
+    /// would leave them too short to drag comfortably. The link toggle sits between
+    /// them, spanning both rows.</summary>
+    private void OnVolumesGridSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool stacked = e.NewSize.Width < 460;
+        if (stacked == _volumesStacked)
+        {
+            return;
+        }
+
+        _volumesStacked = stacked;
+        if (stacked)
+        {
+            // Second star column must not eat width while its content lives in row 1.
+            MonitorSliderColumn.Width = new GridLength(0);
+
+            Grid.SetRow(MonitorVolumeLabel, 1);
+            Grid.SetColumn(MonitorVolumeLabel, 0);
+            MonitorVolumeLabel.Margin = new Thickness(0, 8, 8, 0);
+
+            Grid.SetRow(MonitorVolumeSlider, 1);
+            Grid.SetColumn(MonitorVolumeSlider, 1);
+            MonitorVolumeSlider.Margin = new Thickness(0, 8, 0, 0);
+
+            Grid.SetRow(MonitorVolumePercentText, 1);
+            Grid.SetColumn(MonitorVolumePercentText, 2);
+            MonitorVolumePercentText.Margin = new Thickness(0, 8, 0, 0);
+
+            Grid.SetRowSpan(VolumeLinkToggle, 2);
+        }
+        else
+        {
+            MonitorSliderColumn.Width = new GridLength(1, GridUnitType.Star);
+
+            Grid.SetRow(MonitorVolumeLabel, 0);
+            Grid.SetColumn(MonitorVolumeLabel, 4);
+            MonitorVolumeLabel.Margin = new Thickness(0, 0, 8, 0);
+
+            Grid.SetRow(MonitorVolumeSlider, 0);
+            Grid.SetColumn(MonitorVolumeSlider, 5);
+            MonitorVolumeSlider.Margin = new Thickness(0);
+
+            Grid.SetRow(MonitorVolumePercentText, 0);
+            Grid.SetColumn(MonitorVolumePercentText, 6);
+            MonitorVolumePercentText.Margin = new Thickness(0);
+
+            Grid.SetRowSpan(VolumeLinkToggle, 1);
+        }
+    }
+
+    /// <summary>Moves the playlist button column to a horizontal row under the list
+    /// when the playlist area is too short to fit the stacked buttons.</summary>
+    private void OnPlaylistRowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool compact = e.NewSize.Height < 150;
+        if (compact == _playlistButtonsCompact)
+        {
+            return;
+        }
+
+        _playlistButtonsCompact = compact;
+        PlaylistButtonsPanel.Orientation = compact
+            ? System.Windows.Controls.Orientation.Horizontal
+            : System.Windows.Controls.Orientation.Vertical;
+        if (compact)
+        {
+            Grid.SetRow(PlaylistButtonsPanel, 1);
+            Grid.SetColumn(PlaylistButtonsPanel, 0);
+            Grid.SetColumnSpan(PlaylistButtonsPanel, 2);
+            PlaylistButtonsPanel.Margin = new Thickness(0, 6, 0, 0);
+        }
+        else
+        {
+            Grid.SetRow(PlaylistButtonsPanel, 0);
+            Grid.SetColumn(PlaylistButtonsPanel, 1);
+            Grid.SetColumnSpan(PlaylistButtonsPanel, 1);
+            PlaylistButtonsPanel.Margin = new Thickness(8, 0, 0, 0);
+        }
+
+        bool first = true;
+        foreach (var button in PlaylistButtonsPanel.Children.OfType<System.Windows.Controls.Button>())
+        {
+            button.Margin = first
+                ? new Thickness(0)
+                : compact ? new Thickness(6, 0, 0, 0) : new Thickness(0, 6, 0, 0);
+            first = false;
+        }
+    }
+
+    private void RestoreWindowBounds()
+    {
+        if (_settings.WindowWidth >= MinWidth && _settings.WindowHeight >= MinHeight)
+        {
+            Width = Math.Min(_settings.WindowWidth, SystemParameters.WorkArea.Width);
+            Height = Math.Min(_settings.WindowHeight, SystemParameters.WorkArea.Height);
+        }
+
+        if (_settings.WindowMaximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState != WindowState.Minimized)
+        {
+            _lastNonMinimizedWindowState = WindowState;
+        }
+    }
+
+    private void PersistWindowBounds()
+    {
+        var size = WindowState == WindowState.Normal
+            ? new System.Windows.Size(Width, Height)
+            : RestoreBounds.Size;
+
+        if (size.Width >= MinWidth && size.Height >= MinHeight)
+        {
+            _settings.WindowWidth = size.Width;
+            _settings.WindowHeight = size.Height;
+        }
+        _settings.WindowMaximized = _lastNonMinimizedWindowState == WindowState.Maximized;
+
+        try
+        {
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to save window bounds.");
+        }
+    }
+
+    #endregion
 
     private sealed record AudioDeviceOption(string Id, string FriendlyName);
 

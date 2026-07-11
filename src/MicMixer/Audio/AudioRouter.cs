@@ -13,6 +13,9 @@ public sealed class AudioRouter : IDisposable
     private InputRoute? _moddedRoute;
     private bool _useModdedInput;
     private bool _outputGateOpen = true;
+    private bool _outputMeteringEnabled;
+    private float _outputPeak;
+    private float _outputRms;
     private bool _disposed;
 
     public bool IsRouting => _player?.PlaybackState == PlaybackState.Playing;
@@ -65,6 +68,10 @@ public sealed class AudioRouter : IDisposable
             // outgoing mix (mic and music) while upstream sources keep advancing.
             source = new GateSampleProvider(source, () => OutputGateOpen);
 
+            // Tap after the gate: the peak reflects exactly what the cable receives,
+            // so the overlay meter reads empty while push-to-talk holds silence.
+            source = new OutputPeakTapProvider(source, this);
+
             player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 50);
             player.PlaybackStopped += OnPlaybackStopped;
             player.Init(new SampleToTargetWaveProvider(source, targetFormat));
@@ -95,6 +102,40 @@ public sealed class AudioRouter : IDisposable
             Stop();
             RaiseError(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Gates the per-sample output level computation. Off means the tap is a pure
+    /// pass-through — no reason to scan the whole stream while no meter is shown.
+    /// </summary>
+    public bool OutputMeteringEnabled
+    {
+        get => Volatile.Read(ref _outputMeteringEnabled);
+        set
+        {
+            Volatile.Write(ref _outputMeteringEnabled, value);
+            if (!value)
+            {
+                Interlocked.Exchange(ref _outputPeak, 0f);
+                Interlocked.Exchange(ref _outputRms, 0f);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Levels of the complete outgoing mix (mic + music, after the push-to-talk
+    /// gate) since the last call, then resets. Peak is the max absolute sample
+    /// (clipping detection); Rms is the highest block RMS (perceived loudness —
+    /// what a volume indicator should judge, since limited music runs peaks near
+    /// full scale while sounding far louder than speech at the same peak).
+    /// Both are 0 while routing is stopped, the gate is closed, or
+    /// <see cref="OutputMeteringEnabled"/> is off.
+    /// </summary>
+    public (float Peak, float Rms) ReadAndResetOutputLevels()
+    {
+        // Exchange makes each read/reset atomic so an audio-thread write landing
+        // between them is never wiped.
+        return (Interlocked.Exchange(ref _outputPeak, 0f), Interlocked.Exchange(ref _outputRms, 0f));
     }
 
     public void SetUseModdedInput(bool useModdedInput)
@@ -152,6 +193,8 @@ public sealed class AudioRouter : IDisposable
 
         Volatile.Write(ref _useModdedInput, false);
         Volatile.Write(ref _outputGateOpen, true);
+        Volatile.Write(ref _outputPeak, 0f);
+        Volatile.Write(ref _outputRms, 0f);
     }
 
     public void Dispose()
@@ -268,6 +311,61 @@ public sealed class AudioRouter : IDisposable
         {
             float peak = e.MaxSampleValues.Length == 0 ? 0f : e.MaxSampleValues.Max();
             Volatile.Write(ref _currentPeak, Math.Clamp(peak, 0f, 1f));
+        }
+    }
+
+    /// <summary>
+    /// Pass-through that tracks the block peak and block RMS of the outgoing mix
+    /// for the UI volume indicator. A lost race between reader and reset only
+    /// costs one meter frame, so plain volatile reads/writes are enough.
+    /// </summary>
+    private sealed class OutputPeakTapProvider : ISampleProvider
+    {
+        private readonly ISampleProvider _source;
+        private readonly AudioRouter _router;
+
+        public OutputPeakTapProvider(ISampleProvider source, AudioRouter router)
+        {
+            _source = source;
+            _router = router;
+        }
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            int samplesRead = _source.Read(buffer, offset, count);
+            if (samplesRead == 0 || !_router.OutputMeteringEnabled)
+            {
+                return samplesRead;
+            }
+
+            float max = 0f;
+            double squareSum = 0d;
+            for (int i = 0; i < samplesRead; i++)
+            {
+                float sample = buffer[offset + i];
+                float abs = Math.Abs(sample);
+                if (abs > max)
+                {
+                    max = abs;
+                }
+
+                squareSum += (double)sample * sample;
+            }
+
+            if (max > Volatile.Read(ref _router._outputPeak))
+            {
+                Volatile.Write(ref _router._outputPeak, max);
+            }
+
+            float rms = (float)Math.Sqrt(squareSum / samplesRead);
+            if (rms > Volatile.Read(ref _router._outputRms))
+            {
+                Volatile.Write(ref _router._outputRms, rms);
+            }
+
+            return samplesRead;
         }
     }
 
