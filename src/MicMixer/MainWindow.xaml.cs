@@ -14,6 +14,7 @@ using System.IO;
 using MicMixer.Audio;
 using MicMixer.Input;
 using MicMixer.Music;
+using MicMixer.Overlay;
 using MicMixer.Settings;
 using NAudio.CoreAudioApi;
 using Serilog;
@@ -37,6 +38,12 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _musicTimer;
     private readonly List<string> _musicQueue = new();
     private List<TrackItem> _allTracks = new();
+    private List<FolderChipItem> _folderChips = new();
+    private Dictionary<string, FolderInfo> _folderInfoByPath = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Active filter chips in the order they were turned on; the last one steers the download folder.</summary>
+    private readonly List<string> _folderChipActivationOrder = new();
+    /// <summary>The download folder the user picked themselves — filter chips override the combo but never this.</summary>
+    private string? _userDownloadFolderPath;
     private System.Windows.Point _queueDragStart;
     private int _queueDragIndex = -1;
     private DateTime _queuePopupClosedAt = DateTime.MinValue;
@@ -54,6 +61,7 @@ public partial class MainWindow : Window
     private bool _trayBalloonShown;
     private bool _isDownloading;
     private AppSettings _settings;
+    private OverlayIndicatorWindow? _overlayIndicator;
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
     private int _releaseDelayMilliseconds;
     private bool _isCapturingHotkey;
@@ -112,8 +120,6 @@ public partial class MainWindow : Window
         ModdedInputCombo.IsEnabled = false;
         OutputDeviceCombo.IsEnabled = false;
 
-        ApplyModdedMicUiState(_settings.SkipModdedMic);
-
         _music.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
         _music.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
         _isUpdatingMusicUi = true;
@@ -121,10 +127,22 @@ public partial class MainWindow : Window
         MonitorVolumeSlider.Value = _music.MonitorVolume;
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
+        PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
+        OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         _isUpdatingMusicUi = false;
         _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
-        _playlist.CustomFolder = _settings.MusicFolderPath;
+        ApplyModdedMicUiState(_settings.SkipModdedMic);
+
+        // Migrate the legacy single-folder setting into the folder list.
+        var storedFolders = _settings.MusicFolderPaths is { Count: > 0 } paths
+            ? paths
+            : string.IsNullOrWhiteSpace(_settings.MusicFolderPath)
+                ? new List<string>()
+                : new List<string> { _settings.MusicFolderPath! };
+        _playlist.SetFolders(storedFolders);
+        _userDownloadFolderPath = _settings.DownloadFolderPath;
+        RefreshMusicFolderUi();
         RefreshPlaylist(null);
 
         // Restore the music source mode without letting the radio handler run
@@ -150,6 +168,7 @@ public partial class MainWindow : Window
 
         UpdateStatusText();
         UpdateTrayIcon();
+        ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
         Closing += OnClosing;
 
         App.StartupTrace("MainWindow ctor done");
@@ -370,9 +389,11 @@ public partial class MainWindow : Window
         ToggleBtn.IsEnabled = false;
         StatusText.Text = "Startar routning...";
 
+        bool pushToTalk = IsPushToTalk;
+
         try
         {
-            await Task.Run(() => StartRoutingByDeviceId(dryInput.Id, skipModded ? null : moddedInput!.Id, output.Id));
+            await Task.Run(() => StartRoutingByDeviceId(dryInput.Id, skipModded ? null : moddedInput!.Id, output.Id, pushToTalk));
         }
         catch (Exception ex)
         {
@@ -388,11 +409,12 @@ public partial class MainWindow : Window
 
         if (_router.IsRouting)
         {
-            if (!skipModded)
+            if (!skipModded || pushToTalk)
             {
                 SetHotkeyMonitoringEnabled(true);
             }
 
+            ApplyEffectiveRoutingStates();
             ToggleBtnText.Text = "Stoppa routning";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
@@ -409,7 +431,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void StartRoutingByDeviceId(string dryInputId, string? moddedInputId, string outputId)
+    private void StartRoutingByDeviceId(string dryInputId, string? moddedInputId, string outputId, bool startMuted)
     {
         using var enumerator = new MMDeviceEnumerator();
         var dryInput = enumerator.GetDevice(dryInputId);
@@ -417,6 +439,8 @@ public partial class MainWindow : Window
         var output = enumerator.GetDevice(outputId);
 
         _router.SetUseModdedInput(false);
+        // Push-to-talk must start silent; the gate opens when the hotkey is pressed.
+        _router.SetOutputGateOpen(!startMuted);
         _router.Start(dryInput, moddedInput, output);
     }
 
@@ -512,10 +536,45 @@ public partial class MainWindow : Window
 
     private void ApplyModdedMicUiState(bool skip)
     {
-        HotkeyDelayCard.IsEnabled = !skip;
-        HotkeyDelayCard.Opacity = skip ? 0.55 : 1.0;
+        // The hotkey still matters without a modded mic when push-to-talk gates the mix.
+        bool hotkeyRelevant = !skip || IsPushToTalk;
+        HotkeyConfigPanel.IsEnabled = hotkeyRelevant;
+        HotkeyConfigPanel.Opacity = hotkeyRelevant ? 1.0 : 0.55;
         ModdedMeterPanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetColumnSpan(DryMeterPanel, skip ? 3 : 1);
+    }
+
+    private bool IsPushToTalk => PushToTalkCheck.IsChecked == true;
+
+    private void OnPushToTalkChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        ApplyModdedMicUiState();
+        CancelPendingReleaseDelay();
+
+        if (_router.IsRouting)
+        {
+            SetHotkeyMonitoringEnabled(!IsModdedMicSkipped || IsPushToTalk);
+            ApplyEffectiveRoutingStates();
+        }
+
+        SaveSettings();
+        UpdateStatusText();
+    }
+
+    /// <summary>
+    /// Derives the router's modded-mic switch and push-to-talk gate from the
+    /// current hotkey state. Single writer for both so they can never diverge.
+    /// </summary>
+    private void ApplyEffectiveRoutingStates()
+    {
+        bool engaged = IsHotkeyEngaged();
+        _router.SetUseModdedInput(!IsModdedMicSkipped && engaged);
+        _router.SetOutputGateOpen(!IsPushToTalk || engaged);
     }
 
     private void UpdateOutputCableWarning()
@@ -616,6 +675,8 @@ public partial class MainWindow : Window
         _levelTimer.Stop();
         _releaseDelayTimer.Stop();
         _musicTimer.Stop();
+        _overlayIndicator?.Close();
+        _overlayIndicator = null;
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _router.Dispose();
@@ -649,7 +710,14 @@ public partial class MainWindow : Window
         _settings.MusicVolume = (float)MusicVolumeSlider.Value;
         _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
         _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
-        _settings.MusicFolderPath = _playlist.CustomFolder;
+        _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
+        _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
+        _settings.MusicFolderPaths = _playlist.Folders.ToList();
+        // Keep the legacy field pointing at the first custom folder so an older
+        // app version reading these settings degrades gracefully.
+        _settings.MusicFolderPath = _playlist.Folders.FirstOrDefault(folder => !PlaylistManager.IsDefaultFolder(folder));
+        // Persist the user's own choice, not a temporary filter-chip override.
+        _settings.DownloadFolderPath = _userDownloadFolderPath;
         _settings.ExternalCaptureMode = _isExternalMode;
         if ((ExternalAppCombo.SelectedItem as AudioAppOption)?.ProcessName is string externalAppName)
         {
@@ -676,22 +744,48 @@ public partial class MainWindow : Window
 
         if (_router.IsRouting)
         {
+            bool pushToTalk = IsPushToTalk;
+            bool isMuted = pushToTalk && !_router.OutputGateOpen;
+
             RoutingStateText.Text = "Routning aktiv";
             RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
             RoutingStateIcon.Fill = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
-            ActiveSourceText.Text = _router.UseModdedInput ? "Aktiv källa: Moddad mic" : "Aktiv källa: Vanlig mic";
-            ActiveSourceText.Foreground = _router.UseModdedInput
-                ? new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C2410C"))
-                : new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
+
+            if (isMuted)
+            {
+                ActiveSourceText.Text = "Aktiv källa: Tyst (push-to-talk)";
+                ActiveSourceText.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#6B7280"));
+            }
+            else
+            {
+                ActiveSourceText.Text = _router.UseModdedInput ? "Aktiv källa: Moddad mic" : "Aktiv källa: Vanlig mic";
+                ActiveSourceText.Foreground = _router.UseModdedInput
+                    ? new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C2410C"))
+                    : new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
+            }
+
             if (!_isCapturingHotkey)
             {
-                HotkeyStateText.Text = IsModdedMicSkipped
-                    ? "Moddad mic används ej — musiken mixas in så länge den spelar"
-                    : _hotkeyListener.IsPressed
-                        ? $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic"
+                if (pushToTalk)
+                {
+                    HotkeyStateText.Text = _hotkeyListener.IsPressed
+                        ? IsModdedMicSkipped
+                            ? $"{_hotkeyBinding.DisplayName} hålls nere — ljudet sänds"
+                            : $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic sänds"
                         : _isReleaseDelayPending
-                            ? $"{_hotkeyBinding.DisplayName} släppt — återgår om {_releaseDelayMilliseconds} ms"
-                            : $"{_hotkeyBinding.DisplayName} — vanlig mic";
+                            ? $"{_hotkeyBinding.DisplayName} släppt — mutar om {_releaseDelayMilliseconds} ms"
+                            : $"Push-to-talk: håll {_hotkeyBinding.DisplayName} för att höras";
+                }
+                else
+                {
+                    HotkeyStateText.Text = IsModdedMicSkipped
+                        ? "Moddad mic används ej — musiken mixas in så länge den spelar"
+                        : _hotkeyListener.IsPressed
+                            ? $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic"
+                            : _isReleaseDelayPending
+                                ? $"{_hotkeyBinding.DisplayName} släppt — återgår om {_releaseDelayMilliseconds} ms"
+                                : $"{_hotkeyBinding.DisplayName} — vanlig mic";
+                }
             }
 
             StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
@@ -707,9 +801,11 @@ public partial class MainWindow : Window
         ActiveSourceText.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
         if (!_isCapturingHotkey)
         {
-            HotkeyStateText.Text = IsModdedMicSkipped
-                ? "Moddad mic används ej — endast vanlig mic + musik"
-                : $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
+            HotkeyStateText.Text = IsPushToTalk
+                ? $"Push-to-talk aktivt — håll {_hotkeyBinding.DisplayName} för att höras när routningen är igång"
+                : IsModdedMicSkipped
+                    ? "Moddad mic används ej — endast vanlig mic + musik"
+                    : $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
         }
 
         StatusText.Text = _devicesLoaded
@@ -727,7 +823,7 @@ public partial class MainWindow : Window
         _isCapturingHotkey = false;
         CancelPendingReleaseDelay();
         _hotkeyListener.UpdateBinding(binding);
-        _router.SetUseModdedInput(GetEffectiveModdedState());
+        ApplyEffectiveRoutingStates();
         UpdateHotkeyUi();
         SaveSettings();
         UpdateStatusText();
@@ -744,41 +840,30 @@ public partial class MainWindow : Window
 
     private void ApplyHotkeyPressedState(bool isPressed)
     {
-        if (IsModdedMicSkipped)
+        bool hotkeyRelevant = !IsModdedMicSkipped || IsPushToTalk;
+
+        if (!hotkeyRelevant || !_router.IsRouting)
         {
             CancelPendingReleaseDelay();
-            _router.SetUseModdedInput(false);
+            ApplyEffectiveRoutingStates();
             return;
         }
 
-        if (!_router.IsRouting)
+        if (isPressed || _releaseDelayMilliseconds <= 0)
         {
             CancelPendingReleaseDelay();
-            _router.SetUseModdedInput(false);
-            return;
         }
-
-        if (isPressed)
+        else
         {
-            CancelPendingReleaseDelay();
-            _router.SetUseModdedInput(true);
-            UpdateStatusText();
-            return;
+            // Released with a delay configured: keep the current state (modded mic
+            // and/or open gate) until the timer runs out.
+            _isReleaseDelayPending = true;
+            _releaseDelayTimer.Stop();
+            _releaseDelayTimer.Interval = TimeSpan.FromMilliseconds(_releaseDelayMilliseconds);
+            _releaseDelayTimer.Start();
         }
 
-        if (_releaseDelayMilliseconds <= 0)
-        {
-            CancelPendingReleaseDelay();
-            _router.SetUseModdedInput(false);
-            UpdateStatusText();
-            return;
-        }
-
-        _isReleaseDelayPending = true;
-        _releaseDelayTimer.Stop();
-        _releaseDelayTimer.Interval = TimeSpan.FromMilliseconds(_releaseDelayMilliseconds);
-        _releaseDelayTimer.Start();
-        _router.SetUseModdedInput(true);
+        ApplyEffectiveRoutingStates();
         UpdateStatusText();
     }
 
@@ -801,7 +886,7 @@ public partial class MainWindow : Window
     {
         _releaseDelayTimer.Stop();
         _isReleaseDelayPending = false;
-        _router.SetUseModdedInput(false);
+        ApplyEffectiveRoutingStates();
         UpdateStatusText();
     }
 
@@ -833,7 +918,7 @@ public partial class MainWindow : Window
             {
                 _releaseDelayTimer.Stop();
                 _isReleaseDelayPending = false;
-                _router.SetUseModdedInput(false);
+                ApplyEffectiveRoutingStates();
             }
             else
             {
@@ -847,7 +932,8 @@ public partial class MainWindow : Window
         UpdateStatusText();
     }
 
-    private bool GetEffectiveModdedState()
+    /// <summary>True while the hotkey is held or its release delay is still running.</summary>
+    private bool IsHotkeyEngaged()
     {
         return _hotkeyListener.IsPressed || _isReleaseDelayPending;
     }
@@ -962,6 +1048,8 @@ public partial class MainWindow : Window
 
     private void UpdateMusicUi()
     {
+        UpdateMusicRoutingWarning();
+
         if (_isExternalMode)
         {
             // Transport steers the external app via media keys; there is no local
@@ -998,6 +1086,21 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Local monitoring and external apps can remain audible while routing is
+    /// stopped. Keep that distinction visible next to the transport controls.
+    /// </summary>
+    private void UpdateMusicRoutingWarning()
+    {
+        bool hasActiveMusic = _isExternalMode
+            ? _appCapture != null
+            : _music.IsPlaying;
+
+        MusicRoutingWarning.Visibility = hasActiveMusic && !_router.IsRouting
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
     private static string FormatTrackTime(TimeSpan time)
     {
         return $"{(int)time.TotalMinutes}:{time.Seconds:00}";
@@ -1008,8 +1111,13 @@ public partial class MainWindow : Window
         try
         {
             string? current = selectPath ?? (PlaylistListBox.SelectedItem as TrackItem)?.Path;
+            bool showFolderBadges = _playlist.Folders.Count > 1;
             _allTracks = _playlist.GetTracks()
-                .Select(path => new TrackItem(path, Path.GetFileNameWithoutExtension(path)))
+                .Select(file => new TrackItem(
+                    file.Path,
+                    Path.GetFileNameWithoutExtension(file.Path),
+                    _folderInfoByPath.GetValueOrDefault(file.Folder),
+                    showFolderBadges))
                 .ToList();
 
             ApplyPlaylistFilter();
@@ -1033,9 +1141,24 @@ public partial class MainWindow : Window
         string filter = PlaylistFilterBox.Text.Trim();
         string? selected = (PlaylistListBox.SelectedItem as TrackItem)?.Path;
 
-        var visible = filter.Length == 0
-            ? _allTracks
-            : _allTracks.Where(track => track.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        var activeFolders = _folderChips
+            .Where(chip => chip.IsActive)
+            .Select(chip => chip.Info.Path)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        IEnumerable<TrackItem> filtered = _allTracks;
+
+        if (activeFolders.Count > 0)
+        {
+            filtered = filtered.Where(track => track.FolderPath != null && activeFolders.Contains(track.FolderPath));
+        }
+
+        if (filter.Length > 0)
+        {
+            filtered = filtered.Where(track => track.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var visible = ReferenceEquals(filtered, _allTracks) ? _allTracks : filtered.ToList();
 
         PlaylistListBox.ItemsSource = visible;
 
@@ -1476,18 +1599,49 @@ public partial class MainWindow : Window
 
     private void OnOpenMusicFolderClick(object sender, RoutedEventArgs e)
     {
+        if (_playlist.Folders.Count == 1)
+        {
+            OpenMusicFolder(_playlist.Folders[0]);
+            return;
+        }
+
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = OpenMusicFolderBtn,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom
+        };
+
+        foreach (string folder in _playlist.Folders)
+        {
+            string captured = folder;
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = new TextBlock { Text = GetFolderMenuLabel(folder) },
+                Icon = CreateFolderBadge(_folderInfoByPath.GetValueOrDefault(folder)),
+                ToolTip = folder
+            };
+            item.Click += (_, _) => OpenMusicFolder(captured);
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    private void OpenMusicFolder(string folder)
+    {
         try
         {
-            Directory.CreateDirectory(_playlist.MusicFolder);
+            Directory.CreateDirectory(folder);
             Process.Start(new ProcessStartInfo
             {
-                FileName = _playlist.MusicFolder,
+                FileName = folder,
                 UseShellExecute = true
             });
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to open music folder.");
+            Log.Warning(ex, "Failed to open music folder {Folder}.", folder);
+            MusicStatusText.Text = $"Kunde inte öppna mappen: {ex.Message}";
         }
     }
 
@@ -1504,54 +1658,271 @@ public partial class MainWindow : Window
         {
             Header = new TextBlock
             {
-                Text = _playlist.UsesCustomFolder
-                    ? $"Egen mapp: {_playlist.MusicFolder}"
-                    : "Standardmappen används"
+                Text = _playlist.Folders.Count == 1
+                    ? "Musikmapp — lägg till fler för att blanda mappar"
+                    : $"Musikmappar ({_playlist.Folders.Count}) — låtar från alla visas i listan"
             },
             IsEnabled = false
         });
         menu.Items.Add(new Separator());
 
-        var pickItem = new System.Windows.Controls.MenuItem { Header = "Välj annan musikmapp…" };
-        pickItem.Click += (_, _) => PickMusicFolder();
-        menu.Items.Add(pickItem);
+        bool canRemove = _playlist.Folders.Count > 1;
 
-        if (_playlist.UsesCustomFolder)
+        foreach (string folder in _playlist.Folders)
         {
-            var resetItem = new System.Windows.Controls.MenuItem { Header = "Använd standardmappen igen" };
-            resetItem.Click += (_, _) => SetMusicFolder(null);
+            string captured = folder;
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = new TextBlock { Text = GetFolderMenuLabel(folder) },
+                Icon = CreateFolderBadge(_folderInfoByPath.GetValueOrDefault(folder)),
+                IsCheckable = true,
+                IsChecked = true,
+                IsEnabled = canRemove,
+                ToolTip = canRemove ? "Avmarkera för att ta bort mappen från listan" : "Minst en musikmapp måste finnas kvar"
+            };
+            item.Click += (_, _) => RemoveMusicFolder(captured);
+            menu.Items.Add(item);
+        }
+
+        menu.Items.Add(new Separator());
+
+        var addItem = new System.Windows.Controls.MenuItem { Header = "Lägg till mapp…" };
+        addItem.Click += (_, _) => AddMusicFolderViaDialog();
+        menu.Items.Add(addItem);
+
+        if (!_playlist.UsesOnlyDefaultFolder)
+        {
+            var resetItem = new System.Windows.Controls.MenuItem { Header = "Använd bara standardmappen" };
+            resetItem.Click += (_, _) =>
+            {
+                _playlist.SetFolders(null);
+                OnMusicFoldersChanged("Använder standardmusikmappen igen.");
+            };
             menu.Items.Add(resetItem);
         }
 
         menu.IsOpen = true;
     }
 
-    private void PickMusicFolder()
+    private void AddMusicFolderViaDialog()
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
             Title = "Välj mapp med MP3-filer"
         };
 
-        if (Directory.Exists(_playlist.MusicFolder))
+        if (dialog.ShowDialog(this) != true)
         {
-            dialog.InitialDirectory = _playlist.MusicFolder;
+            return;
         }
 
-        if (dialog.ShowDialog(this) == true)
+        if (_playlist.AddFolder(dialog.FolderName))
         {
-            SetMusicFolder(dialog.FolderName);
+            OnMusicFoldersChanged($"Lade till musikmapp: {dialog.FolderName}");
+        }
+        else
+        {
+            MusicStatusText.Text = "Mappen finns redan i listan.";
         }
     }
 
-    private void SetMusicFolder(string? folder)
+    private void RemoveMusicFolder(string folder)
     {
-        _playlist.CustomFolder = folder;
+        if (_playlist.RemoveFolder(folder))
+        {
+            OnMusicFoldersChanged($"Tog bort musikmapp: {folder}");
+        }
+        else
+        {
+            MusicStatusText.Text = "Minst en musikmapp måste finnas kvar.";
+        }
+    }
+
+    private void OnMusicFoldersChanged(string statusMessage)
+    {
+        RefreshMusicFolderUi();
         SaveSettings();
         RefreshPlaylist(null);
-        MusicStatusText.Text = folder is null
-            ? "Använder standardmusikmappen igen."
-            : $"Musikmapp: {folder}";
+        MusicStatusText.Text = statusMessage;
+    }
+
+    private string GetFolderMenuLabel(string folder)
+    {
+        return PlaylistManager.IsDefaultFolder(folder) ? $"Standard: {folder}" : folder;
+    }
+
+    /// <summary>Small colored letter badge matching the playlist badges, for menu icons.</summary>
+    private static UIElement? CreateFolderBadge(FolderInfo? info)
+    {
+        if (info == null)
+        {
+            return null;
+        }
+
+        return new Border
+        {
+            Background = info.Tint,
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(5, 1, 5, 1),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = info.Letter,
+                FontSize = 9.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = info.Accent
+            }
+        };
+    }
+
+    /// <summary>
+    /// Rebuilds everything derived from the folder list: badge colors, the filter
+    /// chips, and the download-target selector. Call before RefreshPlaylist.
+    /// </summary>
+    private void RefreshMusicFolderUi()
+    {
+        var folders = _playlist.Folders;
+        var infos = new List<FolderInfo>(folders.Count);
+        _folderInfoByPath = new Dictionary<string, FolderInfo>(StringComparer.OrdinalIgnoreCase);
+
+        for (int i = 0; i < folders.Count; i++)
+        {
+            var (accent, tint) = FolderPalette[i % FolderPalette.Length];
+            var info = new FolderInfo(folders[i], accent, tint);
+            infos.Add(info);
+            _folderInfoByPath[info.Path] = info;
+        }
+
+        bool multiple = infos.Count > 1;
+
+        // Filter chips — keep an existing folder filter across list changes.
+        var previouslyActive = _folderChips
+            .Where(chip => chip.IsActive)
+            .Select(chip => chip.Info.Path)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _folderChips = infos
+            .Select(info => new FolderChipItem(info) { IsActive = multiple && previouslyActive.Contains(info.Path) })
+            .ToList();
+        UpdateFolderChipVisuals();
+        FolderChipsPanel.ItemsSource = _folderChips;
+        FolderChipsPanel.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+
+        // Keep the activation order aligned with the rebuilt chips (a removed
+        // folder must not linger as the download target).
+        _folderChipActivationOrder.RemoveAll(path =>
+            !_folderChips.Any(chip => chip.IsActive && string.Equals(chip.Info.Path, path, StringComparison.OrdinalIgnoreCase)));
+
+        // Download target — only a visible choice when there is more than one folder.
+        if (_userDownloadFolderPath == null || !_folderInfoByPath.ContainsKey(_userDownloadFolderPath))
+        {
+            _userDownloadFolderPath = infos[0].Path;
+        }
+
+        _isUpdatingMusicUi = true;
+        try
+        {
+            DownloadFolderCombo.ItemsSource = infos;
+        }
+        finally
+        {
+            _isUpdatingMusicUi = false;
+        }
+
+        SyncDownloadFolderToFilter(announce: false);
+        DownloadFolderCombo.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnFolderChipClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is FolderChipItem chip)
+        {
+            _folderChipActivationOrder.RemoveAll(path =>
+                string.Equals(path, chip.Info.Path, StringComparison.OrdinalIgnoreCase));
+
+            if (chip.IsActive)
+            {
+                _folderChipActivationOrder.Add(chip.Info.Path);
+            }
+        }
+
+        UpdateFolderChipVisuals();
+        ApplyPlaylistFilter();
+        SyncDownloadFolderToFilter(announce: true);
+    }
+
+    /// <summary>
+    /// Points the download combo at the filtered folder: an active chip becomes
+    /// the download target (the most recently activated one when several are on),
+    /// and clearing the filter returns to the user's own combo choice. The
+    /// override never touches <see cref="_userDownloadFolderPath"/>, so the
+    /// stored preference survives the filter round trip.
+    /// </summary>
+    private void SyncDownloadFolderToFilter(bool announce)
+    {
+        if (DownloadFolderCombo.ItemsSource is not List<FolderInfo> infos || infos.Count == 0)
+        {
+            return;
+        }
+
+        string? filterPath = _folderChipActivationOrder.Count > 0 ? _folderChipActivationOrder[^1] : null;
+        string targetPath = filterPath ?? _userDownloadFolderPath ?? infos[0].Path;
+
+        var target = infos.FirstOrDefault(info => string.Equals(info.Path, targetPath, StringComparison.OrdinalIgnoreCase))
+            ?? infos[0];
+
+        if (ReferenceEquals(DownloadFolderCombo.SelectedItem, target))
+        {
+            return;
+        }
+
+        _isUpdatingMusicUi = true;
+        try
+        {
+            DownloadFolderCombo.SelectedItem = target;
+        }
+        finally
+        {
+            _isUpdatingMusicUi = false;
+        }
+
+        if (announce)
+        {
+            MusicStatusText.Text = filterPath != null
+                ? $"Nya låtar laddas ner till {target.DisplayName} så länge mappfiltret är på."
+                : $"Nya låtar laddas ner till {target.DisplayName} igen.";
+        }
+    }
+
+    private void UpdateFolderChipVisuals()
+    {
+        bool anyActive = _folderChips.Any(chip => chip.IsActive);
+        foreach (var chip in _folderChips)
+        {
+            chip.SetDimmed(anyActive && !chip.IsActive);
+        }
+    }
+
+    private void OnDownloadFolderChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        // A manual pick is the user's real preference; filter-driven changes go
+        // through SyncDownloadFolderToFilter and never reach this handler.
+        if ((DownloadFolderCombo.SelectedItem as FolderInfo)?.Path is string pickedPath)
+        {
+            _userDownloadFolderPath = pickedPath;
+        }
+
+        SaveSettings();
+
+        if (DownloadFolderCombo.SelectedItem is FolderInfo info)
+        {
+            MusicStatusText.Text = $"Nya låtar laddas ner till: {info.Path}";
+        }
     }
 
     // --- External app capture (Spotify m.fl.) ---
@@ -1773,7 +2144,7 @@ public partial class MainWindow : Window
 
         MusicStatusText.Text = _router.IsRouting
             ? $"Fångar ljud från {target.DisplayName}."
-            : $"Fångar ljud från {target.DisplayName} — starta routningen så att andra hör.";
+            : $"Fångar ljud från {target.DisplayName} — aktivera routningen så att andra hör.";
     }
 
     private void StopAppCapture()
@@ -2139,7 +2510,8 @@ public partial class MainWindow : Window
                 }
             });
 
-            string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, _playlist.MusicFolder, progress, CancellationToken.None);
+            string downloadFolder = (DownloadFolderCombo.SelectedItem as FolderInfo)?.Path ?? _playlist.Folders[0];
+            string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, downloadFolder, progress, CancellationToken.None);
 
             YoutubeUrlBox.Text = "";
             RefreshPlaylist(newFile);
@@ -2223,21 +2595,137 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Per-folder presentation data: a display name, a one-letter badge, and a stable
+    /// color pair (strong accent + light tint) assigned from <see cref="FolderPalette"/>.
+    /// </summary>
+    private sealed class FolderInfo
+    {
+        public FolderInfo(string path, System.Windows.Media.Brush accent, System.Windows.Media.Brush tint)
+        {
+            Path = path;
+            DisplayName = PlaylistManager.IsDefaultFolder(path)
+                ? "Standard"
+                : System.IO.Path.GetFileName(path) is { Length: > 0 } leaf ? leaf : path;
+            Letter = char.ToUpperInvariant(DisplayName[0]).ToString();
+            Accent = accent;
+            Tint = tint;
+        }
+
+        public string Path { get; }
+
+        public string DisplayName { get; }
+
+        public string Letter { get; }
+
+        public System.Windows.Media.Brush Accent { get; }
+
+        public System.Windows.Media.Brush Tint { get; }
+    }
+
+    /// <summary>Toggleable folder chip next to the search box; active chips narrow the playlist.</summary>
+    private sealed class FolderChipItem : INotifyPropertyChanged
+    {
+        private bool _isActive;
+        private bool _isDimmed;
+
+        public FolderChipItem(FolderInfo info)
+        {
+            Info = info;
+        }
+
+        public FolderInfo Info { get; }
+
+        public string Letter => Info.Letter;
+
+        public string ToolTipText => IsActive
+            ? $"{Info.Path}\nVisar bara låtar från den här mappen — klicka för att visa alla."
+            : $"{Info.Path}\nKlicka för att bara visa låtar från den här mappen.";
+
+        public bool IsActive
+        {
+            get => _isActive;
+            set
+            {
+                if (_isActive == value)
+                {
+                    return;
+                }
+
+                _isActive = value;
+                Raise(nameof(IsActive));
+                Raise(nameof(ChipBackground));
+                Raise(nameof(ChipForeground));
+                Raise(nameof(ToolTipText));
+            }
+        }
+
+        public System.Windows.Media.Brush ChipBackground => IsActive ? Info.Accent : Info.Tint;
+
+        public System.Windows.Media.Brush ChipForeground => IsActive ? System.Windows.Media.Brushes.White : Info.Accent;
+
+        public double ChipOpacity => _isDimmed ? 0.45 : 1.0;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void SetDimmed(bool isDimmed)
+        {
+            if (_isDimmed == isDimmed)
+            {
+                return;
+            }
+
+            _isDimmed = isDimmed;
+            Raise(nameof(ChipOpacity));
+        }
+
+        private void Raise(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+
+    /// <summary>Accent/tint pairs assigned to folders by list position.</summary>
+    private static readonly (System.Windows.Media.Brush Accent, System.Windows.Media.Brush Tint)[] FolderPalette =
+    {
+        (CreateFrozenBrush(0x0F, 0x76, 0x6E), CreateFrozenBrush(0xCC, 0xFB, 0xF1)), // teal
+        (CreateFrozenBrush(0x43, 0x38, 0xCA), CreateFrozenBrush(0xE0, 0xE7, 0xFF)), // indigo
+        (CreateFrozenBrush(0xC2, 0x41, 0x0C), CreateFrozenBrush(0xFF, 0xED, 0xD5)), // orange
+        (CreateFrozenBrush(0xBE, 0x18, 0x5D), CreateFrozenBrush(0xFC, 0xE7, 0xF3)), // pink
+        (CreateFrozenBrush(0x15, 0x80, 0x3D), CreateFrozenBrush(0xDC, 0xFC, 0xE7)), // green
+        (CreateFrozenBrush(0x1D, 0x4E, 0xD8), CreateFrozenBrush(0xDB, 0xEA, 0xFE)), // blue
+    };
+
     private sealed class TrackItem : INotifyPropertyChanged
     {
+        private readonly FolderInfo? _folder;
+        private readonly bool _showFolderBadge;
         private string _queueText = "";
         private Visibility _queueVisibility = Visibility.Collapsed;
         private Visibility _playingVisibility = Visibility.Collapsed;
 
-        public TrackItem(string path, string name)
+        public TrackItem(string path, string name, FolderInfo? folder, bool showFolderBadge)
         {
             Path = path;
             Name = name;
+            _folder = folder;
+            _showFolderBadge = showFolderBadge;
         }
 
         public string Path { get; }
 
         public string Name { get; }
+
+        public string? FolderPath => _folder?.Path;
+
+        public string? FolderLetter => _folder?.Letter;
+
+        public System.Windows.Media.Brush? FolderBadgeBackground => _folder?.Tint;
+
+        public System.Windows.Media.Brush? FolderBadgeForeground => _folder?.Accent;
+
+        public Visibility FolderBadgeVisibility =>
+            _showFolderBadge && _folder != null ? Visibility.Visible : Visibility.Collapsed;
 
         public string QueueText
         {
@@ -2330,11 +2818,21 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    private TrayIconState ComputeTrayIconState()
+    {
+        return !_router.IsRouting
+            ? TrayIconState.Stopped
+            : !_router.OutputGateOpen
+                ? TrayIconState.Muted
+                : _router.UseModdedInput ? TrayIconState.Modded : TrayIconState.Normal;
+    }
+
     private void UpdateTrayIcon()
     {
-        var newState = _router.IsRouting
-            ? (_router.UseModdedInput ? TrayIconState.Modded : TrayIconState.Normal)
-            : TrayIconState.Stopped;
+        var newState = ComputeTrayIconState();
+
+        // The overlay mirrors the tray state; SetState no-ops when unchanged.
+        _overlayIndicator?.SetState(ToOverlayIndicatorState(newState));
 
         if (newState == _lastTrayState)
             return;
@@ -2349,6 +2847,7 @@ public partial class MainWindow : Window
             {
                 TrayIconState.Normal => "MicMixer — Vanlig mic",
                 TrayIconState.Modded => "MicMixer — Moddad mic",
+                TrayIconState.Muted => "MicMixer — Tyst (push-to-talk)",
                 _ => "MicMixer — Stoppad"
             };
 
@@ -2375,6 +2874,7 @@ public partial class MainWindow : Window
         {
             TrayIconState.Normal => System.Drawing.Color.FromArgb(15, 118, 110),   // teal
             TrayIconState.Modded => System.Drawing.Color.FromArgb(194, 65, 12),    // orange
+            TrayIconState.Muted => System.Drawing.Color.FromArgb(185, 28, 28),     // red (PTT muted)
             _ => System.Drawing.Color.FromArgb(107, 114, 128)                       // gray
         };
 
@@ -2417,12 +2917,60 @@ public partial class MainWindow : Window
         }
     }
 
+    // --- Overlay indicator ---
+
+    private static OverlayIndicatorState ToOverlayIndicatorState(TrayIconState state)
+    {
+        return state switch
+        {
+            TrayIconState.Normal => OverlayIndicatorState.Normal,
+            TrayIconState.Modded => OverlayIndicatorState.Modded,
+            TrayIconState.Muted => OverlayIndicatorState.Muted,
+            _ => OverlayIndicatorState.Hidden
+        };
+    }
+
+    private void OnOverlayIndicatorChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        ApplyOverlayIndicatorSetting(OverlayIndicatorCheck.IsChecked == true);
+        SaveSettings();
+    }
+
+    private void ApplyOverlayIndicatorSetting(bool enabled)
+    {
+        if (enabled)
+        {
+            try
+            {
+                _overlayIndicator ??= new OverlayIndicatorWindow();
+                _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeTrayIconState()));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to create overlay indicator window.");
+                _overlayIndicator = null;
+                StatusText.Text = $"Kunde inte visa overlay-indikatorn: {ex.Message}";
+            }
+        }
+        else if (_overlayIndicator is { } overlay)
+        {
+            _overlayIndicator = null;
+            overlay.Close();
+        }
+    }
+
     private sealed record AudioDeviceOption(string Id, string FriendlyName);
 
     private enum TrayIconState
     {
         Stopped,
         Normal,
-        Modded
+        Modded,
+        Muted
     }
 }

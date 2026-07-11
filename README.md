@@ -13,6 +13,8 @@ Appen är en WPF-app för Windows och använder NAudio för ljudroutning.
 - Växlar till en moddad mikrofon medan en global hotkey hålls nere.
 - Kan köras utan moddad mikrofon via valet `Ingen moddad mic`.
 - Har återgångsdelay så moddad mic kan ligga kvar kort efter att hotkeyn släpps.
+- Har push-to-talk-läge som mutar allt utgående ljud (mic och musik) tills
+  hotkeyn hålls in — fungerar även utan moddad mic.
 - Mäter ljudnivå för vanlig och moddad mikrofon.
 - Spelar MP3-filer och mixar musiken in i mikrofonkanalen.
 - Kan hämta ljud från YouTube-länkar och konvertera till MP3.
@@ -68,6 +70,21 @@ ska växla till moddad mic. När routningen är aktiv gäller:
 - Återgångsdelay över `0 ms`: moddad mic ligger kvar tills delayn löpt ut.
 - `Ingen moddad mic`: hotkeyn stängs av och vanlig mic används hela tiden.
 
+### Push-to-talk
+
+Kryssrutan `Push-to-talk` under hotkey-inställningen vänder på beteendet: så
+länge hotkeyn inte hålls in skickas bara tystnad till den virtuella kabeln —
+varken mic eller musik hörs. Håll in hotkeyn för att sända.
+
+- Fungerar även med `Ingen moddad mic`: hotkeyn aktiveras då ändå och styr om
+  din vanliga mic hörs.
+- Med moddad mic vald hörs den moddade micen medan hotkeyn hålls, precis som
+  vanligt — skillnaden är att inget hörs alls när den släpps.
+- Återgångsdelayn gäller även här: ljudet ligger kvar tills delayn löpt ut.
+- Medhörningen i dina egna hörlurar påverkas inte, så du hör musiken själv
+  hela tiden.
+- Tray-ikonen blir röd när mixen är mutad av push-to-talk.
+
 ## Musik och MP3
 
 Musiken mixas in i samma virtuella mikrofonkanal som rösten. Det betyder att
@@ -81,6 +98,19 @@ Du kan lägga till musik på två sätt:
 Första gången du hämtar en länk laddar MicMixer ner `yt-dlp` och `ffmpeg`.
 `ffmpeg`-paketet är stort, så första hämtningen kan ta en stund. Efteråt ligger
 verktygen kvar lokalt och återanvänds.
+
+### Flera musikmappar
+
+Via kugghjulet bredvid spellistan kan du lägga till flera musikmappar. Låtarna
+från alla mappar visas då tillsammans i spellistan:
+
+- Varje låt får en liten färgad bokstavssymbol före namnet som visar vilken
+  mapp den kommer från. Hovra över symbolen för att se hela sökvägen.
+- Bredvid sökfältet visas en chip per mapp — klicka på en chip för att bara
+  visa låtar från den mappen, klicka igen för att visa alla.
+- Bredvid `Hämta MP3` väljer du vilken mapp nya nedladdningar hamnar i.
+- Avmarkera en mapp i kugghjulsmenyn för att ta bort den ur listan; minst en
+  mapp måste alltid finnas kvar.
 
 Musik kan spelas när routningen är aktiv eller när medhörning är aktiverad. Om
 båda saknas finns ingen ljudklocka som driver uppspelningen, så appen pausar i

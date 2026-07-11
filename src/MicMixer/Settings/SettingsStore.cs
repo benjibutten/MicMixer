@@ -11,10 +11,15 @@ public sealed class SettingsStore
         WriteIndented = true
     };
 
-    private readonly string _settingsPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "MicMixer",
-        "settings.json");
+    private readonly string _settingsPath;
+
+    public SettingsStore(string? settingsPath = null)
+    {
+        _settingsPath = settingsPath ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MicMixer",
+            "settings.json");
+    }
 
     public AppSettings Load()
     {

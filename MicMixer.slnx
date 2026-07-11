@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/MicMixer/MicMixer.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MicMixer.Tests/MicMixer.Tests.csproj" />
+  </Folder>
 </Solution>
