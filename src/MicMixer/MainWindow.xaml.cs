@@ -35,9 +35,12 @@ public partial class MainWindow : Window
     private readonly YouTubeDownloader _youTubeDownloader;
     private readonly DispatcherTimer _musicTimer;
     private readonly DispatcherTimer _delayedStartTimer;
+    private readonly DispatcherTimer _settingsSaveTimer;
     private int _delayedStartRemainingSeconds;
     private readonly List<string> _musicQueue = new();
     private List<TrackItem> _allTracks = new();
+    private readonly Dictionary<string, TrackItem> _trackByPath = new(StringComparer.OrdinalIgnoreCase);
+    private TrackItem? _playingTrackItem;
     private List<FolderChipItem> _folderChips = new();
     private Dictionary<string, FolderInfo> _folderInfoByPath = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Active filter chips in the order they were turned on; the last one steers the download folder.</summary>
@@ -102,6 +105,12 @@ public partial class MainWindow : Window
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         _delayedStartTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _delayedStartTimer.Tick += OnDelayedStartTick;
+        _settingsSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _settingsSaveTimer.Tick += (_, _) =>
+        {
+            _settingsSaveTimer.Stop();
+            SaveSettings();
+        };
         _singleTrackAnnounceTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(System.Windows.Forms.SystemInformation.DoubleClickTime + 50)
@@ -687,6 +696,9 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         PersistWindowBounds();
+        // PersistWindowBounds saves the same settings object, so any pending
+        // debounced slider values are already included and need no later write.
+        _settingsSaveTimer.Stop();
 
         if (!_isReallyClosing && !App.StartupBenchmarkMode)
         {
@@ -707,6 +719,7 @@ public partial class MainWindow : Window
         _levelTimer.Stop();
         _releaseDelayTimer.Stop();
         _musicTimer.Stop();
+        _settingsSaveTimer.Stop();
         _overlayIndicator?.Close();
         _overlayIndicator = null;
         _trayIcon.Visible = false;
@@ -770,6 +783,12 @@ public partial class MainWindow : Window
             Log.Warning(ex, "Failed to save settings.");
             StatusText.Text = $"Kunde inte spara inställningar: {ex.Message}";
         }
+    }
+
+    private void ScheduleSettingsSave()
+    {
+        _settingsSaveTimer.Stop();
+        _settingsSaveTimer.Start();
     }
 
     private void UpdateStatusText()
@@ -1114,10 +1133,15 @@ public partial class MainWindow : Window
         PlayPauseIcon.Data = (Geometry)FindResource(_music.IsPlaying ? "PauseIcon" : "PlayIcon");
 
         string? playingPath = _music.CurrentTrackPath;
-        foreach (var track in _allTracks)
+        TrackItem? playingTrack = playingPath != null
+            ? _trackByPath.GetValueOrDefault(playingPath)
+            : null;
+
+        if (!ReferenceEquals(playingTrack, _playingTrackItem))
         {
-            track.SetIsPlaying(playingPath != null
-                && string.Equals(track.Path, playingPath, StringComparison.OrdinalIgnoreCase));
+            _playingTrackItem?.SetIsPlaying(false);
+            playingTrack?.SetIsPlaying(true);
+            _playingTrackItem = playingTrack;
         }
     }
 
@@ -1154,6 +1178,13 @@ public partial class MainWindow : Window
                     _folderInfoByPath.GetValueOrDefault(file.Folder),
                     showFolderBadges))
                 .ToList();
+
+            _playingTrackItem = null;
+            _trackByPath.Clear();
+            foreach (var track in _allTracks)
+            {
+                _trackByPath.TryAdd(track.Path, track);
+            }
 
             ApplyPlaylistFilter();
             UpdateQueueUi();
@@ -2656,6 +2687,7 @@ public partial class MainWindow : Window
         }
 
         _music.MusicVolume = (float)e.NewValue;
+        _settings.MusicVolume = (float)e.NewValue;
 
         // Linked mode keeps a fixed offset between the sliders. The follower is
         // clamped at its edge, but the offset itself is preserved so the gap
@@ -2668,7 +2700,7 @@ public partial class MainWindow : Window
         }
 
         UpdateVolumePercentTexts();
-        SaveSettings();
+        ScheduleSettingsSave();
     }
 
     private void OnMonitorVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -2679,6 +2711,7 @@ public partial class MainWindow : Window
         }
 
         _music.MonitorVolume = (float)e.NewValue;
+        _settings.MonitorVolume = (float)e.NewValue;
 
         if (VolumeLinkToggle.IsChecked == true && !_isSyncingLinkedVolume)
         {
@@ -2688,7 +2721,7 @@ public partial class MainWindow : Window
         }
 
         UpdateVolumePercentTexts();
-        SaveSettings();
+        ScheduleSettingsSave();
     }
 
     private void OnVolumeLinkChanged(object sender, RoutedEventArgs e)
@@ -3241,9 +3274,10 @@ public partial class MainWindow : Window
         {
             overlay.MeterSensitivityDb = (float)e.NewValue;
         }
+        _settings.MeterSensitivityDb = (float)e.NewValue;
 
         UpdateMeterSensitivityText();
-        SaveSettings();
+        ScheduleSettingsSave();
     }
 
     private void OnMeterSensitivityLabelMouseDown(object sender, MouseButtonEventArgs e)
