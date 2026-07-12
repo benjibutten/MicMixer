@@ -458,7 +458,7 @@
                                                 <TextBlock Style="{StaticResource TipBody}"
                                                            Text="Visar en liten halvtransparent prick uppe i högra hörnet medan routningen är igång — samma färger som ikonen i systemfältet: grön = vanlig mic hörs, blå = moddad mic hörs (hotkeyn hålls), röd överkryssad mic = tyst (push-to-talk)."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="När musik spelas ut i mic-kanalen pulserar dessutom svaga ljudvågor runt pricken."/>
+                                                           Text="När musik spelas ut i mic-kanalen dansar dessutom tre små equalizer-staplar under pricken — som en 'spelas nu'-symbol."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="Pricken går inte att klicka på — musklick går rakt igenom — och den syns även ovanpå spel i fönster/borderless-läge. Spel i exklusivt helskärmsläge kan dock inte visa overlays."/>
                                             </StackPanel>
@@ -469,22 +469,22 @@
                                           IsEnabled="{Binding IsChecked, ElementName=OverlayIndicatorCheck}"
                                           Checked="OnOverlayVolumeMeterChanged" Unchecked="OnOverlayVolumeMeterChanged"
                                           ToolTipService.ShowDuration="60000">
-                                    <TextBlock Text="Volymindikator — mätare vid pricken som visar om ljudnivån ut är bra" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Volymindikator — nivåring runt pricken som visar om ljudnivån ut är bra" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
                                                 <TextBlock Style="{StaticResource TipTitle}" Text="Volymindikator för utgående ljud"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Visar en liten mätare till vänster om pricken medan routningen är igång. Den mäter allt som skickas till mic-kanalen — röst och musik tillsammans, exakt det de andra hör. Färgen säger om nivån är bra: grön = bra nivå, gul = för lågt eller för högt, röd = alldeles för högt eller klipper (sänk volymen)."/>
+                                                           Text="Visar en nivåring runt pricken medan routningen är igång — ringen fylls medurs med ljudnivån och ett litet vitt streck hänger kvar en stund vid den senaste toppen. Den mäter allt som skickas till mic-kanalen — röst och musik tillsammans, exakt det de andra hör. Färgen säger om nivån är bra: grön = bra nivå, gul = för lågt eller för högt, röd = alldeles för högt eller klipper (sänk volymen)."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="Mätaren går på upplevd ljudstyrka, inte bara topparna — hårt komprimerad musik som låter högt visar högt även när den inte klipper. Vid push-to-talk-tyst är mätaren tom, eftersom inget skickas ut då."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
                                 </CheckBox>
-                                <!-- Meter calibration: shifts the whole dB window so bar and color
-                                     bands react earlier/later. Active only while the meter itself is
-                                     both available (overlay on) and enabled. -->
+                                <!-- Meter calibration: shifts the whole dB window so ring fill and
+                                     color bands react earlier/later. Active only while the meter itself
+                                     is both available (overlay on) and enabled. -->
                                 <Grid Margin="40,4,0,0" ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True">
                                     <Grid.Style>
                                         <Style TargetType="Grid">
