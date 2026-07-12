@@ -1,9 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,6 +13,7 @@ using MicMixer.Input;
 using MicMixer.Music;
 using MicMixer.Overlay;
 using MicMixer.Settings;
+using MicMixer.UI;
 using NAudio.CoreAudioApi;
 using Serilog;
 
@@ -36,6 +34,8 @@ public partial class MainWindow : Window
     private readonly ToolBootstrapper _toolBootstrapper;
     private readonly YouTubeDownloader _youTubeDownloader;
     private readonly DispatcherTimer _musicTimer;
+    private readonly DispatcherTimer _delayedStartTimer;
+    private int _delayedStartRemainingSeconds;
     private readonly List<string> _musicQueue = new();
     private List<TrackItem> _allTracks = new();
     private List<FolderChipItem> _folderChips = new();
@@ -73,7 +73,7 @@ public partial class MainWindow : Window
     private bool _isReallyClosing;
     private bool _devicesLoaded;
     private string? _deviceLoadError;
-    private TrayIconState _lastTrayState = TrayIconState.Stopped;
+    private MicStatus _lastTrayStatus = MicStatus.Stopped;
     private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
 
     public MainWindow()
@@ -100,6 +100,13 @@ public partial class MainWindow : Window
         _releaseDelayMilliseconds = ClampReleaseDelay(_settings.ReleaseDelayMilliseconds);
         _releaseDelayTimer = new DispatcherTimer();
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
+        _delayedStartTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _delayedStartTimer.Tick += OnDelayedStartTick;
+        _singleTrackAnnounceTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(System.Windows.Forms.SystemInformation.DoubleClickTime + 50)
+        };
+        _singleTrackAnnounceTimer.Tick += OnSingleTrackAnnounceTick;
         InitializeComponent();
         App.StartupTrace("InitializeComponent done");
         RestoreWindowBounds();
@@ -108,11 +115,9 @@ public partial class MainWindow : Window
             : WindowState.Normal;
         StateChanged += OnWindowStateChanged;
 
-        using var windowIcon = RenderTrayIcon(TrayIconState.Normal);
-        Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-            windowIcon.Handle,
-            System.Windows.Int32Rect.Empty,
-            System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+        // The window/taskbar icon is the neutral brand badge; only the tray icon
+        // and the overlay carry routing state.
+        Icon = StatusTheme.RenderBrandBadge(48);
 
         _router.Error += OnRouterError;
         _hotkeyListener.PressedStateChanged += OnHotkeyPressedStateChanged;
@@ -138,6 +143,9 @@ public partial class MainWindow : Window
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         _isUpdatingMusicUi = false;
+        UpdateDelayedPlayIdleUi();
+        SetSingleTrackMode(_settings.SingleTrackMode ? SingleTrackPlayMode.Always : SingleTrackPlayMode.Off,
+            save: false, announce: false);
         _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
         ApplyModdedMicUiState(_settings.SkipModdedMic);
@@ -735,6 +743,9 @@ public partial class MainWindow : Window
         _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
         _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
+        // Only the deliberate double-click mode survives a restart; the one-shot
+        // state is transient by design.
+        _settings.SingleTrackMode = _singleTrackMode == SingleTrackPlayMode.Always;
         _settings.MusicFolderPaths = _playlist.Folders.ToList();
         // Keep the legacy field pointing at the first custom folder so an older
         // app version reading these settings degrades gracefully.
@@ -768,24 +779,19 @@ public partial class MainWindow : Window
         if (_router.IsRouting)
         {
             bool pushToTalk = IsPushToTalk;
-            bool isMuted = pushToTalk && !_router.OutputGateOpen;
+            var status = ComputeMicStatus();
 
             RoutingStateText.Text = "Routning aktiv";
             RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
-            RoutingStateIcon.Fill = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
+            RoutingStateIcon.Fill = StatusTheme.BrushFor(status);
 
-            if (isMuted)
+            ActiveSourceText.Text = status switch
             {
-                ActiveSourceText.Text = "Aktiv källa: Tyst (push-to-talk)";
-                ActiveSourceText.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#6B7280"));
-            }
-            else
-            {
-                ActiveSourceText.Text = _router.UseModdedInput ? "Aktiv källa: Moddad mic" : "Aktiv källa: Vanlig mic";
-                ActiveSourceText.Foreground = _router.UseModdedInput
-                    ? new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C2410C"))
-                    : new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
-            }
+                MicStatus.Muted => "Aktiv källa: Tyst (push-to-talk)",
+                MicStatus.Modded => "Aktiv källa: Moddad mic",
+                _ => "Aktiv källa: Vanlig mic"
+            };
+            ActiveSourceText.Foreground = StatusTheme.InkFor(status);
 
             if (!_isCapturingHotkey)
             {
@@ -820,9 +826,9 @@ public partial class MainWindow : Window
 
         RoutingStateText.Text = "Routning stoppad";
         RoutingStateIcon.Data = (Geometry)FindResource("CircleOffIcon");
-        RoutingStateIcon.Fill = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#9CA3AF"));
+        RoutingStateIcon.Fill = StatusTheme.StoppedBrush;
         ActiveSourceText.Text = "Aktiv källa: Ingen";
-        ActiveSourceText.Foreground = new SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#0F766E"));
+        ActiveSourceText.Foreground = StatusTheme.StoppedInkBrush;
         if (!_isCapturingHotkey)
         {
             HotkeyStateText.Text = IsPushToTalk
@@ -1230,6 +1236,8 @@ public partial class MainWindow : Window
 
     private void PlayTrack(string path)
     {
+        CancelDelayedStart(null);
+
         if (!_music.HasMonitorOutput && !_router.IsRouting)
         {
             MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
@@ -1580,9 +1588,48 @@ public partial class MainWindow : Window
         return null;
     }
 
-    private void OnMusicTrackEnded(object? sender, EventArgs e)
+    private void OnMusicTrackEnded(object? sender, string endedPath)
     {
-        Dispatcher.BeginInvoke(PlayNextTrack);
+        // Capture the mode together with the end notification. The UI may toggle
+        // it again before the dispatcher gets around to processing this event.
+        SingleTrackPlayMode modeWhenTrackEnded = _singleTrackMode;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            // The event is queued from an audio thread; by the time it runs the user
+            // may have started another track, or this may be the end of an older
+            // track than the last one we started. Acting on a stale event would
+            // stop or advance from the wrong song — drop it instead.
+            if (_isExternalMode
+                || _music.HasTrack
+                || !string.Equals(endedPath, _lastPlayedTrackPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            // Single-track mode: the engine already stopped by itself when the file
+            // ran out — just reflect that instead of advancing. The queue stays
+            // untouched; the next/play buttons resume it on explicit request.
+            if (modeWhenTrackEnded != SingleTrackPlayMode.Off)
+            {
+                string finished = $"Klar: {Path.GetFileNameWithoutExtension(endedPath)}";
+
+                if (modeWhenTrackEnded == SingleTrackPlayMode.Once)
+                {
+                    SetSingleTrackMode(SingleTrackPlayMode.Off, announce: false);
+                    MusicStatusText.Text = $"{finished} — stannade. Enkellåtsläget stängdes av igen.";
+                }
+                else
+                {
+                    MusicStatusText.Text = $"{finished} — stannade (enkellåtsläge).";
+                }
+
+                UpdateMusicUi();
+                return;
+            }
+
+            PlayNextTrack();
+        });
     }
 
     private void OnMusicEngineError(object? sender, string message)
@@ -1953,7 +2000,6 @@ public partial class MainWindow : Window
 
     // --- External app capture (Spotify m.fl.) ---
 
-    private static readonly System.Windows.Media.Brush CaptureActiveBrush = CreateFrozenBrush(0x0F, 0x76, 0x6E);
     private static readonly System.Windows.Media.Brush CaptureIdleBrush = CreateFrozenBrush(0x9C, 0xA3, 0xAF);
 
     // The capture toggle deliberately uses the music panel's purple accent (never the
@@ -1991,6 +2037,7 @@ public partial class MainWindow : Window
         }
 
         _isExternalMode = external;
+        CancelDelayedStart(null);
 
         if (external)
         {
@@ -2047,6 +2094,11 @@ public partial class MainWindow : Window
         MonitorDeviceCombo.IsEnabled = !external;
         MonitorVolumeSlider.IsEnabled = !external;
         VolumeLinkToggle.IsEnabled = !external;
+
+        // Single-track mode only applies to local playback — in app mode the
+        // external app decides what plays next. Delayed start stays available
+        // (it just sends play to the app after the countdown).
+        SingleTrackBtn.IsEnabled = !external;
 
         UpdateQueueUi();
         UpdateCaptureUi();
@@ -2227,7 +2279,7 @@ public partial class MainWindow : Window
             CaptureToggleBtn.BorderBrush = CaptureAccentTintBorderBrush;
             CaptureToggleBtn.Foreground = CaptureAccentBrush;
             CaptureStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
-            CaptureStateIcon.Fill = CaptureActiveBrush;
+            CaptureStateIcon.Fill = StatusTheme.LiveInkBrush;
             CaptureStateText.Text = $"Fångar ljud från {_captureTarget?.DisplayName}";
             CaptureHintText.Text = CaptureActiveHint;
         }
@@ -2249,6 +2301,8 @@ public partial class MainWindow : Window
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e)
     {
+        CancelDelayedStart(null);
+
         if (_isExternalMode)
         {
             MediaKeySender.SendPlayPause();
@@ -2268,6 +2322,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        StartPlaybackFromCurrentState();
+    }
+
+    /// <summary>
+    /// Starts playback exactly like the play button does when nothing is playing:
+    /// resume a paused track, otherwise play the selected (or first) track.
+    /// Shared by the play button and the delayed-start countdown.
+    /// </summary>
+    private void StartPlaybackFromCurrentState()
+    {
         if (_music.IsPaused)
         {
             if (!_music.HasMonitorOutput && !_router.IsRouting)
@@ -2303,6 +2367,8 @@ public partial class MainWindow : Window
 
     private void OnPrevTrackClick(object sender, RoutedEventArgs e)
     {
+        CancelDelayedStart(null);
+
         if (_isExternalMode)
         {
             MediaKeySender.SendPreviousTrack();
@@ -2338,6 +2404,8 @@ public partial class MainWindow : Window
 
     private void OnNextTrackClick(object sender, RoutedEventArgs e)
     {
+        CancelDelayedStart(null);
+
         if (_isExternalMode)
         {
             MediaKeySender.SendNextTrack();
@@ -2345,6 +2413,213 @@ public partial class MainWindow : Window
         }
 
         PlayNextTrack();
+    }
+
+    // --- Delayed start & single-track mode ---
+
+    private static readonly System.Windows.Media.Brush TransportIdleBrush = CreateFrozenBrush(0xE8, 0xEE, 0xF5);
+    private static readonly System.Windows.Media.Brush TransportIdleBorderBrush = CreateFrozenBrush(0xD7, 0xDE, 0xE7);
+    private static readonly System.Windows.Media.Brush TransportInkBrush = CreateFrozenBrush(0x10, 0x23, 0x3A);
+
+    private bool IsDelayedStartCountingDown => _delayedStartTimer.IsEnabled;
+
+    private static int ClampDelayedStartSeconds(int seconds) => Math.Clamp(seconds, 1, 60);
+
+    private void OnDelayedPlayClick(object sender, RoutedEventArgs e)
+    {
+        if (IsDelayedStartCountingDown)
+        {
+            CancelDelayedStart("Fördröjd start avbruten.");
+            return;
+        }
+
+        if (!_isExternalMode)
+        {
+            if (_music.IsPlaying)
+            {
+                MusicStatusText.Text = "Musiken spelar redan.";
+                return;
+            }
+
+            if (!_music.HasMonitorOutput && !_router.IsRouting)
+            {
+                MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
+                return;
+            }
+
+            if (!_music.IsPaused && _allTracks.Count == 0)
+            {
+                MusicStatusText.Text = "Ingen musik ännu — klistra in en YouTube-länk ovan.";
+                return;
+            }
+        }
+
+        _delayedStartRemainingSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
+        _delayedStartTimer.Start();
+        UpdateDelayedPlayCountdownUi();
+    }
+
+    private void OnDelayedStartTick(object? sender, EventArgs e)
+    {
+        _delayedStartRemainingSeconds--;
+
+        if (_delayedStartRemainingSeconds > 0)
+        {
+            UpdateDelayedPlayCountdownUi();
+            return;
+        }
+
+        _delayedStartTimer.Stop();
+        UpdateDelayedPlayIdleUi();
+
+        if (_isExternalMode)
+        {
+            MediaKeySender.SendPlayPause();
+            MusicStatusText.Text = "Skickade play till appen som spelar.";
+            return;
+        }
+
+        StartPlaybackFromCurrentState();
+    }
+
+    private void CancelDelayedStart(string? statusMessage)
+    {
+        if (!IsDelayedStartCountingDown)
+        {
+            return;
+        }
+
+        _delayedStartTimer.Stop();
+        UpdateDelayedPlayIdleUi();
+
+        if (statusMessage != null)
+        {
+            MusicStatusText.Text = statusMessage;
+        }
+    }
+
+    private void UpdateDelayedPlayCountdownUi()
+    {
+        DelayedPlayBtn.Background = CaptureAccentBrush;
+        DelayedPlayBtn.BorderBrush = CaptureAccentBrush;
+        DelayedPlayIcon.Fill = System.Windows.Media.Brushes.White;
+        DelayedPlayText.Foreground = System.Windows.Media.Brushes.White;
+        DelayedPlayText.Text = _delayedStartRemainingSeconds.ToString(CultureInfo.InvariantCulture);
+        MusicStatusText.Text = $"Startar om {_delayedStartRemainingSeconds} s — klicka på knappen igen för att avbryta.";
+    }
+
+    private void UpdateDelayedPlayIdleUi()
+    {
+        DelayedPlayBtn.Background = TransportIdleBrush;
+        DelayedPlayBtn.BorderBrush = TransportIdleBorderBrush;
+        DelayedPlayIcon.Fill = TransportInkBrush;
+        DelayedPlayText.Foreground = TransportInkBrush;
+        DelayedPlayText.Text = $"{ClampDelayedStartSeconds(_settings.DelayedStartSeconds)} s";
+    }
+
+    private void OnDelayedStartMenuOpened(object sender, RoutedEventArgs e)
+    {
+        int current = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
+        foreach (var item in DelayedStartMenu.Items.OfType<System.Windows.Controls.MenuItem>())
+        {
+            item.IsChecked = item.Tag is string tag
+                && int.TryParse(tag, NumberStyles.Integer, CultureInfo.InvariantCulture, out int seconds)
+                && seconds == current;
+        }
+    }
+
+    private void OnDelayedStartOptionClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem item || item.Tag is not string tag
+            || !int.TryParse(tag, NumberStyles.Integer, CultureInfo.InvariantCulture, out int seconds))
+        {
+            return;
+        }
+
+        _settings.DelayedStartSeconds = ClampDelayedStartSeconds(seconds);
+        SaveSettings();
+
+        if (IsDelayedStartCountingDown)
+        {
+            // Picking a new delay mid-countdown restarts the countdown with the
+            // new value; stop/start also resets the timer's one-second phase.
+            _delayedStartTimer.Stop();
+            _delayedStartRemainingSeconds = _settings.DelayedStartSeconds;
+            _delayedStartTimer.Start();
+            UpdateDelayedPlayCountdownUi();
+            return;
+        }
+
+        UpdateDelayedPlayIdleUi();
+        MusicStatusText.Text = $"Fördröjd start: {_settings.DelayedStartSeconds} s.";
+    }
+
+    /// <summary>How the single-track button behaves when the current track ends.</summary>
+    private enum SingleTrackPlayMode
+    {
+        /// <summary>Playlist advances as usual.</summary>
+        Off,
+        /// <summary>Stop after the playing track, then fall back to <see cref="Off"/> automatically.</summary>
+        Once,
+        /// <summary>Stop after every track until the user turns it off (double-click).</summary>
+        Always
+    }
+
+    private SingleTrackPlayMode _singleTrackMode;
+    private readonly DispatcherTimer _singleTrackAnnounceTimer;
+    private string _pendingSingleTrackStatus = "";
+
+    private void OnSingleTrackMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Click handling lives in the preview event so a double-click can be told
+        // apart from two toggles: click 1 arms/disarms, click 2 upgrades to Always.
+        e.Handled = true;
+
+        if (e.ClickCount == 2)
+        {
+            SetSingleTrackMode(SingleTrackPlayMode.Always);
+        }
+        else
+        {
+            SetSingleTrackMode(_singleTrackMode == SingleTrackPlayMode.Off
+                ? SingleTrackPlayMode.Once
+                : SingleTrackPlayMode.Off);
+        }
+    }
+
+    private void SetSingleTrackMode(SingleTrackPlayMode mode, bool save = true, bool announce = true)
+    {
+        _singleTrackAnnounceTimer.Stop();
+        _singleTrackMode = mode;
+        SingleTrackBtn.Tag = mode.ToString();
+
+        if (save)
+        {
+            SaveSettings();
+        }
+
+        if (announce)
+        {
+            // The status text is deferred past the double-click window: a longer
+            // message can rewrap the card and physically move this button between
+            // the two clicks of a double-click. The button's own color feedback is
+            // immediate — it never affects layout.
+            _pendingSingleTrackStatus = mode switch
+            {
+                SingleTrackPlayMode.Once =>
+                    "Enkellåtsläge: stannar när låten är klar, sedan stängs läget av igen. Dubbelklicka för att låta det ligga kvar.",
+                SingleTrackPlayMode.Always =>
+                    "Enkellåtsläge på tills du stänger av det — musiken stannar efter varje låt.",
+                _ => "Enkellåtsläge av — spellistan fortsätter som vanligt."
+            };
+            _singleTrackAnnounceTimer.Start();
+        }
+    }
+
+    private void OnSingleTrackAnnounceTick(object? sender, EventArgs e)
+    {
+        _singleTrackAnnounceTimer.Stop();
+        MusicStatusText.Text = _pendingSingleTrackStatus;
     }
 
     private void OnSeekDragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
@@ -2805,8 +3080,8 @@ public partial class MainWindow : Window
     {
         var trayIcon = new System.Windows.Forms.NotifyIcon
         {
+            Icon = StatusTheme.RenderStatusIcon(MicStatus.Stopped, TrayIconPixelSize),
             Text = "MicMixer",
-            Icon = RenderTrayIcon(TrayIconState.Stopped),
             Visible = true
         };
 
@@ -2847,115 +3122,60 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    private TrayIconState ComputeTrayIconState()
+    private MicStatus ComputeMicStatus()
     {
         return !_router.IsRouting
-            ? TrayIconState.Stopped
+            ? MicStatus.Stopped
             : !_router.OutputGateOpen
-                ? TrayIconState.Muted
-                : _router.UseModdedInput ? TrayIconState.Modded : TrayIconState.Normal;
+                ? MicStatus.Muted
+                : _router.UseModdedInput ? MicStatus.Modded : MicStatus.Live;
     }
+
+    /// <summary>Tray badge size matching the actual small-icon size at the current DPI.</summary>
+    private static int TrayIconPixelSize => Math.Max(16, System.Windows.Forms.SystemInformation.SmallIconSize.Width);
 
     private void UpdateTrayIcon()
     {
-        var newState = ComputeTrayIconState();
+        var newStatus = ComputeMicStatus();
 
         // The overlay mirrors the tray state; SetState no-ops when unchanged.
-        _overlayIndicator?.SetState(ToOverlayIndicatorState(newState));
+        _overlayIndicator?.SetState(ToOverlayIndicatorState(newStatus));
         _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
 
-        if (newState == _lastTrayState)
+        if (newStatus == _lastTrayStatus)
             return;
 
         try
         {
             var oldIcon = _trayIcon.Icon;
-            _trayIcon.Icon = RenderTrayIcon(newState);
+            _trayIcon.Icon = StatusTheme.RenderStatusIcon(newStatus, TrayIconPixelSize);
             oldIcon?.Dispose();
 
-            _trayIcon.Text = newState switch
+            _trayIcon.Text = newStatus switch
             {
-                TrayIconState.Normal => "MicMixer — Vanlig mic",
-                TrayIconState.Modded => "MicMixer — Moddad mic",
-                TrayIconState.Muted => "MicMixer — Tyst (push-to-talk)",
-                _ => "MicMixer — Stoppad"
+                MicStatus.Live => "MicMixer — Vanlig mic hörs",
+                MicStatus.Modded => "MicMixer — Moddad mic hörs",
+                MicStatus.Muted => "MicMixer — Tyst (push-to-talk)",
+                _ => "MicMixer — Routning stoppad"
             };
 
-            _lastTrayState = newState;
+            _lastTrayStatus = newStatus;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to update tray icon to state {TrayState}.", newState);
-        }
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool DestroyIcon(IntPtr hIcon);
-
-    private static Icon RenderTrayIcon(TrayIconState state)
-    {
-        const int size = 32;
-        using var bmp = new Bitmap(size, size);
-        using var g = Graphics.FromImage(bmp);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(System.Drawing.Color.Transparent);
-
-        System.Drawing.Color bgColor = state switch
-        {
-            TrayIconState.Normal => System.Drawing.Color.FromArgb(15, 118, 110),   // teal
-            TrayIconState.Modded => System.Drawing.Color.FromArgb(194, 65, 12),    // orange
-            TrayIconState.Muted => System.Drawing.Color.FromArgb(185, 28, 28),     // red (PTT muted)
-            _ => System.Drawing.Color.FromArgb(107, 114, 128)                       // gray
-        };
-
-        // Circle background
-        using (var bgBrush = new SolidBrush(bgColor))
-        {
-            g.FillEllipse(bgBrush, 1, 1, size - 2, size - 2);
-        }
-
-        // Mic body (white) — simple rounded rectangle + circle cap
-        using var micBrush = new SolidBrush(System.Drawing.Color.White);
-        using var micPen = new System.Drawing.Pen(System.Drawing.Color.White, 1.8f);
-
-        // Mic capsule
-        var capsuleRect = new RectangleF(12, 6, 8, 12);
-        using var capsulePath = new GraphicsPath();
-        capsulePath.AddArc(capsuleRect.X, capsuleRect.Y, capsuleRect.Width, 8, 180, 180);
-        capsulePath.AddLine(capsuleRect.Right, capsuleRect.Y + 4, capsuleRect.Right, capsuleRect.Bottom - 2);
-        capsulePath.AddArc(capsuleRect.X, capsuleRect.Bottom - 6, capsuleRect.Width, 6, 0, 180);
-        capsulePath.AddLine(capsuleRect.X, capsuleRect.Bottom - 3, capsuleRect.X, capsuleRect.Y + 4);
-        g.FillPath(micBrush, capsulePath);
-
-        // Arm arc
-        g.DrawArc(micPen, 9, 10, 14, 12, 0, 180);
-
-        // Stand line
-        g.DrawLine(micPen, 16, 22, 16, 26);
-        g.DrawLine(micPen, 12, 26, 20, 26);
-
-        IntPtr hIcon = bmp.GetHicon();
-
-        try
-        {
-            using Icon temporaryIcon = System.Drawing.Icon.FromHandle(hIcon);
-            return (Icon)temporaryIcon.Clone();
-        }
-        finally
-        {
-            _ = DestroyIcon(hIcon);
+            Log.Error(ex, "Failed to update tray icon to status {MicStatus}.", newStatus);
         }
     }
 
     // --- Overlay indicator ---
 
-    private static OverlayIndicatorState ToOverlayIndicatorState(TrayIconState state)
+    private static OverlayIndicatorState ToOverlayIndicatorState(MicStatus status)
     {
-        return state switch
+        return status switch
         {
-            TrayIconState.Normal => OverlayIndicatorState.Normal,
-            TrayIconState.Modded => OverlayIndicatorState.Modded,
-            TrayIconState.Muted => OverlayIndicatorState.Muted,
+            MicStatus.Live => OverlayIndicatorState.Normal,
+            MicStatus.Modded => OverlayIndicatorState.Modded,
+            MicStatus.Muted => OverlayIndicatorState.Muted,
             _ => OverlayIndicatorState.Hidden
         };
     }
@@ -3023,7 +3243,7 @@ public partial class MainWindow : Window
             {
                 _overlayIndicator ??= new OverlayIndicatorWindow();
                 _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
-                _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeTrayIconState()));
+                _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeMicStatus()));
                 _overlayIndicator.SetMusicActive(IsMusicRoutedOut());
             }
             catch (Exception ex)
@@ -3385,12 +3605,4 @@ public partial class MainWindow : Window
     #endregion
 
     private sealed record AudioDeviceOption(string Id, string FriendlyName);
-
-    private enum TrayIconState
-    {
-        Stopped,
-        Normal,
-        Modded,
-        Muted
-    }
 }

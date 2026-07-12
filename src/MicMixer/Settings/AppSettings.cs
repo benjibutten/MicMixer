@@ -35,6 +35,12 @@ public sealed class AppSettings
 
     public bool ExternalCaptureMode { get; set; }
 
+    /// <summary>Seconds the delayed-start button counts down before playback begins.</summary>
+    public int DelayedStartSeconds { get; set; } = 3;
+
+    /// <summary>Stops playback when the current track ends instead of advancing through the playlist.</summary>
+    public bool SingleTrackMode { get; set; }
+
     /// <summary>Shows a small click-through status dot in the top-right screen corner while routing runs.</summary>
     public bool OverlayIndicatorEnabled { get; set; }
 

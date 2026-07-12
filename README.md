@@ -79,7 +79,8 @@ cable receives silence. Neither microphone audio nor music is sent.
 - With a modified mic selected, holding the hotkey both opens the gate and selects it.
 - The release delay applies to push-to-talk as well.
 - Local music monitoring is not muted by push-to-talk.
-- The tray icon and overlay turn red while the outgoing mix is muted.
+- The tray icon and overlay turn red with a crossed-out mic while the outgoing mix
+  is muted.
 
 ## Music sources
 
@@ -130,12 +131,13 @@ than the virtual cable.
 ## Overlay indicator
 
 The optional click-through overlay remains visible above borderless/windowed games
-without stealing focus or intercepting mouse input. Its color mirrors the routing
-state:
+without stealing focus or intercepting mouse input. It shows the same status colors
+and glyphs as the tray icon:
 
-- Teal: normal microphone.
-- Orange: modified microphone.
-- Red: push-to-talk is muted.
+- Green with a mic: the normal microphone is heard.
+- Blue with a modified-mic glyph: the modified microphone is heard.
+- Red with a crossed-out mic: push-to-talk is muted.
+- Gray (tray icon only): routing is stopped.
 
 Animated rings indicate that music is being routed. The optional meter shows the
 level of the complete outgoing mix after the push-to-talk gate. Exclusive fullscreen

@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using MicMixer.UI;
 
 namespace MicMixer.Overlay;
 
@@ -77,19 +78,6 @@ public sealed class OverlayIndicatorWindow : Window
     private const float HotBandStart = 0.81f;
     private const float RedBandStart = 0.92f;
 
-    // Same glyphs as the MicIcon / ModdedMicIcon / MicOffIcon window resources.
-    private static readonly Geometry MicGlyph = CreateGlyph(
-        "M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z");
-    private static readonly Geometry ModdedMicGlyph = CreateGlyph(
-        "M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19M3,9H1V15H3V9M21,9H23V15H21V9");
-    private static readonly Geometry MicOffGlyph = CreateGlyph(
-        "M19,11C19,12.19 18.66,13.3 18.1,14.28L16.87,13.05C17.14,12.43 17.3,11.74 17.3,11H19M15,11.16L9,5.18V5A3,3 0 0,1 12,2A3,3 0 0,1 15,5V11L15,11.16M4.27,3L21,19.73L19.73,21L15.54,16.81C14.77,17.27 13.91,17.58 13,17.72V21H11V17.72C7.72,17.23 5,14.41 5,11H6.7C6.7,14 9.24,16.1 12,16.1C12.81,16.1 13.6,15.91 14.31,15.58L12.65,13.92L12,14A3,3 0 0,1 9,11V10.28L3,4.27L4.27,3Z");
-
-    // Same palette as the tray icon states.
-    private static readonly System.Windows.Media.Brush NormalBrush = CreateFrozenBrush(0x0F, 0x76, 0x6E);   // teal
-    private static readonly System.Windows.Media.Brush ModdedBrush = CreateFrozenBrush(0xC2, 0x41, 0x0C);   // orange
-    private static readonly System.Windows.Media.Brush MutedBrush = CreateFrozenBrush(0xB9, 0x1C, 0x1C);    // red
-
     private static readonly System.Windows.Media.Color MeterGoodColor = System.Windows.Media.Color.FromRgb(0x22, 0xC5, 0x5E);
     private static readonly System.Windows.Media.Color MeterWarnColor = System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B);
     private static readonly System.Windows.Media.Color MeterClipColor = System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44);
@@ -137,13 +125,13 @@ public sealed class OverlayIndicatorWindow : Window
             Height = DotDiameter,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Fill = NormalBrush,
+            Fill = StatusTheme.LiveBrush,
             Effect = new DropShadowEffect { BlurRadius = 7, ShadowDepth = 1, Opacity = 0.35 }
         };
 
         _glyph = new System.Windows.Shapes.Path
         {
-            Data = MicGlyph,
+            Data = StatusTheme.MicGlyph,
             Fill = System.Windows.Media.Brushes.White,
             Width = 16,
             Height = 16,
@@ -161,7 +149,7 @@ public sealed class OverlayIndicatorWindow : Window
             {
                 Width = DotDiameter,
                 Height = DotDiameter,
-                Stroke = NormalBrush,
+                Stroke = StatusTheme.LiveBrush,
                 StrokeThickness = RippleStrokeThickness,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -267,12 +255,12 @@ public sealed class OverlayIndicatorWindow : Window
 
         (_dot.Fill, _glyph.Data) = state switch
         {
-            OverlayIndicatorState.Modded => (ModdedBrush, ModdedMicGlyph),
-            OverlayIndicatorState.Muted => (MutedBrush, MicOffGlyph),
-            _ => (NormalBrush, MicGlyph)
+            OverlayIndicatorState.Modded => (StatusTheme.ModdedBrush, StatusTheme.ModdedMicGlyph),
+            OverlayIndicatorState.Muted => (StatusTheme.MutedBrush, StatusTheme.MicOffGlyph),
+            _ => (StatusTheme.LiveBrush, StatusTheme.MicGlyph)
         };
 
-        var rippleBrush = state == OverlayIndicatorState.Modded ? ModdedBrush : NormalBrush;
+        var rippleBrush = state == OverlayIndicatorState.Modded ? StatusTheme.ModdedBrush : StatusTheme.LiveBrush;
         foreach (var ripple in _ripples)
         {
             ripple.Stroke = rippleBrush;
@@ -564,13 +552,6 @@ public sealed class OverlayIndicatorWindow : Window
         }, IntPtr.Zero);
 
         return found;
-    }
-
-    private static Geometry CreateGlyph(string pathData)
-    {
-        var geometry = Geometry.Parse(pathData);
-        geometry.Freeze();
-        return geometry;
     }
 
     private static System.Windows.Media.Brush CreateFrozenBrush(byte r, byte g, byte b, byte a = 0xFF)

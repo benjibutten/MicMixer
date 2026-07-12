@@ -49,7 +49,8 @@ public sealed class MusicPlaybackEngine : IDisposable
     private bool _monitorPumpActive;
     private int _monitorConfigVersion;
 
-    public event EventHandler? TrackEnded;
+    /// <summary>Raised when file playback reaches the end; carries the path of the finished track.</summary>
+    public event EventHandler<string>? TrackEnded;
     public event EventHandler<string>? Error;
 
     public MusicPlaybackEngine()
@@ -442,6 +443,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private int PumpRead(float[] buffer, int offset, int count)
     {
         AudioFileReader? endedReader = null;
+        string? endedPath = null;
         int samplesRead;
 
         lock (_syncRoot)
@@ -458,6 +460,7 @@ public sealed class MusicPlaybackEngine : IDisposable
             if (samplesRead == 0 && _reader != null)
             {
                 endedReader = _reader;
+                endedPath = _currentTrackPath;
                 _reader = null;
                 _playbackChain = null;
                 _currentTrackPath = null;
@@ -466,6 +469,9 @@ public sealed class MusicPlaybackEngine : IDisposable
 
         if (endedReader != null)
         {
+            // Capture the path with the ended reader so the event describes the
+            // track that actually finished, even if another one starts meanwhile.
+            string finishedPath = endedPath ?? string.Empty;
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
@@ -477,7 +483,7 @@ public sealed class MusicPlaybackEngine : IDisposable
                     // Already torn down.
                 }
 
-                TrackEnded?.Invoke(this, EventArgs.Empty);
+                TrackEnded?.Invoke(this, finishedPath);
             });
         }
 
