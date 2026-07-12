@@ -92,6 +92,7 @@ public sealed class OverlayIndicatorWindow : Window
     private OverlayIndicatorState _state = OverlayIndicatorState.Hidden;
     private bool _musicActive;
     private bool _meterEnabled = true;
+    private float _meterSensitivityDb;
     private bool _ripplesRunning;
     private float _fillPeak;   // fast decay: drives the bar height
     private float _zonePeak;   // slow decay: drives the bar color, so it doesn't flip between beats
@@ -235,6 +236,18 @@ public sealed class OverlayIndicatorWindow : Window
         }
     }
 
+    /// <summary>
+    /// Calibration offset in dB added to the measured loudness before it is mapped
+    /// onto the meter's dB window. Positive values make the meter read hotter, so
+    /// the bar and every color band react earlier. The sample-peak clip flash is
+    /// deliberately unaffected: digital clipping does not depend on perception.
+    /// </summary>
+    public float MeterSensitivityDb
+    {
+        get => _meterSensitivityDb;
+        set => _meterSensitivityDb = Math.Clamp(value, -12f, 12f);
+    }
+
     /// <summary>Shows, hides, and recolors the dot. No-op when the state is unchanged.</summary>
     public void SetState(OverlayIndicatorState state)
     {
@@ -332,15 +345,15 @@ public sealed class OverlayIndicatorWindow : Window
         }
     }
 
-    /// <summary>Maps a linear RMS value onto the meter's dB window as 0..1.</summary>
-    private static float NormalizeLoudness(float rms)
+    /// <summary>Maps a linear RMS value onto the meter's dB window as 0..1, after the sensitivity offset.</summary>
+    private float NormalizeLoudness(float rms)
     {
         if (rms <= 0f)
         {
             return 0f;
         }
 
-        float db = 20f * (float)Math.Log10(rms);
+        float db = 20f * (float)Math.Log10(rms) + _meterSensitivityDb;
         return Math.Clamp((db - MeterFloorDb) / (MeterCeilingDb - MeterFloorDb), 0f, 1f);
     }
 

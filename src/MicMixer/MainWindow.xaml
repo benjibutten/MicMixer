@@ -482,6 +482,54 @@
                                         </ToolTip>
                                     </CheckBox.ToolTip>
                                 </CheckBox>
+                                <!-- Meter calibration: shifts the whole dB window so bar and color
+                                     bands react earlier/later. Active only while the meter itself is
+                                     both available (overlay on) and enabled. -->
+                                <Grid Margin="40,4,0,0" ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True">
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsChecked, ElementName=OverlayIndicatorCheck}" Value="True"/>
+                                                        <Condition Binding="{Binding IsChecked, ElementName=OverlayVolumeMeterCheck}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="IsEnabled" Value="True"/>
+                                                </MultiDataTrigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="MeterSensitivityLabel" Text="Känslighet" FontSize="10.5" Foreground="#6B7280"
+                                               VerticalAlignment="Center" Margin="0,0,8,0" Cursor="Hand"
+                                               MouseLeftButtonDown="OnMeterSensitivityLabelMouseDown"/>
+                                    <Slider x:Name="MeterSensitivitySlider" Grid.Column="1" Width="130" VerticalAlignment="Center"
+                                            Minimum="-12" Maximum="12" TickFrequency="1" IsSnapToTickEnabled="True"
+                                            SmallChange="1" LargeChange="0"
+                                            ValueChanged="OnMeterSensitivityChanged"/>
+                                    <TextBlock x:Name="MeterSensitivityValueText" Grid.Column="2" Text="±0 dB" FontSize="10.5"
+                                               Foreground="#9CA3AF" VerticalAlignment="Center" Margin="8,0,0,0"
+                                               MinWidth="42" TextAlignment="Right"/>
+                                    <Grid.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Kalibrera volymindikatorn"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Om andra tycker att du låter högre än mätaren visar — öka känsligheten, så slår mätaren om till gult/rött tidigare. Tycker de att du låter lägre — sänk den. Standard (±0 dB) passar de flesta."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Ändringen syns direkt i mätaren medan du drar. Dubbelklicka på ordet Känslighet för att återställa. Den röda klipp-blinken påverkas inte — klippning är alltid klippning."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </Grid.ToolTip>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </Grid>

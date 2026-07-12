@@ -47,6 +47,12 @@ public sealed class AppSettings
     /// <summary>Shows a small level meter next to the overlay dot with the outgoing mix level (mic + music).</summary>
     public bool OverlayVolumeMeterEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Calibration offset in dB for the overlay volume meter. Positive values make
+    /// the meter read hotter (bar and color bands react earlier); 0 is the default window.
+    /// </summary>
+    public float MeterSensitivityDb { get; set; }
+
     public string? ExternalAppName { get; set; }
 
     /// <summary>Last window size; 0 means never saved, so the XAML default is used.</summary>

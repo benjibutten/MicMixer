@@ -142,7 +142,9 @@ public partial class MainWindow : Window
         PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
+        MeterSensitivitySlider.Value = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
         _isUpdatingMusicUi = false;
+        UpdateMeterSensitivityText();
         UpdateDelayedPlayIdleUi();
         SetSingleTrackMode(_settings.SingleTrackMode ? SingleTrackPlayMode.Always : SingleTrackPlayMode.Off,
             save: false, announce: false);
@@ -743,6 +745,7 @@ public partial class MainWindow : Window
         _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
         _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
+        _settings.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
         // Only the deliberate double-click mode survives a restart; the one-shot
         // state is transient by design.
         _settings.SingleTrackMode = _singleTrackMode == SingleTrackPlayMode.Always;
@@ -3226,6 +3229,45 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    private void OnMeterSensitivityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        // Applies live so the meter can be calibrated against real sound while dragging.
+        if (_overlayIndicator is { } overlay)
+        {
+            overlay.MeterSensitivityDb = (float)e.NewValue;
+        }
+
+        UpdateMeterSensitivityText();
+        SaveSettings();
+    }
+
+    private void OnMeterSensitivityLabelMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            MeterSensitivitySlider.Value = 0;
+        }
+    }
+
+    /// <summary>The ±0 default stays visually quiet; any deviation is emphasized.</summary>
+    private void UpdateMeterSensitivityText()
+    {
+        int db = (int)Math.Round(MeterSensitivitySlider.Value);
+        MeterSensitivityValueText.Text = db == 0 ? "±0 dB"
+            : db > 0 ? $"+{db} dB"
+            : $"−{-db} dB";
+        MeterSensitivityValueText.Foreground = db == 0 ? MeterSensitivityIdleBrush : MeterSensitivityActiveBrush;
+        MeterSensitivityValueText.FontWeight = db == 0 ? FontWeights.Normal : FontWeights.SemiBold;
+    }
+
+    private static readonly System.Windows.Media.Brush MeterSensitivityIdleBrush = CreateFrozenBrush(0x9C, 0xA3, 0xAF);
+    private static readonly System.Windows.Media.Brush MeterSensitivityActiveBrush = CreateFrozenBrush(0x10, 0x23, 0x3A);
+
     /// <summary>
     /// The audio-thread level computation only runs while something can display
     /// it; otherwise the tap is a pure pass-through.
@@ -3243,6 +3285,7 @@ public partial class MainWindow : Window
             {
                 _overlayIndicator ??= new OverlayIndicatorWindow();
                 _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
+                _overlayIndicator.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
                 _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeMicStatus()));
                 _overlayIndicator.SetMusicActive(IsMusicRoutedOut());
             }
