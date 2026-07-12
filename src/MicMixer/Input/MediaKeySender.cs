@@ -10,6 +10,7 @@ internal static class MediaKeySender
 {
     private const ushort VkMediaNextTrack = 0xB0;
     private const ushort VkMediaPrevTrack = 0xB1;
+    private const ushort VkMediaStop = 0xB2;
     private const ushort VkMediaPlayPause = 0xB3;
 
     private const uint InputKeyboard = 1;
@@ -21,6 +22,8 @@ internal static class MediaKeySender
     public static void SendNextTrack() => SendKey(VkMediaNextTrack);
 
     public static void SendPreviousTrack() => SendKey(VkMediaPrevTrack);
+
+    public static void SendStop() => SendKey(VkMediaStop);
 
     private static void SendKey(ushort virtualKey)
     {

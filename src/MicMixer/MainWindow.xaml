@@ -944,6 +944,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
@@ -955,13 +956,18 @@
                                 Background="#10233A" BorderThickness="0">
                             <Path x:Name="PlayPauseIcon" Data="{StaticResource PlayIcon}" Fill="White" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
-                        <Button Grid.Column="2" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Nästa låt"
+                        <Button Grid.Column="2" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnStopPlaybackClick"
+                                ToolTip="Stoppa och avmarkera aktiv låt"
+                                Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
+                            <Path Data="{StaticResource StopIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
+                        </Button>
+                        <Button Grid.Column="3" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Nästa låt"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource SkipNextIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
                         <!-- Delayed start: arm a countdown, then play — time to alt-tab back to the game.
                              Right-click picks the delay length; clicking again mid-countdown cancels. -->
-                        <Button x:Name="DelayedPlayBtn" Grid.Column="3" Height="30" MinWidth="48" Padding="8,0" Margin="12,0,0,0"
+                        <Button x:Name="DelayedPlayBtn" Grid.Column="4" Height="30" MinWidth="48" Padding="8,0" Margin="12,0,0,0"
                                 Click="OnDelayedPlayClick" FontSize="11.5" FontWeight="SemiBold"
                                 Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"
                                 ToolTipService.ShowDuration="60000">
@@ -996,7 +1002,7 @@
                         <!-- Single-track mode: stop when the current track ends instead of auto-advancing.
                              Three states driven by Tag from code-behind: Off, Once (tinted — resets
                              itself after the track), Always (solid purple — double-click, stays on). -->
-                        <Button x:Name="SingleTrackBtn" Grid.Column="4" Height="30" Width="30" Margin="6,0,0,0" Cursor="Hand"
+                        <Button x:Name="SingleTrackBtn" Grid.Column="5" Height="30" Width="30" Margin="6,0,0,0" Cursor="Hand"
                                 Tag="Off" PreviewMouseLeftButtonDown="OnSingleTrackMouseDown"
                                 ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True">
                             <Button.Template>
@@ -1040,13 +1046,13 @@
                                 </ToolTip>
                             </Button.ToolTip>
                         </Button>
-                        <Slider x:Name="SeekSlider" Grid.Column="5" Margin="12,0,8,0" VerticalAlignment="Center"
+                        <Slider x:Name="SeekSlider" Grid.Column="6" Margin="12,0,8,0" VerticalAlignment="Center"
                                 Minimum="0" Maximum="1" IsMoveToPointEnabled="True"
                                 Thumb.DragStarted="OnSeekDragStarted" Thumb.DragCompleted="OnSeekDragCompleted" ValueChanged="OnSeekValueChanged"/>
-                        <TextBlock x:Name="ExternalTransportHint" Grid.Column="5" Margin="12,0,8,0" VerticalAlignment="Center"
+                        <TextBlock x:Name="ExternalTransportHint" Grid.Column="6" Margin="12,0,8,0" VerticalAlignment="Center"
                                    FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap" Visibility="Collapsed"
                                    Text="Knapparna skickar medietangenter till appen som spelar."/>
-                        <TextBlock x:Name="TrackTimeText" Grid.Column="6" Text="0:00 / 0:00" FontSize="11" Foreground="#6B7280"
+                        <TextBlock x:Name="TrackTimeText" Grid.Column="7" Text="0:00 / 0:00" FontSize="11" Foreground="#6B7280"
                                    VerticalAlignment="Center" MinWidth="76" TextAlignment="Right"/>
                     </Grid>
 

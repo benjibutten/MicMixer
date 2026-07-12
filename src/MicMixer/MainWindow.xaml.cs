@@ -2359,6 +2359,25 @@ public partial class MainWindow : Window
         StartPlaybackFromCurrentState();
     }
 
+    private void OnStopPlaybackClick(object sender, RoutedEventArgs e)
+    {
+        CancelDelayedStart(null);
+
+        if (_isExternalMode)
+        {
+            MediaKeySender.SendStop();
+            MusicStatusText.Text = "Skickade stopp till appen som spelar.";
+            return;
+        }
+
+        _music.Stop();
+        _musicWasAutoPaused = false;
+        _lastPlayedTrackPath = null;
+        PlaylistListBox.SelectedItem = null;
+        MusicStatusText.Text = "Musiken stoppad — ingen låt är aktiv.";
+        UpdateMusicUi();
+    }
+
     /// <summary>
     /// Starts playback exactly like the play button does when nothing is playing:
     /// resume a paused track, otherwise play the selected (or first) track.
