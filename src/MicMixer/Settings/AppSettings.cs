@@ -18,6 +18,17 @@ public sealed class AppSettings
 
     public string? MusicMonitorDeviceId { get; set; }
 
+    /// <summary>Plays the finished pre-gate mix (mic + music) on an extra render device, e.g. for OBS capture.</summary>
+    public bool SecondaryOutputEnabled { get; set; }
+
+    public string? SecondaryOutputDeviceId { get; set; }
+
+    /// <summary>Gain applied to the secondary output branch only; never affects the cable.</summary>
+    public float SecondaryOutputVolume { get; set; } = 1.0f;
+
+    /// <summary>When true the secondary output keeps playing while push-to-talk holds the cable silent.</summary>
+    public bool SecondaryOutputIgnorePushToTalk { get; set; } = true;
+
     public bool MonitorEnabled { get; set; } = true;
 
     public float MusicVolume { get; set; } = 0.5f;
