@@ -20,6 +20,8 @@ routing.
 - Captures audio directly from an external application such as Spotify.
 - Downloads audio from supported video URLs and converts it to MP3.
 - Provides optional local monitoring with independent output and volume controls.
+- Provides an optional secondary output that plays the complete mix (mic + music)
+  on an extra device — before the push-to-talk gate — for example for OBS capture.
 - Includes playlist search, multiple music folders, a queue, and transport controls.
 - Provides a click-through status overlay with mic state, music animation, and an
   optional outgoing level meter.
@@ -128,6 +130,40 @@ separate device and volume control and does not change the level sent to other
 people through the virtual microphone. Select a physical playback device rather
 than the virtual cable.
 
+## Secondary output
+
+The **Sekundär ut** section routes the complete finished mix — microphone and
+music — to one extra playback device while routing is active. The tap sits
+*before* the push-to-talk gate, so with **Ignorera push-to-talk** enabled
+(default) the secondary device keeps receiving mic + music even while the
+virtual cable receives silence. Disable that option to make the secondary
+output follow the same push-to-talk gate as the cable.
+
+Typical use with OBS:
+
+1. Enable **Sekundär ut** and select a playback device that you are not
+   otherwise using (for example an unused HDMI output or a virtual device).
+2. In OBS, add an **Audio Output Capture** source and select the same device.
+3. Start routing in MicMixer. OBS now records/streams the full mix, including
+   everything you say while push-to-talk is released.
+
+Warnings:
+
+- **The secondary device plays your own microphone.** If you pick your normal
+  speakers, everyone in the room hears your mic and you risk feedback into the
+  microphone. Prefer a device you cannot hear, or headphones.
+- **OBS captures everything on that device.** Any other application playing
+  audio to the same device ends up in the recording.
+- The secondary output can never use the same device as **Virtuell kabel ut**;
+  MicMixer blocks that combination because the mix would play twice on the cable.
+- If the saved secondary device is missing at startup, MicMixer leaves the
+  selection empty and refuses to start the secondary output until you explicitly
+  pick a device again — it never substitutes another output on its own.
+
+The secondary volume only affects the secondary device. Failures on the
+secondary device (for example unplugging it) close only the secondary branch;
+routing to the virtual cable continues.
+
 ## Overlay indicator
 
 The optional click-through overlay remains visible above borderless/windowed games
@@ -174,6 +210,9 @@ Runtime logs roll at 5 MB, rotate daily, and are retained for 14 days.
 - If a download fails, check the internet connection and inspect the logs under
   `%LocalAppData%\MicMixer\logs`.
 - If an audio device was disconnected, refresh the device list and select it again.
+- If the secondary output shows "enheten hittades inte", reconnect the device or
+  select a new one explicitly; MicMixer intentionally never auto-picks a
+  replacement secondary device.
 
 ## Development
 
