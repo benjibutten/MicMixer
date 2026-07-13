@@ -19,7 +19,11 @@ public sealed class SettingsStoreTests : IDisposable
             OverlayIndicatorEnabled = true,
             MusicFolderPaths = [@"C:\Music A", @"D:\Music B"],
             DownloadFolderPath = @"D:\Music B",
-            MusicVolume = 0.75f
+            MusicVolume = 0.75f,
+            SecondaryOutputEnabled = true,
+            SecondaryOutputDeviceId = "secondary-device-id",
+            SecondaryOutputVolume = 0.6f,
+            SecondaryOutputIgnorePushToTalk = false
         };
 
         sut.Save(expected);
@@ -30,6 +34,10 @@ public sealed class SettingsStoreTests : IDisposable
         actual.MusicFolderPaths.Should().Equal(expected.MusicFolderPaths!);
         actual.DownloadFolderPath.Should().Be(expected.DownloadFolderPath);
         actual.MusicVolume.Should().Be(expected.MusicVolume);
+        actual.SecondaryOutputEnabled.Should().BeTrue();
+        actual.SecondaryOutputDeviceId.Should().Be(expected.SecondaryOutputDeviceId);
+        actual.SecondaryOutputVolume.Should().Be(expected.SecondaryOutputVolume);
+        actual.SecondaryOutputIgnorePushToTalk.Should().BeFalse();
         File.Exists(path + ".tmp").Should().BeFalse();
     }
 
@@ -47,6 +55,9 @@ public sealed class SettingsStoreTests : IDisposable
         settings.MonitorEnabled.Should().BeTrue();
         settings.MusicVolume.Should().Be(0.5f);
         settings.MonitorVolume.Should().Be(0.5f);
+        settings.SecondaryOutputEnabled.Should().BeFalse();
+        settings.SecondaryOutputVolume.Should().Be(1.0f);
+        settings.SecondaryOutputIgnorePushToTalk.Should().BeTrue();
     }
 
     public void Dispose()

@@ -30,6 +30,13 @@ public sealed class AudioRouter : IDisposable
     /// </summary>
     public Func<WaveFormat, ISampleProvider>? MusicSourceFactory { get; set; }
 
+    /// <summary>
+    /// Optional secondary output that receives the finished mix before the
+    /// push-to-talk gate. Owned by the caller; the router only starts/stops it
+    /// alongside the routing session and feeds it via a pre-gate tap.
+    /// </summary>
+    public SecondaryOutputEngine? SecondaryOutput { get; set; }
+
     public event EventHandler<string>? Error;
 
     /// <summary>
@@ -62,6 +69,16 @@ public sealed class AudioRouter : IDisposable
                 mixer.AddMixerInput(micSource);
                 mixer.AddMixerInput(MusicSourceFactory(targetFormat));
                 source = mixer;
+            }
+
+            // Fan the finished pre-gate mix out to the optional secondary output.
+            // The tap sits before the gate so that branch keeps carrying mic + music
+            // while push-to-talk holds the cable silent. A secondary start failure
+            // only skips the branch — the cable routing continues untouched.
+            var secondaryOutput = SecondaryOutput;
+            if (secondaryOutput != null && secondaryOutput.TryStartForRouting(source.WaveFormat, () => OutputGateOpen))
+            {
+                source = new TapSampleProvider(source, secondaryOutput.Write);
             }
 
             // The gate sits last in the chain so push-to-talk silences the entire
@@ -190,6 +207,7 @@ public sealed class AudioRouter : IDisposable
 
         normalRoute?.Dispose();
         moddedRoute?.Dispose();
+        SecondaryOutput?.Stop();
 
         Volatile.Write(ref _useModdedInput, false);
         Volatile.Write(ref _outputGateOpen, true);
@@ -363,55 +381,6 @@ public sealed class AudioRouter : IDisposable
             if (rms > Volatile.Read(ref _router._outputRms))
             {
                 Volatile.Write(ref _router._outputRms, rms);
-            }
-
-            return samplesRead;
-        }
-    }
-
-    /// <summary>
-    /// Multiplies the stream by 0 or 1 depending on the gate state, with a short
-    /// gain ramp on transitions so open/close never produces an audible click.
-    /// </summary>
-    private sealed class GateSampleProvider : ISampleProvider
-    {
-        private readonly ISampleProvider _source;
-        private readonly Func<bool> _isOpen;
-        private readonly float _gainStepPerSample;
-        private float _gain;
-
-        public GateSampleProvider(ISampleProvider source, Func<bool> isOpen)
-        {
-            _source = source;
-            _isOpen = isOpen;
-            // ~8 ms full-range ramp at the stream's interleaved sample rate.
-            _gainStepPerSample = 1f / Math.Max(0.008f * source.WaveFormat.SampleRate * source.WaveFormat.Channels, 1f);
-            _gain = isOpen() ? 1f : 0f;
-        }
-
-        public WaveFormat WaveFormat => _source.WaveFormat;
-
-        public int Read(float[] buffer, int offset, int count)
-        {
-            int samplesRead = _source.Read(buffer, offset, count);
-            float target = _isOpen() ? 1f : 0f;
-
-            if (_gain == target)
-            {
-                if (target == 0f)
-                {
-                    Array.Clear(buffer, offset, samplesRead);
-                }
-
-                return samplesRead;
-            }
-
-            for (int i = 0; i < samplesRead; i++)
-            {
-                _gain = _gain < target
-                    ? Math.Min(target, _gain + _gainStepPerSample)
-                    : Math.Max(target, _gain - _gainStepPerSample);
-                buffer[offset + i] *= _gain;
             }
 
             return samplesRead;

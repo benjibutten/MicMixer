@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private const int MaxReleaseDelayMilliseconds = 5_000;
 
     private readonly AudioRouter _router;
+    private readonly SecondaryOutputEngine _secondaryOutput;
     private readonly GlobalHotkeyListener _hotkeyListener;
     private readonly SettingsStore _settingsStore;
     private readonly DispatcherTimer _levelTimer;
@@ -82,6 +83,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         _router = new AudioRouter();
+        _secondaryOutput = new SecondaryOutputEngine();
+        _secondaryOutput.Error += OnSecondaryOutputError;
+        _router.SecondaryOutput = _secondaryOutput;
         App.StartupTrace("AudioRouter created");
         _hotkeyListener = new GlobalHotkeyListener();
         App.StartupTrace("GlobalHotkeyListener created");
@@ -140,6 +144,15 @@ public partial class MainWindow : Window
         DryInputCombo.IsEnabled = false;
         ModdedInputCombo.IsEnabled = false;
         OutputDeviceCombo.IsEnabled = false;
+        SecondaryOutputCombo.IsEnabled = false;
+
+        _isUpdatingUi = true;
+        SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
+        SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
+        SecondaryVolumeSlider.Value = Math.Clamp(_settings.SecondaryOutputVolume, 0f, 1f);
+        _isUpdatingUi = false;
+        UpdateSecondaryVolumePercentText();
+        ApplySecondaryOutputConfig();
 
         _music.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
         _music.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
@@ -238,6 +251,7 @@ public partial class MainWindow : Window
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
+            SecondaryOutputCombo.IsEnabled = false;
         }
 
         UpdateStatusText();
@@ -246,6 +260,7 @@ public partial class MainWindow : Window
         var selectedModdedInput = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
         var selectedOutput = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
         var selectedMonitor = (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
+        var selectedSecondary = (SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.Id;
 
         try
         {
@@ -302,6 +317,15 @@ public partial class MainWindow : Window
 
                 MonitorDeviceCombo.ItemsSource = outputs;
                 MonitorDeviceCombo.SelectedItem = SelectMonitorDevice(outputs, selectedMonitor ?? _settings.MusicMonitorDeviceId);
+
+                // Strict id match only — never auto-pick a replacement. With the
+                // feature enabled, a silently substituted device would play the
+                // microphone on open speakers (feedback/unexpected exposure).
+                // A missing device leaves the combo empty and start is blocked
+                // until the user makes an explicit new choice.
+                string? preferredSecondaryId = selectedSecondary ?? _settings.SecondaryOutputDeviceId;
+                SecondaryOutputCombo.ItemsSource = outputs;
+                SecondaryOutputCombo.SelectedItem = outputs.FirstOrDefault(device => device.Id == preferredSecondaryId);
             }
             finally
             {
@@ -316,10 +340,13 @@ public partial class MainWindow : Window
                 DryInputCombo.IsEnabled = true;
                 ModdedInputCombo.IsEnabled = true;
                 OutputDeviceCombo.IsEnabled = true;
+                SecondaryOutputCombo.IsEnabled = true;
             }
 
             ApplyModdedMicUiState();
             UpdateOutputCableWarning();
+            ApplySecondaryOutputConfig();
+            UpdateSecondaryOutputWarning();
             SaveSettings();
             await ApplyMonitorConfigAsync();
             App.StartupTrace("Devices refreshed");
@@ -416,6 +443,25 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (SecondaryOutputEnabledCheck.IsChecked == true)
+        {
+            if (SecondaryOutputCombo.SelectedItem is not AudioDeviceOption secondaryDevice)
+            {
+                StatusText.Text = "Sekundär ut är aktiverad men ingen enhet är vald — välj en enhet eller stäng av Sekundär ut.";
+                return;
+            }
+
+            // Hard-block: two shared-mode render streams on the same endpoint would
+            // sum both copies of the mix on the cable.
+            if (secondaryDevice.Id == output.Id)
+            {
+                StatusText.Text = "Sekundär ut och Virtuell kabel ut är samma enhet — mixen skulle spelas dubbelt. Välj en annan enhet för Sekundär ut.";
+                return;
+            }
+        }
+
+        ApplySecondaryOutputConfig();
+
         _isStartingRouting = true;
         ToggleBtn.IsEnabled = false;
         StatusText.Text = "Startar routning...";
@@ -451,6 +497,9 @@ public partial class MainWindow : Window
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
+            SecondaryOutputEnabledCheck.IsEnabled = false;
+            SecondaryOutputCombo.IsEnabled = false;
+            UpdateSecondaryOutputStatus();
             SaveSettings();
             UpdateStatusText();
             ResumeMusicIfAutoPaused();
@@ -491,8 +540,11 @@ public partial class MainWindow : Window
             DryInputCombo.IsEnabled = true;
             ModdedInputCombo.IsEnabled = true;
             OutputDeviceCombo.IsEnabled = true;
+            SecondaryOutputCombo.IsEnabled = true;
         }
 
+        SecondaryOutputEnabledCheck.IsEnabled = true;
+        UpdateSecondaryOutputStatus();
         UpdateStatusText();
         UpdateExternalCaptureStatusText();
     }
@@ -559,8 +611,140 @@ public partial class MainWindow : Window
 
         ApplyModdedMicUiState();
         UpdateOutputCableWarning();
+        UpdateSecondaryOutputWarning();
         SaveSettings();
         UpdateStatusText();
+    }
+
+    // --- Secondary output (pre-gate fanout, e.g. for OBS capture) ---
+
+    /// <summary>
+    /// Pushes the current UI state into the engine. The device takes effect at the
+    /// next routing start; volume and ignore-PTT apply immediately while running.
+    /// </summary>
+    private void ApplySecondaryOutputConfig()
+    {
+        _secondaryOutput.Enabled = SecondaryOutputEnabledCheck.IsChecked == true;
+        _secondaryOutput.DeviceId = (SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        _secondaryOutput.IgnorePushToTalk = SecondaryIgnorePttCheck.IsChecked == true;
+        _secondaryOutput.Volume = (float)SecondaryVolumeSlider.Value;
+    }
+
+    private void OnSecondaryOutputConfigChanged(object sender, RoutedEventArgs e)
+    {
+        // Fires while XAML is still being parsed: SecondaryIgnorePttCheck defaults
+        // to checked, which raises Checked before the later controls exist.
+        if (SecondaryVolumeSlider == null || _isUpdatingUi || _isUpdatingMusicUi)
+        {
+            return;
+        }
+
+        ApplySecondaryOutputConfig();
+        UpdateSecondaryOutputWarning();
+        SaveSettings();
+    }
+
+    private void OnSecondaryOutputDeviceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SecondaryVolumeSlider == null || _isUpdatingUi)
+        {
+            return;
+        }
+
+        ApplySecondaryOutputConfig();
+        UpdateSecondaryOutputWarning();
+        SaveSettings();
+    }
+
+    private void OnSecondaryVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        // Fires while XAML is still being parsed (initial Value assignment).
+        if (SecondaryVolumePercentText == null)
+        {
+            return;
+        }
+
+        UpdateSecondaryVolumePercentText();
+
+        if (_isUpdatingUi || _isUpdatingMusicUi)
+        {
+            return;
+        }
+
+        _secondaryOutput.Volume = (float)e.NewValue;
+        ScheduleSettingsSave();
+    }
+
+    private void UpdateSecondaryVolumePercentText()
+    {
+        SecondaryVolumePercentText.Text = $"{Math.Round(SecondaryVolumeSlider.Value * 100)} %";
+    }
+
+    private void UpdateSecondaryOutputWarning()
+    {
+        if (SecondaryOutputEnabledCheck.IsChecked != true)
+        {
+            SecondaryOutputWarningText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (SecondaryOutputCombo.SelectedItem is not AudioDeviceOption secondary)
+        {
+            // No selection on a fresh install is normal. Only call it a missing
+            // saved device when an id was actually persisted earlier.
+            bool savedDeviceMissing = !string.IsNullOrWhiteSpace(_settings.SecondaryOutputDeviceId);
+            SecondaryOutputWarningText.Text =
+                "⚠ Den sparade sekundära enheten hittades inte — anslut den igen eller välj en ny enhet. Ingen enhet väljs automatiskt åt dig.";
+            SecondaryOutputWarningText.Visibility = _devicesLoaded && savedDeviceMissing
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            return;
+        }
+
+        if ((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id == secondary.Id)
+        {
+            SecondaryOutputWarningText.Text =
+                "⚠ Samma enhet som Virtuell kabel ut — mixen skulle spelas dubbelt. Välj en annan enhet.";
+            SecondaryOutputWarningText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        SecondaryOutputWarningText.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateSecondaryOutputStatus()
+    {
+        if (_router.IsRouting && _secondaryOutput.IsRunning)
+        {
+            SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D));
+            SecondaryOutputStatusText.Text =
+                $"Aktiv — mixen spelas även på {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "vald enhet")}.";
+            SecondaryOutputStatusText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            SecondaryOutputStatusText.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnSecondaryOutputError(object? sender, string message)
+    {
+        Log.Error("Secondary output error: {ErrorMessage}", message);
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            // A delayed teardown notification from an older session must not
+            // replace the healthy status of a secondary output already restarted.
+            if (_secondaryOutput.IsRunning)
+            {
+                return;
+            }
+
+            SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C));
+            SecondaryOutputStatusText.Text = $"Sekundär ut stoppades: {message} — routningen till kabeln fortsätter.";
+            SecondaryOutputStatusText.Visibility = Visibility.Visible;
+            UpdateStatusText();
+        });
     }
 
     /// <summary>List entry in the modded-mic combo that disables the modded route entirely.</summary>
@@ -725,6 +909,7 @@ public partial class MainWindow : Window
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _router.Dispose();
+        _secondaryOutput.Dispose();
         _appCapture?.Dispose();
         _music.Dispose();
         _hotkeyListener.Dispose();
@@ -742,6 +927,16 @@ public partial class MainWindow : Window
             _settings.ModdedInputDeviceId = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
         }
         _settings.OutputDeviceId = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
+        _settings.SecondaryOutputEnabled = SecondaryOutputEnabledCheck.IsChecked == true;
+
+        // Keep the stored id while the device is unplugged (the combo is then
+        // empty), so the same device is found again once it is reconnected.
+        if (SecondaryOutputCombo.SelectedItem is AudioDeviceOption secondaryDevice)
+        {
+            _settings.SecondaryOutputDeviceId = secondaryDevice.Id;
+        }
+        _settings.SecondaryOutputIgnorePushToTalk = SecondaryIgnorePttCheck.IsChecked == true;
+        _settings.SecondaryOutputVolume = (float)SecondaryVolumeSlider.Value;
         _settings.HotkeyId = _hotkeyBinding.SerializedValue;
         _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
         _settings.MusicMonitorDeviceId = (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
@@ -839,7 +1034,13 @@ public partial class MainWindow : Window
                 }
             }
 
-            StatusText.Text = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
+            string outputLine = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
+            if (_secondaryOutput.IsRunning)
+            {
+                outputLine += $" · Sekundär ut: {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "aktiv")}";
+            }
+
+            StatusText.Text = outputLine;
 
             UpdateCompactStatus();
             UpdateTrayIcon();

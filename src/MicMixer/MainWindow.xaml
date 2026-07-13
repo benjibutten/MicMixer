@@ -68,6 +68,8 @@
         <Geometry x:Key="SingleTrackIcon">M14,17H12V9H10V7H14V17M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19Z</Geometry>
         <!-- Timed play icon: play triangle inside a dashed clock circle (delayed start) -->
         <Geometry x:Key="TimedPlayIcon">M13,2.05C18.05,2.55 22,6.82 22,12C22,17.18 18.05,21.45 13,21.95V19.93C16.95,19.44 20,16.08 20,12C20,7.92 16.95,4.56 13,4.07V2.05M11,2.05V4.07C9.43,4.27 8,4.89 6.77,5.82L5.36,4.36C7,3.11 8.87,2.3 11,2.05M4.36,5.36L5.82,6.77C4.89,8 4.27,9.43 4.07,11H2.05C2.3,8.87 3.11,7 4.36,5.36M2.05,13H4.07C4.27,14.57 4.89,16 5.82,17.23L4.36,18.64C3.11,17 2.3,15.13 2.05,13M6.77,18.18C8,19.11 9.43,19.73 11,19.93V21.95C8.87,21.7 7,20.89 5.36,19.64L6.77,18.18M16,12L10,16V8L16,12Z</Geometry>
+        <!-- Speaker / secondary output icon -->
+        <Geometry x:Key="SpeakerIcon">M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z</Geometry>
         <!-- Chain link icon (volume sync) -->
         <Geometry x:Key="LinkIcon">M3.9,12C3.9,10.29 5.29,8.9 7,8.9H11V7H7A5,5 0 0,0 2,12A5,5 0 0,0 7,17H11V15.1H7C5.29,15.1 3.9,13.71 3.9,12M8,13H16V11H8V13M17,7H13V8.9H17C18.71,8.9 20.1,10.29 20.1,12C20.1,13.71 18.71,15.1 17,15.1H13V17H17A5,5 0 0,0 22,12A5,5 0 0,0 17,7Z</Geometry>
 
@@ -264,13 +266,14 @@
             <!-- Left column: devices, hotkey, status -->
             <ScrollViewer x:Name="RoutingScroll" Grid.Column="0" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled" Focusable="False">
-            <!-- MinHeight keeps the status card stretched to the bottom when everything
-                 fits; the ScrollViewer only kicks in when the content is taller. -->
-            <Grid MinHeight="{Binding ViewportHeight, ElementName=RoutingScroll}">
+            <!-- Keep the routing cards content-sized; the ScrollViewer only kicks in
+                 when their combined natural height exceeds the available space. -->
+            <Grid VerticalAlignment="Top">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- Device configuration — 3 columns side by side, stacked vertically
@@ -358,6 +361,102 @@
                                        Text="⚠ Det här ser inte ut som en virtuell kabel. Spelet/Discord hör mixen bara om den skickas till t.ex. CABLE Input (VB-CABLE)."/>
                         </StackPanel>
                     </Grid>
+                </Border>
+
+                <!-- Secondary output: optional fanout of the finished mix, tapped before
+                     the push-to-talk gate. Off by default — the cable path is untouched. -->
+                <Border Grid.Row="2" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path Data="{StaticResource SpeakerIcon}" Fill="#0E7490" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
+                                <TextBlock Text="Sekundär ut" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
+                                <Border Style="{StaticResource InfoTipHost}">
+                                    <Path Style="{StaticResource InfoTipIcon}"/>
+                                    <Border.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Extra utgång för hela mixen — t.ex. till OBS"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Spelar upp exakt samma mix som kabeln får (mic + musik) på en extra ljudenhet. Kabeln till FiveM/Discord påverkas inte alls."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Typiskt användningsfall: OBS ska spela in eller streama mixen. Välj en enhet här och lägg till samma enhet i OBS som 'Audio Output Capture'."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Med 'Ignorera push-to-talk' hörs mic + musik här hela tiden — även när PTT är släppt och kabeln får tystnad. Skillnad mot Medhörning: medhörningen spelar bara musiken, sekundär ut spelar hela mixen inklusive din röst."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Behöver du inte spela in eller lyssna på hela mixen separat? Låt det vara avstängt — allt fungerar precis som vanligt."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </Border.ToolTip>
+                                </Border>
+                            </StackPanel>
+                            <CheckBox x:Name="SecondaryOutputEnabledCheck" Grid.Column="1" VerticalAlignment="Center" FontSize="11.5" Foreground="#10233A"
+                                      Checked="OnSecondaryOutputConfigChanged" Unchecked="OnSecondaryOutputConfigChanged"
+                                      ToolTipService.ShowDuration="60000"
+                                      ToolTip="Spela mixen även på enheten nedan. Aktiveras vid nästa routningsstart.">
+                                <TextBlock Text="Aktivera" VerticalAlignment="Center"/>
+                            </CheckBox>
+                        </Grid>
+
+                        <StackPanel x:Name="SecondaryOutputConfigPanel" Margin="0,6,0,0"
+                                    IsEnabled="{Binding IsChecked, ElementName=SecondaryOutputEnabledCheck}">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.5"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+
+                            <ComboBox x:Name="SecondaryOutputCombo" DisplayMemberPath="FriendlyName" FontSize="11.5"
+                                      SelectionChanged="OnSecondaryOutputDeviceChanged"
+                                      ToolTipService.ShowDuration="60000"
+                                      ToolTip="Enheten som mixen också spelas på — t.ex. den enhet OBS fångar med 'Audio Output Capture'. Välj inte samma enhet som Virtuell kabel ut."/>
+                            <TextBlock x:Name="SecondaryOutputWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="#B91C1C" Visibility="Collapsed"
+                                       Text="⚠ Samma enhet som Virtuell kabel ut — mixen skulle spelas dubbelt. Välj en annan enhet."/>
+
+                            <CheckBox x:Name="SecondaryIgnorePttCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A" IsChecked="True"
+                                      Checked="OnSecondaryOutputConfigChanged" Unchecked="OnSecondaryOutputConfigChanged"
+                                      ToolTipService.ShowDuration="60000">
+                                <TextBlock Text="Ignorera push-to-talk — mic + musik hörs här även när kabeln är tyst"
+                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <CheckBox.ToolTip>
+                                    <ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="Spela även när push-to-talk är släppt"/>
+                                            <TextBlock Style="{StaticResource TipBody}"
+                                                       Text="På (standard): sekundär ut får alltid mic + musik, även när push-to-talk håller kabeln tyst — t.ex. så att OBS spelar in allt du säger. Av: sekundär ut tystnar och hörs exakt när kabeln hörs."/>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Volym" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <Slider x:Name="SecondaryVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="1"
+                                        VerticalAlignment="Center" LargeChange="0" SmallChange="0.05"
+                                        ValueChanged="OnSecondaryVolumeChanged"
+                                        ToolTip="Volym endast för sekundär ut — påverkar inte vad kabeln får"/>
+                                <TextBlock x:Name="SecondaryVolumePercentText" Grid.Column="2" Text="100 %" FontSize="11" Foreground="#10233A"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
+                            </Grid>
+
+                            <TextBlock x:Name="SecondaryOutputStatusText" Margin="0,6,0,0" FontSize="10.5" Foreground="#9CA3AF"
+                                       TextWrapping="Wrap" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
 
                 <!-- Hotkey + delay row -->
@@ -536,7 +635,7 @@
                 </Border>
 
                 <!-- Live status panel -->
-                <Border Grid.Row="2" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                <Border Grid.Row="3" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
