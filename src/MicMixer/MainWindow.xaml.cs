@@ -12,6 +12,7 @@ using MicMixer.Audio;
 using MicMixer.Input;
 using MicMixer.Music;
 using MicMixer.Overlay;
+using MicMixer.Remote;
 using MicMixer.Settings;
 using MicMixer.UI;
 using NAudio.CoreAudioApi;
@@ -19,7 +20,7 @@ using Serilog;
 
 namespace MicMixer;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IMicMixerControlHost
 {
     private const int MaxReleaseDelayMilliseconds = 5_000;
 
@@ -1379,6 +1380,7 @@ public partial class MainWindow : Window
                     _folderInfoByPath.GetValueOrDefault(file.Folder),
                     showFolderBadges))
                 .ToList();
+            _libraryVersion = RemoteId.VersionForPaths(_allTracks.Select(track => track.Path));
 
             _playingTrackItem = null;
             _trackByPath.Clear();
@@ -1469,14 +1471,14 @@ public partial class MainWindow : Window
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    private void PlayTrack(string path)
+    private bool PlayTrack(string path)
     {
         CancelDelayedStart(null);
 
         if (!_music.HasMonitorOutput && !_router.IsRouting)
         {
             MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
-            return;
+            return false;
         }
 
         try
@@ -1487,7 +1489,7 @@ public partial class MainWindow : Window
         {
             Log.Error(ex, "Failed to play track {TrackPath}.", path);
             MusicStatusText.Text = $"Kunde inte spela låten: {ex.Message}";
-            return;
+            return false;
         }
 
         _lastPlayedTrackPath = path;
@@ -1501,6 +1503,7 @@ public partial class MainWindow : Window
         }
 
         UpdateMusicUi();
+        return true;
     }
 
     private void PlayNextTrack()
@@ -2536,47 +2539,27 @@ public partial class MainWindow : Window
 
     private void OnPlayPauseClick(object sender, RoutedEventArgs e)
     {
-        CancelDelayedStart(null);
-
         if (_isExternalMode)
         {
+            CancelDelayedStart(null);
             MediaKeySender.SendPlayPause();
             return;
         }
 
-        if (_music.IsPlaying)
-        {
-            _music.Pause();
-            _musicWasAutoPaused = false;
-            if (_music.CurrentTrackPath is string playingPath)
-            {
-                MusicStatusText.Text = $"Pausad: {Path.GetFileNameWithoutExtension(playingPath)}";
-            }
-
-            UpdateMusicUi();
-            return;
-        }
-
-        StartPlaybackFromCurrentState();
+        _ = RemoteTogglePlayPause();
     }
 
     private void OnStopPlaybackClick(object sender, RoutedEventArgs e)
     {
-        CancelDelayedStart(null);
-
         if (_isExternalMode)
         {
+            CancelDelayedStart(null);
             MediaKeySender.SendStop();
             MusicStatusText.Text = "Skickade stopp till appen som spelar.";
             return;
         }
 
-        _music.Stop();
-        _musicWasAutoPaused = false;
-        _lastPlayedTrackPath = null;
-        PlaylistListBox.SelectedItem = null;
-        MusicStatusText.Text = "Musiken stoppad — ingen låt är aktiv.";
-        UpdateMusicUi();
+        _ = RemoteStop();
     }
 
     /// <summary>
@@ -2584,14 +2567,14 @@ public partial class MainWindow : Window
     /// resume a paused track, otherwise play the selected (or first) track.
     /// Shared by the play button and the delayed-start countdown.
     /// </summary>
-    private void StartPlaybackFromCurrentState()
+    private bool StartPlaybackFromCurrentState()
     {
         if (_music.IsPaused)
         {
             if (!_music.HasMonitorOutput && !_router.IsRouting)
             {
                 MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
-                return;
+                return false;
             }
 
             _music.Resume();
@@ -2602,71 +2585,46 @@ public partial class MainWindow : Window
             }
 
             UpdateMusicUi();
-            return;
+            return true;
         }
 
         if (PlaylistListBox.SelectedItem is TrackItem selected)
         {
-            PlayTrack(selected.Path);
+            return PlayTrack(selected.Path);
         }
         else if (_allTracks.Count > 0)
         {
-            PlayTrack(_allTracks[0].Path);
+            return PlayTrack(_allTracks[0].Path);
         }
         else
         {
             MusicStatusText.Text = "Ingen musik ännu — klistra in en YouTube-länk ovan.";
+            return false;
         }
     }
 
     private void OnPrevTrackClick(object sender, RoutedEventArgs e)
     {
-        CancelDelayedStart(null);
-
         if (_isExternalMode)
         {
+            CancelDelayedStart(null);
             MediaKeySender.SendPreviousTrack();
             return;
         }
 
-        if (!_music.HasTrack)
-        {
-            return;
-        }
-
-        if (_music.Position > TimeSpan.FromSeconds(3))
-        {
-            _music.Seek(TimeSpan.Zero);
-            UpdateMusicUi();
-            return;
-        }
-
-        string? current = _music.CurrentTrackPath ?? _lastPlayedTrackPath;
-        if (current != null)
-        {
-            int index = _allTracks.FindIndex(track => string.Equals(track.Path, current, StringComparison.OrdinalIgnoreCase));
-            if (index > 0)
-            {
-                PlayTrack(_allTracks[index - 1].Path);
-                return;
-            }
-        }
-
-        _music.Seek(TimeSpan.Zero);
-        UpdateMusicUi();
+        _ = RemotePrevious();
     }
 
     private void OnNextTrackClick(object sender, RoutedEventArgs e)
     {
-        CancelDelayedStart(null);
-
         if (_isExternalMode)
         {
+            CancelDelayedStart(null);
             MediaKeySender.SendNextTrack();
             return;
         }
 
-        PlayNextTrack();
+        _ = RemoteNext();
     }
 
     // --- Delayed start & single-track mode ---
@@ -2676,6 +2634,10 @@ public partial class MainWindow : Window
     private static readonly System.Windows.Media.Brush TransportInkBrush = CreateFrozenBrush(0x10, 0x23, 0x3A);
 
     private bool IsDelayedStartCountingDown => _delayedStartTimer.IsEnabled;
+
+    // Remote companions can arm the countdown for a specific track; the local
+    // button keeps its play-selected-or-resume behavior by leaving this null.
+    private string? _delayedStartTrackPath;
 
     private static int ClampDelayedStartSeconds(int seconds) => Math.Clamp(seconds, 1, 60);
 
@@ -2708,6 +2670,7 @@ public partial class MainWindow : Window
             }
         }
 
+        _delayedStartTrackPath = null;
         _delayedStartRemainingSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
         _delayedStartTimer.Start();
         UpdateDelayedPlayCountdownUi();
@@ -2726,10 +2689,19 @@ public partial class MainWindow : Window
         _delayedStartTimer.Stop();
         UpdateDelayedPlayIdleUi();
 
+        string? armedTrackPath = _delayedStartTrackPath;
+        _delayedStartTrackPath = null;
+
         if (_isExternalMode)
         {
             MediaKeySender.SendPlayPause();
             MusicStatusText.Text = "Skickade play till appen som spelar.";
+            return;
+        }
+
+        if (armedTrackPath != null)
+        {
+            PlayTrack(armedTrackPath);
             return;
         }
 
@@ -2744,6 +2716,7 @@ public partial class MainWindow : Window
         }
 
         _delayedStartTimer.Stop();
+        _delayedStartTrackPath = null;
         UpdateDelayedPlayIdleUi();
 
         if (statusMessage != null)
@@ -3026,7 +2999,7 @@ public partial class MainWindow : Window
         await StartDownloadAsync();
     }
 
-    private async Task StartDownloadAsync()
+    private async Task StartDownloadAsync(string? downloadFolderOverride = null)
     {
         if (_isDownloading)
         {
@@ -3067,7 +3040,9 @@ public partial class MainWindow : Window
                 }
             });
 
-            string downloadFolder = (DownloadFolderCombo.SelectedItem as FolderInfo)?.Path ?? _playlist.Folders[0];
+            string downloadFolder = downloadFolderOverride
+                ?? (DownloadFolderCombo.SelectedItem as FolderInfo)?.Path
+                ?? _playlist.Folders[0];
             string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, downloadFolder, progress, CancellationToken.None);
 
             YoutubeUrlBox.Text = "";
