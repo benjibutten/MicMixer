@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 using MicMixer.Diagnostics;
+using MicMixer.Remote;
 using Serilog;
 
 namespace MicMixer;
@@ -31,6 +32,7 @@ public partial class App : System.Windows.Application
     private Mutex? _instanceMutex;
     private EventWaitHandle? _showEvent;
     private Thread? _listenerThread;
+    private MicMixerControlServer? _controlServer;
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
@@ -127,6 +129,9 @@ public partial class App : System.Windows.Application
         StartupTrace("Pre-MainWindow");
         var mainWindow = new MainWindow();
         StartupTrace("MainWindow created");
+        _controlServer = new MicMixerControlServer(mainWindow);
+        _controlServer.Start();
+        StartupTrace("Control server started");
         mainWindow.Show();
         StartupTrace("MainWindow shown");
     }
@@ -136,6 +141,12 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException -= OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException -= OnCurrentDomainUnhandledException;
         TaskScheduler.UnobservedTaskException -= OnTaskSchedulerUnobservedTaskException;
+
+        if (_controlServer != null)
+        {
+            _controlServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _controlServer = null;
+        }
 
         _showEvent?.Set();   // unblock listener thread so it exits
         _showEvent?.Dispose();
