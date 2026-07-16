@@ -2,6 +2,8 @@ namespace MicMixer.Settings;
 
 public sealed class AppSettings
 {
+    public bool StartWithWindows { get; set; }
+
     public string? NormalInputDeviceId { get; set; }
 
     public string? ModdedInputDeviceId { get; set; }
@@ -15,6 +17,12 @@ public sealed class AppSettings
     public int ReleaseDelayMilliseconds { get; set; }
 
     public bool PushToTalkMode { get; set; }
+
+    /// <summary>Music keeps flowing to the virtual cable while push-to-talk holds the mic silent.</summary>
+    public bool MusicIgnoresPushToTalk { get; set; }
+
+    /// <summary>Preview mode: music is never sent to the virtual cable — only local monitoring (and the secondary output) carry it.</summary>
+    public bool MusicMonitorOnly { get; set; }
 
     public string? MusicMonitorDeviceId { get; set; }
 

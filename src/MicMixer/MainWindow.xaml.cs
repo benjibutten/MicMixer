@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Navigation;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using System.IO;
 using MicMixer.Audio;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly SecondaryOutputEngine _secondaryOutput;
     private readonly GlobalHotkeyListener _hotkeyListener;
     private readonly SettingsStore _settingsStore;
+    private readonly StartupRegistrySyncService _startupRegistrySyncService;
     private readonly DispatcherTimer _levelTimer;
     private readonly DispatcherTimer _releaseDelayTimer;
     private readonly System.Windows.Forms.NotifyIcon _trayIcon;
@@ -77,6 +79,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private bool _isUpdatingUi;
     private bool _isReallyClosing;
     private bool _devicesLoaded;
+    private bool _startupCompleted;
     private string? _deviceLoadError;
     private MicStatus _lastTrayStatus = MicStatus.Stopped;
     private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
@@ -91,6 +94,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _hotkeyListener = new GlobalHotkeyListener();
         App.StartupTrace("GlobalHotkeyListener created");
         _settingsStore = new SettingsStore();
+        _startupRegistrySyncService = new StartupRegistrySyncService();
         App.StartupTrace("SettingsStore created");
 
         _music = new MusicPlaybackEngine();
@@ -148,12 +152,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SecondaryOutputCombo.IsEnabled = false;
 
         _isUpdatingUi = true;
+        StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
         SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
         SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
         SecondaryVolumeSlider.Value = Math.Clamp(_settings.SecondaryOutputVolume, 0f, 1f);
         _isUpdatingUi = false;
         UpdateSecondaryVolumePercentText();
         ApplySecondaryOutputConfig();
+        SyncStartWithWindows();
 
         _music.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
         _music.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
@@ -163,10 +169,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
         PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
+        MusicIgnorePttCheck.IsChecked = _settings.MusicIgnoresPushToTalk;
+        MusicMonitorOnlyCheck.IsChecked = _settings.MusicMonitorOnly;
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         MeterSensitivitySlider.Value = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
         _isUpdatingMusicUi = false;
+        ApplyMusicRoutingModes();
         UpdateMeterSensitivityText();
         UpdateDelayedPlayIdleUi();
         SetSingleTrackMode(_settings.SingleTrackMode ? SingleTrackPlayMode.Always : SingleTrackPlayMode.Off,
@@ -214,26 +223,42 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         App.StartupTrace("MainWindow ctor done");
 
-        ContentRendered += (_, _) =>
+        ContentRendered += (_, _) => CompleteStartup();
+    }
+
+    public void StartHiddenInTray()
+    {
+        ShowInTaskbar = false;
+        new WindowInteropHelper(this).EnsureHandle();
+        Hide();
+        Dispatcher.BeginInvoke(CompleteStartup, DispatcherPriority.Loaded);
+    }
+
+    private void CompleteStartup()
+    {
+        if (_startupCompleted)
         {
-            App.StartupTrace("ContentRendered (startup complete)");
-            App.StartupStopwatch.Stop();
+            return;
+        }
 
-            if (!App.StartupBenchmarkMode)
-            {
-                App.StartupTrace("Device refresh queued");
-                _ = RefreshDevicesAsync();
-            }
+        _startupCompleted = true;
+        App.StartupTrace("Startup complete");
+        App.StartupStopwatch.Stop();
 
-            if (App.StartupBenchmarkMode)
+        if (!App.StartupBenchmarkMode)
+        {
+            App.StartupTrace("Device refresh queued");
+            _ = RefreshDevicesAsync();
+        }
+
+        if (App.StartupBenchmarkMode)
+        {
+            Dispatcher.BeginInvoke(() =>
             {
-                Dispatcher.BeginInvoke(() =>
-                {
-                    _isReallyClosing = true;
-                    System.Windows.Application.Current.Shutdown();
-                }, DispatcherPriority.Background);
-            }
-        };
+                _isReallyClosing = true;
+                System.Windows.Application.Current.Shutdown();
+            }, DispatcherPriority.Background);
+        }
     }
 
     private async Task RefreshDevicesAsync()
@@ -372,17 +397,24 @@ public partial class MainWindow : Window, IMicMixerControlHost
         using var enumerator = new MMDeviceEnumerator();
         App.StartupTrace("MMDeviceEnumerator created (lazy)");
 
-        var inputs = enumerator
-            .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .Select(device => new AudioDeviceOption(device.ID, device.FriendlyName))
-            .ToList();
-
-        var outputs = enumerator
-            .EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .Select(device => new AudioDeviceOption(device.ID, device.FriendlyName))
-            .ToList();
+        var inputs = ReadDeviceOptions(enumerator, DataFlow.Capture);
+        var outputs = ReadDeviceOptions(enumerator, DataFlow.Render);
 
         return (inputs, outputs);
+    }
+
+    private static List<AudioDeviceOption> ReadDeviceOptions(MMDeviceEnumerator enumerator, DataFlow dataFlow)
+    {
+        var options = new List<AudioDeviceOption>();
+        foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(dataFlow, DeviceState.Active))
+        {
+            using (device)
+            {
+                options.Add(new AudioDeviceOption(device.ID, device.FriendlyName));
+            }
+        }
+
+        return options;
     }
 
     private async void OnToggleClick(object sender, RoutedEventArgs e)
@@ -515,9 +547,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void StartRoutingByDeviceId(string dryInputId, string? moddedInputId, string outputId, bool startMuted)
     {
         using var enumerator = new MMDeviceEnumerator();
-        var dryInput = enumerator.GetDevice(dryInputId);
-        var moddedInput = moddedInputId != null ? enumerator.GetDevice(moddedInputId) : null;
-        var output = enumerator.GetDevice(outputId);
+        using var dryInput = enumerator.GetDevice(dryInputId);
+        using var moddedInput = moddedInputId != null ? enumerator.GetDevice(moddedInputId) : null;
+        using var output = enumerator.GetDevice(outputId);
 
         _router.SetUseModdedInput(false);
         // Push-to-talk must start silent; the gate opens when the hotkey is pressed.
@@ -568,12 +600,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnLevelTimerTick(object? sender, EventArgs e)
     {
-        // Feeds the overlay volume meter; SetOutputLevel no-ops while it is hidden,
-        // and the read itself resets the levels so stale values never linger.
+        // Feeds the overlay volume meters; the Set*Level calls no-op while their
+        // rings are hidden, and the reads reset the levels so stale values never linger.
         if (_overlayIndicator is { } overlay)
         {
             var (outputPeak, outputRms) = _router.ReadAndResetOutputLevels();
             overlay.SetOutputLevel(outputPeak, outputRms);
+
+            var (musicPeak, musicRms) = _router.ReadAndResetMusicLevels();
+            overlay.SetMusicLevel(musicPeak, musicRms);
         }
 
         if (_appCapture is { } capture)
@@ -715,6 +750,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void UpdateSecondaryOutputStatus()
     {
+        // The monitor-only hint mentions the secondary output while it runs.
+        UpdateMusicRouteHint();
+
         if (_router.IsRouting && _secondaryOutput.IsRunning)
         {
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D));
@@ -744,6 +782,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C));
             SecondaryOutputStatusText.Text = $"Sekundär ut stoppades: {message} — routningen till kabeln fortsätter.";
             SecondaryOutputStatusText.Visibility = Visibility.Visible;
+            UpdateMusicRouteHint();
             UpdateStatusText();
         });
     }
@@ -799,6 +838,69 @@ public partial class MainWindow : Window, IMicMixerControlHost
         bool engaged = IsHotkeyEngaged();
         _router.SetUseModdedInput(!IsModdedMicSkipped && engaged);
         _router.SetOutputGateOpen(!IsPushToTalk || engaged);
+    }
+
+    private void OnMusicRoutingModeChanged(object sender, RoutedEventArgs e)
+    {
+        // Fires while XAML is still being parsed when a checkbox default raises
+        // Checked before the later controls exist.
+        if (MusicRouteHintText == null || _isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        ApplyMusicRoutingModes();
+        SaveSettings();
+        UpdateStatusText();
+        UpdateMusicUi();
+    }
+
+    /// <summary>
+    /// Pushes the music routing toggles into the router (they apply immediately,
+    /// also while routing runs) and refreshes the honest-state hint below them.
+    /// </summary>
+    private void ApplyMusicRoutingModes()
+    {
+        _router.SetMusicIgnoresPushToTalk(MusicIgnorePttCheck.IsChecked == true);
+        _router.SetMusicMonitorOnly(MusicMonitorOnlyCheck.IsChecked == true);
+        UpdateMusicRouteHint();
+    }
+
+    /// <summary>
+    /// The amber hint under the music routing toggles: states exactly where the
+    /// music goes while monitor-only preview is active, including the cases the
+    /// user could otherwise be surprised by (secondary output still carrying it,
+    /// or monitoring being off so nothing is audible locally).
+    /// </summary>
+    private void UpdateMusicRouteHint()
+    {
+        if (MusicMonitorOnlyCheck.IsChecked != true)
+        {
+            MusicRouteHintText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        string text = "Endast medhörning: musiken sänds inte till mic-kanalen.";
+        if (_secondaryOutput.IsRunning)
+        {
+            text += " Sekundär ut får den fortfarande.";
+        }
+
+        if (_isExternalMode)
+        {
+            text += " I app-läget hör du appen direkt.";
+        }
+        else if (MonitorEnabledCheck.IsChecked != true)
+        {
+            text += " Obs: medhörningen är avstängd — du hör ingen musik just nu.";
+        }
+
+        if (MusicRouteHintText.Text != text)
+        {
+            MusicRouteHintText.Text = text;
+        }
+
+        MusicRouteHintText.Visibility = Visibility.Visible;
     }
 
     private void UpdateOutputCableWarning()
@@ -918,6 +1020,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void SaveSettings()
     {
+        _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
         _settings.NormalInputDeviceId = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
         _settings.SkipModdedMic = IsModdedMicSkipped;
 
@@ -952,6 +1055,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
         _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
         _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
+        _settings.MusicIgnoresPushToTalk = MusicIgnorePttCheck.IsChecked == true;
+        _settings.MusicMonitorOnly = MusicMonitorOnlyCheck.IsChecked == true;
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
         _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         _settings.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
@@ -987,6 +1092,44 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settingsSaveTimer.Start();
     }
 
+    private void OnStartWithWindowsChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        try
+        {
+            // Save the loaded settings object directly: device lists may still be
+            // loading, and a full UI snapshot would otherwise clear saved ids.
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to save the Start with Windows setting.");
+            StatusText.Text = $"Kunde inte spara inställningen: {ex.Message}";
+        }
+
+        SyncStartWithWindows();
+    }
+
+    private void SyncStartWithWindows()
+    {
+        try
+        {
+            if (!_startupRegistrySyncService.Sync(_settings.StartWithWindows, Environment.ProcessPath))
+            {
+                Log.Warning("Could not open the Windows startup registry key.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to synchronize the Start with Windows registry setting.");
+        }
+    }
+
     private void UpdateStatusText()
     {
         if (_isCapturingHotkey)
@@ -1003,8 +1146,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
             RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
             RoutingStateIcon.Fill = StatusTheme.BrushFor(status);
 
+            // Muted with the music branch still open must say so: "tyst" would be
+            // a lie while music keeps playing into the cable past push-to-talk.
             ActiveSourceText.Text = status switch
             {
+                MicStatus.Muted when _router.MusicRouteOpen && HasActiveMusicSignal()
+                    => "Aktiv källa: Mic tyst (push-to-talk) — musiken sänds",
                 MicStatus.Muted => "Aktiv källa: Tyst (push-to-talk)",
                 MicStatus.Modded => "Aktiv källa: Moddad mic",
                 _ => "Aktiv källa: Vanlig mic"
@@ -1304,7 +1451,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void UpdateMusicUi()
     {
         UpdateMusicRoutingWarning();
-        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
+        _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
 
         if (_isExternalMode)
         {
@@ -2338,6 +2485,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // (it just sends play to the app after the countdown).
         SingleTrackBtn.IsEnabled = !external;
 
+        UpdateMusicRouteHint();
         UpdateQueueUi();
         UpdateCaptureUi();
     }
@@ -2947,6 +3095,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         SaveSettings();
+        UpdateMusicRouteHint();
         _ = ApplyMonitorConfigAsync();
     }
 
@@ -3343,15 +3492,21 @@ public partial class MainWindow : Window, IMicMixerControlHost
         System.Windows.Application.Current.Shutdown();
     }
 
-    private void RestoreFromTray()
+    internal void ShowAndActivate()
     {
+        ShowInTaskbar = true;
         Show();
         if (WindowState == WindowState.Minimized)
         {
             WindowState = _lastNonMinimizedWindowState;
         }
         Activate();
+        Topmost = true;
+        Topmost = false;
+        Focus();
     }
+
+    private void RestoreFromTray() => ShowAndActivate();
 
     private MicStatus ComputeMicStatus()
     {
@@ -3371,7 +3526,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         // The overlay mirrors the tray state; SetState no-ops when unchanged.
         _overlayIndicator?.SetState(ToOverlayIndicatorState(newStatus));
-        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
+        _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
 
         if (newStatus == _lastTrayStatus)
             return;
@@ -3411,14 +3566,25 @@ public partial class MainWindow : Window, IMicMixerControlHost
         };
     }
 
-    /// <summary>True while music actually reaches the virtual cable: routing runs, the push-to-talk gate is open and a source plays.</summary>
-    private bool IsMusicRoutedOut()
+    /// <summary>
+    /// State of the overlay's music circle: hidden without active music, otherwise
+    /// exactly where the music currently goes — sent to the cable, previewed in
+    /// monitor-only mode, or blocked by push-to-talk.
+    /// </summary>
+    private OverlayMusicState ComputeOverlayMusicState()
     {
-        if (!_router.IsRouting || !_router.OutputGateOpen)
+        if (!_router.IsRouting || !HasActiveMusicSignal())
         {
-            return false;
+            return OverlayMusicState.Hidden;
         }
 
+        return _router.MusicMonitorOnly
+            ? OverlayMusicState.MonitorOnly
+            : _router.MusicRouteOpen ? OverlayMusicState.Sending : OverlayMusicState.Blocked;
+    }
+
+    private bool HasActiveMusicSignal()
+    {
         if (!_isExternalMode)
         {
             return _music.IsPlaying;
@@ -3503,7 +3669,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void UpdateOutputMeteringEnabled()
     {
-        _router.OutputMeteringEnabled = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
+        bool metering = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
+        _router.OutputMeteringEnabled = metering;
+        _router.MusicMeteringEnabled = metering;
     }
 
     private void ApplyOverlayIndicatorSetting(bool enabled)
@@ -3516,7 +3684,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
                 _overlayIndicator.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
                 _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeMicStatus()));
-                _overlayIndicator.SetMusicActive(IsMusicRoutedOut());
+                _overlayIndicator.SetMusicState(ComputeOverlayMusicState());
             }
             catch (Exception ex)
             {

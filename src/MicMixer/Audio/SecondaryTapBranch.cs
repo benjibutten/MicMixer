@@ -5,9 +5,11 @@ using Serilog;
 namespace MicMixer.Audio;
 
 /// <summary>
-/// The secondary-output side of the pre-gate fanout: a bounded buffer that the
-/// primary audio thread writes into (never blocking on the secondary device),
-/// followed by the secondary-only gate and volume stages.
+/// The secondary-output side of the fanout: a bounded buffer that the primary
+/// audio thread writes into (never blocking on the secondary device), followed
+/// by the secondary-only volume stage. Gating happens upstream — the router's
+/// <see cref="MixFanoutSampleProvider"/> applies the secondary's own mic and
+/// music gates before writing, so this branch receives a finished mix.
 ///
 /// Clock-drift policy, both directions:
 /// - Secondary slower than primary (buffer grows): past the high watermark the
@@ -35,7 +37,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
     private long _nextTrimLogTicks;
     private volatile bool _rebuffering;
 
-    public SecondaryTapBranch(WaveFormat sourceFormat, Func<bool> isGateOpen)
+    public SecondaryTapBranch(WaveFormat sourceFormat)
     {
         int bytesPerSecond = sourceFormat.SampleRate * sourceFormat.Channels * sizeof(float);
         _highWatermarkBytes = (int)(bytesPerSecond * 0.4);
@@ -62,8 +64,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
         _buffer.AddSamples(_writeScratch, 0, _primeBytes);
 
         var head = new RebufferingHead(this, _buffer.ToSampleProvider());
-        var gate = new GateSampleProvider(head, isGateOpen);
-        _volumeProvider = new VolumeSampleProvider(gate);
+        _volumeProvider = new VolumeSampleProvider(head);
     }
 
     public WaveFormat WaveFormat => _volumeProvider.WaveFormat;
@@ -81,9 +82,9 @@ internal sealed class SecondaryTapBranch : ISampleProvider
     internal int PrimeBytes => _primeBytes;
 
     /// <summary>
-    /// Copies one pre-gate block from the primary audio thread into the buffer.
-    /// Trims the oldest audio first when the fill level has drifted past the
-    /// high watermark, so the call never stalls and latency stays bounded.
+    /// Copies one finished secondary-mix block from the primary audio thread into
+    /// the buffer. Trims the oldest audio first when the fill level has drifted
+    /// past the high watermark, so the call never stalls and latency stays bounded.
     /// </summary>
     public void Write(float[] buffer, int offset, int count)
     {

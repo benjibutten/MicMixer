@@ -432,7 +432,9 @@
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource TipTitle}" Text="Spela även när push-to-talk är släppt"/>
                                             <TextBlock Style="{StaticResource TipBody}"
-                                                       Text="På (standard): sekundär ut får alltid mic + musik, även när push-to-talk håller kabeln tyst — t.ex. så att OBS spelar in allt du säger. Av: sekundär ut tystnar och hörs exakt när kabeln hörs."/>
+                                                       Text="På (standard): sekundär ut får alltid mic + musik, även när push-to-talk håller kabeln tyst — t.ex. så att OBS spelar in allt du säger. Av: micen på sekundär ut följer push-to-talk och tystnar exakt när kabeln tystnar."/>
+                                            <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                       Text="Musiken följer alltid det du kan höra: den ligger kvar på sekundär ut så länge den sänds till kabeln eller förhandsgranskas i endast medhörning-läget."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </CheckBox.ToolTip>
@@ -463,6 +465,7 @@
                 <Border x:Name="HotkeyDelayCard" Grid.Row="1" Margin="0,0,0,10" Padding="14" CornerRadius="12" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
@@ -534,6 +537,8 @@
                                                 <TextBlock Style="{StaticResource TipBody}"
                                                            Text="När det här är på skickas bara tystnad till den virtuella kabeln — varken mic eller musik hörs — tills du håller in hotkeyn. Fungerar även med 'Ingen moddad mic': då hörs din vanliga mic bara medan hotkeyn hålls."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Vill du att musiken ska fortsätta höras medan din röst är tyst? Slå på 'Musik ignorerar push-to-talk' i musikkortet — då gäller push-to-talk bara micen."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="Återgångsdelayn gäller även här: ljudet ligger kvar en stund efter att du släppt. Medhörningen i dina egna hörlurar påverkas inte, så du hör musiken själv hela tiden."/>
                                             </StackPanel>
                                         </ToolTip>
@@ -557,9 +562,9 @@
                                                 <TextBlock Style="{StaticResource TipBody}"
                                                            Text="Visar en liten halvtransparent prick uppe i högra hörnet medan routningen är igång — samma färger som ikonen i systemfältet: grön = vanlig mic hörs, blå = moddad mic hörs (hotkeyn hålls), röd överkryssad mic = tyst (push-to-talk)."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="När musik spelas ut i mic-kanalen dansar dessutom tre små equalizer-staplar under pricken — som en 'spelas nu'-symbol."/>
+                                                           Text="När musik är igång visas dessutom en egen musikcirkel till vänster om pricken, med dansande equalizer-staplar: lila not = musiken sänds till mic-kanalen, bärnstensfärgade hörlurar = endast medhörning (bara du och ev. sekundär ut hör den), grå överkryssad not = musiken spelar men blockeras av push-to-talk."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Pricken går inte att klicka på — musklick går rakt igenom — och den syns även ovanpå spel i fönster/borderless-läge. Spel i exklusivt helskärmsläge kan dock inte visa overlays."/>
+                                                           Text="Indikatorerna går inte att klicka på — musklick går rakt igenom — och de syns även ovanpå spel i fönster/borderless-läge. Spel i exklusivt helskärmsläge kan dock inte visa overlays."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
@@ -568,15 +573,15 @@
                                           IsEnabled="{Binding IsChecked, ElementName=OverlayIndicatorCheck}"
                                           Checked="OnOverlayVolumeMeterChanged" Unchecked="OnOverlayVolumeMeterChanged"
                                           ToolTipService.ShowDuration="60000">
-                                    <TextBlock Text="Volymindikator — nivåring runt pricken som visar om ljudnivån ut är bra" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Volymindikator — nivåringar runt indikatorerna som visar om ljudnivån är bra" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
                                                 <TextBlock Style="{StaticResource TipTitle}" Text="Volymindikator för utgående ljud"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Visar en nivåring runt pricken medan routningen är igång — ringen fylls medurs med ljudnivån och ett litet vitt streck hänger kvar en stund vid den senaste toppen. Den mäter allt som skickas till mic-kanalen — röst och musik tillsammans, exakt det de andra hör. Färgen säger om nivån är bra: grön = bra nivå, gul = för lågt eller för högt, röd = alldeles för högt eller klipper (sänk volymen)."/>
+                                                           Text="Visar en nivåring runt varje indikator medan routningen är igång — ringen fylls medurs med ljudnivån och ett litet vitt streck hänger kvar en stund vid den senaste toppen. Mic-prickens ring mäter allt som skickas till mic-kanalen — röst och musik tillsammans, exakt det de andra hör. Musikcirkelns ring mäter bara musiken (efter musikvolymen), så du kan ställa in nivån även i endast medhörning-läget innan andra får höra den."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Mätaren går på upplevd ljudstyrka, inte bara topparna — hårt komprimerad musik som låter högt visar högt även när den inte klipper. Vid push-to-talk-tyst är mätaren tom, eftersom inget skickas ut då."/>
+                                                           Text="Färgen säger om nivån är bra: grön = bra nivå, gul = för lågt eller för högt, röd = alldeles för högt eller klipper (sänk volymen). Mätarna går på upplevd ljudstyrka, inte bara topparna — hårt komprimerad musik som låter högt visar högt även när den inte klipper. Vid push-to-talk-tyst är mic-ringen tom, eftersom inget skickas ut då."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
@@ -630,6 +635,25 @@
                                     </Grid.ToolTip>
                                 </Grid>
                             </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="2" Margin="0,10,0,0" Padding="0,10,0,0"
+                                BorderBrush="#E9EEF3" BorderThickness="0,1,0,0">
+                            <CheckBox x:Name="StartWithWindowsCheck" FontSize="11.5" Foreground="#10233A"
+                                      Checked="OnStartWithWindowsChanged" Unchecked="OnStartWithWindowsChanged"
+                                      ToolTipService.ShowDuration="60000">
+                                <TextBlock Text="Starta med Windows — öppnas minimerad i systemfältet"
+                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <CheckBox.ToolTip>
+                                    <ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="Starta MicMixer automatiskt"/>
+                                            <TextBlock Style="{StaticResource TipBody}"
+                                                       Text="Lägger till MicMixer i Windows autostart. Vid inloggning startar appen dold i systemfältet utan att öppna huvudfönstret."/>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </CheckBox.ToolTip>
+                            </CheckBox>
                         </Border>
                     </Grid>
                 </Border>
@@ -740,6 +764,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -1210,8 +1235,63 @@
                                    FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
                     </Grid>
 
+                    <!-- Music routing: how the music relates to push-to-talk and the cable.
+                         Both are honest-by-default toggles — the hint text and the overlay's
+                         music circle always tell where the music actually goes. -->
+                    <StackPanel Grid.Row="9" Margin="0,8,0,0">
+                        <CheckBox x:Name="MusicIgnorePttCheck" FontSize="11.5" Foreground="#10233A"
+                                  Checked="OnMusicRoutingModeChanged" Unchecked="OnMusicRoutingModeChanged"
+                                  IsEnabled="{Binding IsChecked, ElementName=PushToTalkCheck}"
+                                  ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Data="{StaticResource MusicIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
+                                <TextBlock Grid.Column="1" Text="Musik ignorerar push-to-talk — musiken sänds så länge den spelar" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </Grid>
+                            <CheckBox.ToolTip>
+                                <ToolTip>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource TipTitle}" Text="Musik förbi push-to-talk"/>
+                                        <TextBlock Style="{StaticResource TipBody}"
+                                                   Text="Med det här på fortsätter musiken in i mic-kanalen även när push-to-talk håller micen tyst — perfekt när spelet ska höra musiken hela tiden medan din röst bara sänds när du håller hotkeyn."/>
+                                        <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                   Text="Micen följer alltid push-to-talk som vanligt. Valet är bara aktivt när push-to-talk är på — utan push-to-talk sänds musiken ändå så länge den spelar."/>
+                                    </StackPanel>
+                                </ToolTip>
+                            </CheckBox.ToolTip>
+                        </CheckBox>
+                        <CheckBox x:Name="MusicMonitorOnlyCheck" Margin="0,6,0,0" FontSize="11.5" Foreground="#10233A"
+                                  Checked="OnMusicRoutingModeChanged" Unchecked="OnMusicRoutingModeChanged"
+                                  ToolTipService.ShowDuration="60000">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Data="{StaticResource HeadphonesIcon}" Fill="#D97706" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
+                                <TextBlock Grid.Column="1" Text="Endast medhörning — förhandsgranska utan att sända till mic-kanalen" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </Grid>
+                            <CheckBox.ToolTip>
+                                <ToolTip>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource TipTitle}" Text="Förhandsgranska musiken"/>
+                                        <TextBlock Style="{StaticResource TipBody}"
+                                                   Text="Med det här på skickas musiken aldrig till mic-kanalen — du hör den bara själv i medhörningen och kan lyssna igenom en låt eller ställa in volymen innan andra får höra den. Micen påverkas inte alls."/>
+                                        <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                   Text="Är Sekundär ut igång får den fortfarande musiken — streamen (t.ex. OBS) hör alltså samma sak som du. Overlayens musikcirkel blir bärnstensfärgad med hörlurar så länge läget är på."/>
+                                    </StackPanel>
+                                </ToolTip>
+                            </CheckBox.ToolTip>
+                        </CheckBox>
+                        <TextBlock x:Name="MusicRouteHintText" Margin="0,5,0,0" FontSize="10.5" Foreground="#9A3412"
+                                   TextWrapping="Wrap" Visibility="Collapsed"/>
+                    </StackPanel>
+
                     <!-- Now playing + hints -->
-                    <Grid Grid.Row="9" Margin="0,6,0,0">
+                    <Grid Grid.Row="10" Margin="0,6,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>

@@ -6,9 +6,10 @@ using Xunit;
 namespace MicMixer.Tests;
 
 /// <summary>
-/// Hardware-independent tests for the secondary-output fanout: the pre-gate tap,
-/// the bounded buffer with its startup cushion and re-buffering, and the
-/// secondary-only gate and volume stages.
+/// Hardware-independent tests for the secondary-output branch: the bounded buffer
+/// with its startup cushion and re-buffering, and the secondary-only volume stage.
+/// Gating is applied upstream by <see cref="MixFanoutSampleProvider"/> and is
+/// covered by <see cref="MixFanoutSampleProviderTests"/>.
 /// </summary>
 public sealed class SecondaryOutputTests
 {
@@ -18,58 +19,11 @@ public sealed class SecondaryOutputTests
     private const int BlockSamples = 4_800;
 
     [Fact]
-    public void PreGateTap_ShouldKeepFeedingSecondaryBranch_WhenPrimaryGateIsClosed()
-    {
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => true);
-        var source = new ConstantSampleProvider(Format, 0.5f);
-        var tap = new TapSampleProvider(source, branch.Write);
-        var primaryGate = new GateSampleProvider(tap, isOpen: () => false);
-
-        float[] primary = new float[BlockSamples];
-        primaryGate.Read(primary, 0, primary.Length).Should().Be(primary.Length);
-        primary.Should().OnlyContain(sample => sample == 0f, "the closed gate must silence the cable");
-
-        DrainStartupCushion(branch);
-
-        float[] secondary = new float[BlockSamples];
-        branch.Read(secondary, 0, secondary.Length).Should().Be(secondary.Length);
-        secondary.Should().OnlyContain(sample => sample == 0.5f, "the pre-gate tap must still carry the mix");
-    }
-
-    [Fact]
-    public void Branch_ShouldFollowPrimaryGate_WhenNotIgnoringPushToTalk()
-    {
-        bool primaryGateOpen = false;
-        const bool ignorePushToTalk = false;
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => ignorePushToTalk || primaryGateOpen);
-
-        branch.Write(Constant(BlockSamples, 0.5f), 0, BlockSamples);
-        DrainStartupCushion(branch);
-        float[] output = new float[BlockSamples];
-        branch.Read(output, 0, output.Length);
-        output.Should().OnlyContain(sample => sample == 0f, "with the gate closed the secondary must be silent too");
-
-        primaryGateOpen = true;
-        branch.Write(Constant(BlockSamples, 0.5f), 0, BlockSamples);
-        branch.Read(output, 0, output.Length);
-
-        // The gate ramps up over ~8 ms, so audio appears immediately and reaches
-        // full level well within one block.
-        output[0].Should().BeGreaterThan(0f);
-        output[^1].Should().Be(0.5f);
-    }
-
-    [Fact]
     public void Volume_ShouldScaleOnlyTheSecondaryBranch()
     {
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => true) { Volume = 0.5f };
-        var source = new ConstantSampleProvider(Format, 0.5f);
-        var tap = new TapSampleProvider(source, branch.Write);
+        var branch = new SecondaryTapBranch(Format) { Volume = 0.5f };
 
-        float[] primary = new float[BlockSamples];
-        tap.Read(primary, 0, primary.Length);
-        primary.Should().OnlyContain(sample => sample == 0.5f, "the primary chain must not pass through the secondary volume");
-
+        branch.Write(Constant(BlockSamples, 0.5f), 0, BlockSamples);
         DrainStartupCushion(branch);
 
         float[] secondary = new float[BlockSamples];
@@ -80,7 +34,7 @@ public sealed class SecondaryOutputTests
     [Fact]
     public void Read_ShouldDeliverSilence_OnUnderflow()
     {
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => true);
+        var branch = new SecondaryTapBranch(Format);
 
         DrainStartupCushion(branch);
 
@@ -92,7 +46,7 @@ public sealed class SecondaryOutputTests
     [Fact]
     public void Branch_ShouldStartWithSilenceCushion_BeforeDeliveringAudio()
     {
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => true);
+        var branch = new SecondaryTapBranch(Format);
         branch.Write(Constant(BlockSamples, 0.5f), 0, BlockSamples);
 
         // The cushion absorbs a secondary clock that runs slightly faster than
@@ -110,7 +64,7 @@ public sealed class SecondaryOutputTests
     [Fact]
     public void Branch_ShouldRebufferAfterStarvation_UntilCushionIsRestored()
     {
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => true);
+        var branch = new SecondaryTapBranch(Format);
         DrainStartupCushion(branch);
 
         // True starvation: the read comes up short and re-buffering starts.
@@ -139,7 +93,7 @@ public sealed class SecondaryOutputTests
     [Fact]
     public void Write_ShouldDropOldestAudio_WhenBufferGrowsPastHighWatermark()
     {
-        var branch = new SecondaryTapBranch(Format, isGateOpen: () => true);
+        var branch = new SecondaryTapBranch(Format);
         int bytesPerSecond = Format.SampleRate * Format.Channels * sizeof(float);
         int highWatermarkBytes = (int)(bytesPerSecond * 0.4);
         int totalBytesWritten = 0;
@@ -177,24 +131,5 @@ public sealed class SecondaryOutputTests
         var samples = new float[count];
         Array.Fill(samples, value);
         return samples;
-    }
-
-    private sealed class ConstantSampleProvider : ISampleProvider
-    {
-        private readonly float _value;
-
-        public ConstantSampleProvider(WaveFormat format, float value)
-        {
-            WaveFormat = format;
-            _value = value;
-        }
-
-        public WaveFormat WaveFormat { get; }
-
-        public int Read(float[] buffer, int offset, int count)
-        {
-            Array.Fill(buffer, _value, offset, count);
-            return count;
-        }
     }
 }

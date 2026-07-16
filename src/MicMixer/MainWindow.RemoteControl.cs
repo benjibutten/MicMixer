@@ -82,6 +82,8 @@ public partial class MainWindow
             "setmusicvolume" => RemoteSetVolume(request.Payload, monitor: false),
             "setmonitorvolume" => RemoteSetVolume(request.Payload, monitor: true),
             "setvolumeslinked" => RemoteSetVolumesLinked(request.Payload),
+            "setmusicignorespushtotalk" => RemoteSetMusicIgnoresPushToTalk(request.Payload),
+            "setmusicmonitoronly" => RemoteSetMusicMonitorOnly(request.Payload),
             "enqueuetrack" => RemoteEnqueue(request.Payload),
             "removequeueitem" => RemoteRemoveQueueItem(request.Payload),
             "movequeueitem" => RemoteMoveQueueItem(request.Payload),
@@ -367,6 +369,30 @@ public partial class MainWindow
         return ControlResult.Ok();
     }
 
+    private ControlResult RemoteSetMusicIgnoresPushToTalk(JsonElement? payload)
+    {
+        if (!TryGetBoolean(payload, "enabled", out bool enabled))
+        {
+            return MissingArgument("enabled");
+        }
+
+        // Routes through the checkbox so the handler applies the router state,
+        // hint text and saved settings exactly like a local click.
+        MusicIgnorePttCheck.IsChecked = enabled;
+        return ControlResult.Ok();
+    }
+
+    private ControlResult RemoteSetMusicMonitorOnly(JsonElement? payload)
+    {
+        if (!TryGetBoolean(payload, "enabled", out bool enabled))
+        {
+            return MissingArgument("enabled");
+        }
+
+        MusicMonitorOnlyCheck.IsChecked = enabled;
+        return ControlResult.Ok();
+    }
+
     private ControlResult RemoteCancelDelayedPlay()
     {
         CancelDelayedStart("Fördröjd start avbruten.");
@@ -579,7 +605,9 @@ public partial class MainWindow
             downloadPercent,
             DownloadStatusText.Text ?? string.Empty,
             MusicStatusText.Text ?? string.Empty,
-            VolumeLinkToggle.IsChecked == true);
+            VolumeLinkToggle.IsChecked == true,
+            MusicIgnorePttCheck.IsChecked == true,
+            MusicMonitorOnlyCheck.IsChecked == true);
     }
 
     private RemoteTrackPage BuildRemoteTrackPage(JsonElement? payload)

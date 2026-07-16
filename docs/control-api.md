@@ -31,6 +31,8 @@ unsupported protocol version.
 | `seek` | `positionSeconds` |
 | `setMusicVolume`, `setMonitorVolume` | `volume` from 0 to 1 |
 | `setVolumesLinked` | `linked` boolean; mirrors MicMixer's volume-sync toggle |
+| `setMusicIgnoresPushToTalk` | `enabled` boolean; music keeps flowing to the cable while push-to-talk holds the mic silent |
+| `setMusicMonitorOnly` | `enabled` boolean; preview mode — music is never sent to the cable, only local monitoring (and the secondary output) carry it |
 | `removeQueueItem` | zero-based `index` |
 | `moveQueueItem` | zero-based `fromIndex`, `toIndex` |
 | `clearQueue` | none |
@@ -44,6 +46,18 @@ State includes `volumesLinked`, the volume-sync toggle that makes one volume sli
 follow the other. When it is enabled, a single `setMusicVolume` or `setMonitorVolume`
 also moves the other volume, so companions should send only the volume the user
 changed and read both back from state.
+
+State also includes `musicIgnoresPushToTalk` and `musicMonitorOnly`, mirroring the
+music-routing toggles in MicMixer's music card. Unlike the transport commands these
+work in external capture mode as well, since they control routing rather than
+playback. `musicMonitorOnly` overrides `musicIgnoresPushToTalk`: while it is on,
+nothing from the music branch reaches the virtual cable.
+
+The music-routing state fields and commands are advertised through the
+`musicRouting` capability in the `hello` response. The protocol version stays 1;
+companions must check the capability list and hide or disable their music-routing
+controls when it is missing, since an older MicMixer rejects the commands as
+unknown.
 
 `getState` and `getFolders` expose every music folder configured in MicMixer,
 including its full path, display name, default-folder flag, preferred download target,

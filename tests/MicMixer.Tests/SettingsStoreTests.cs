@@ -15,6 +15,7 @@ public sealed class SettingsStoreTests : IDisposable
         var sut = new SettingsStore(path);
         var expected = new AppSettings
         {
+            StartWithWindows = true,
             PushToTalkMode = true,
             OverlayIndicatorEnabled = true,
             MusicFolderPaths = [@"C:\Music A", @"D:\Music B"],
@@ -29,6 +30,7 @@ public sealed class SettingsStoreTests : IDisposable
         sut.Save(expected);
         AppSettings actual = sut.Load();
 
+        actual.StartWithWindows.Should().BeTrue();
         actual.PushToTalkMode.Should().BeTrue();
         actual.OverlayIndicatorEnabled.Should().BeTrue();
         actual.MusicFolderPaths.Should().Equal(expected.MusicFolderPaths!);

@@ -20,21 +20,40 @@ public enum OverlayIndicatorState
     Muted
 }
 
+/// <summary>Where the music currently goes, shown by the overlay's music circle.</summary>
+public enum OverlayMusicState
+{
+    /// <summary>No active music — the music circle is hidden.</summary>
+    Hidden,
+
+    /// <summary>Music is being sent into the mic channel (others hear it).</summary>
+    Sending,
+
+    /// <summary>Monitor-only preview: heard locally (and on the secondary output), never on the cable.</summary>
+    MonitorOnly,
+
+    /// <summary>Music plays but push-to-talk currently blocks it from the cable.</summary>
+    Blocked
+}
+
 /// <summary>
-/// Small always-on-top status dot in the top-right corner of the primary screen,
-/// mirroring the tray icon state (normal / modded / push-to-talk muted) so the
-/// state is visible on top of games without alt-tabbing.
+/// Small always-on-top status cluster in the top-right corner of the primary
+/// screen. The right circle mirrors the tray icon state (normal / modded /
+/// push-to-talk muted); the left circle appears while music is active and tells
+/// where the music goes: purple with a note = sent into the mic channel, amber
+/// with headphones = monitor-only preview (only you and the secondary output
+/// hear it), gray with a crossed-out note = playing but blocked by push-to-talk.
 ///
-/// While music is actually routed into the mic channel, three tiny equalizer
-/// bars dance below the dot, inside the level ring's bottom opening — the
-/// universal "now playing" sign. An optional level ring — a 270° arc gauge
-/// wrapped around the dot with its opening at the bottom — shows the complete
-/// outgoing mix level (mic + music, post push-to-talk gate) and whether it is
-/// good (green), too low or very hot (amber), or near clipping (red). A small
-/// white notch holds the recent peak. The bar animation clocks are fully torn
-/// down while no music plays and are capped at a low frame rate, because
-/// every animation frame of a layered window re-uploads its bitmap to the
-/// compositor.
+/// While music is audible somewhere, three tiny equalizer bars dance below the
+/// music circle — the universal "now playing" sign; in the blocked state they
+/// freeze at minimum height (paused look) without any animation clocks. Each
+/// circle carries an optional level ring — a 270° arc gauge with its opening at
+/// the bottom: the mic ring shows the complete outgoing mix (post gates, exactly
+/// what the cable receives) and the music ring shows the music branch alone
+/// (after the music volume, before its cable gate — so the level can be set
+/// right during a monitor-only preview). The bar animation clocks are fully torn
+/// down while no music plays and are capped at a low frame rate, because every
+/// animation frame of a layered window re-uploads its bitmap to the compositor.
 ///
 /// Deliberately inert: click-through (WS_EX_TRANSPARENT), never focusable or
 /// activatable (WS_EX_NOACTIVATE + ShowActivated=false), hidden from Alt-Tab
@@ -65,7 +84,7 @@ public sealed class OverlayIndicatorWindow : Window
     private const string StreamDeckyProcessName = "StreamDecky";
     private static readonly TimeSpan TopmostInterval = TimeSpan.FromSeconds(3);
 
-    // Music indicator: three tiny equalizer bars dancing in the level ring's
+    // Music indicator: three tiny equalizer bars dancing in the music ring's
     // bottom opening (the universal "now playing" sign). Neutral white — color
     // is reserved for status and level. Each bar bounces between the min and
     // max height on its own period so the trio looks organic, not mechanical.
@@ -82,7 +101,7 @@ public sealed class OverlayIndicatorWindow : Window
         TimeSpan.FromMilliseconds(440)
     };
 
-    // The meter judges perceived loudness (block RMS on a dB scale), not sample
+    // The meters judge perceived loudness (block RMS on a dB scale), not sample
     // peaks: limited music runs its peaks near full scale at any volume, so a
     // peak meter would just mirror the volume slider while the music sounds far
     // louder than speech at the same peak. Sample peak is only used for the
@@ -106,29 +125,36 @@ public sealed class OverlayIndicatorWindow : Window
     private static readonly System.Windows.Media.Color MeterWarnColor = System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B);
     private static readonly System.Windows.Media.Color MeterClipColor = System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44);
 
+    // Music circle state language. Purple is the app's music accent; amber for
+    // monitor-only signals "careful — the game does not hear this" without
+    // reading as an error; blocked reuses the neutral stopped gray. Every state
+    // also has its own glyph so they stay distinguishable without color.
+    private static readonly System.Windows.Media.Brush MusicSendingBrush = CreateFrozenBrush(0x7C, 0x3A, 0xED);
+    private static readonly System.Windows.Media.Brush MusicMonitorOnlyBrush = CreateFrozenBrush(0xD9, 0x77, 0x06);
+
+    private static readonly Geometry MusicNoteGlyph = CreateFrozenGeometry(
+        "M12,3V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V7H18V3H12Z");
+    private static readonly Geometry MusicNoteOffGlyph = CreateFrozenGeometry(
+        "M4.27,3L3,4.27L12,13.27V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V15.27L19.73,21L21,19.73L4.27,3M14,7H18V3H12V8.18L14,10.18V7Z");
+    private static readonly Geometry HeadphonesGlyph = CreateFrozenGeometry(
+        "M12,1C7,1 3,5 3,10V17A3,3 0 0,0 6,20H9V12H5V10A7,7 0 0,1 12,3A7,7 0 0,1 19,10V12H15V20H18A3,3 0 0,0 21,17V10C21,5 17,1 12,1Z");
+
     private readonly Ellipse _dot;
     private readonly System.Windows.Shapes.Path _glyph;
+    private readonly LevelRingGauge _micGauge;
+    private readonly Grid _musicZone;
+    private readonly Ellipse _musicDot;
+    private readonly System.Windows.Shapes.Path _musicGlyph;
+    private readonly LevelRingGauge _musicGauge;
     private readonly System.Windows.Shapes.Rectangle[] _musicBars;
     private readonly ScaleTransform[] _musicBarScales;
     private readonly StackPanel _musicBarsPanel;
-    private readonly Grid _meterLayer;
-    private readonly System.Windows.Shapes.Path _ringFill;
-    private readonly ArcSegment _ringFillArc;
-    private readonly System.Windows.Shapes.Rectangle _notch;
-    private readonly RotateTransform _notchRotate;
-    private readonly SolidColorBrush _ringBrush;
     private readonly DispatcherTimer _topmostTimer;
     private OverlayIndicatorState _state = OverlayIndicatorState.Hidden;
-    private bool _musicActive;
+    private OverlayMusicState _musicState = OverlayMusicState.Hidden;
     private bool _meterEnabled = true;
     private float _meterSensitivityDb;
     private bool _musicBarsRunning;
-    private float _fillPeak;   // fast decay: drives the arc sweep
-    private float _zonePeak;   // slow decay: drives the arc color, so it doesn't flip between beats
-    private float _notchPeak;  // slowest decay: drives the peak-hold notch
-    private DateTime _clipHoldUntil = DateTime.MinValue;
-    private double _renderedSweep = -1; // last sweep pushed to the arc, to skip sub-degree redraws
-    private System.Windows.Media.Color _meterColor = MeterGoodColor;   // displayed color, eased toward the ramp target
 
     public OverlayIndicatorWindow()
     {
@@ -143,9 +169,11 @@ public sealed class OverlayIndicatorWindow : Window
         Focusable = false;
         IsHitTestVisible = false;
 
-        // Square: the level ring wraps the dot, so the dot keeps its screen
-        // position whether or not the meter is currently shown.
-        Width = DotZoneSize;
+        // Two square zones side by side: the music circle on the left, the mic
+        // circle on the right. The window is right-anchored, so the mic circle
+        // keeps its screen position whether or not music is shown, and each
+        // level ring wraps its own dot without shifting anything.
+        Width = DotZoneSize * 2;
         Height = DotZoneSize;
         Opacity = 0.72;
 
@@ -165,6 +193,27 @@ public sealed class OverlayIndicatorWindow : Window
             Fill = System.Windows.Media.Brushes.White,
             Width = 16,
             Height = 16,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        _musicDot = new Ellipse
+        {
+            Width = DotDiameter,
+            Height = DotDiameter,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Fill = MusicSendingBrush,
+            Effect = new DropShadowEffect { BlurRadius = 7, ShadowDepth = 1, Opacity = 0.35 }
+        };
+
+        _musicGlyph = new System.Windows.Shapes.Path
+        {
+            Data = MusicNoteGlyph,
+            Fill = System.Windows.Media.Brushes.White,
+            Width = 15,
+            Height = 15,
             Stretch = Stretch.Uniform,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -203,81 +252,40 @@ public sealed class OverlayIndicatorWindow : Window
             _musicBarsPanel.Children.Add(bar);
         }
 
-        // Level ring: a dark backing arc keeps the gauge readable on bright
-        // scenes, a hairline track shows the scale while unfilled, the colored
-        // fill arc is the meter itself and a white notch holds the recent peak.
-        _ringBrush = new SolidColorBrush(MeterGoodColor);
+        _micGauge = new LevelRingGauge();
+        _musicGauge = new LevelRingGauge();
 
-        var ringBacking = CreateGaugeArc(GaugeSweepDegrees, CreateFrozenBrush(0x00, 0x00, 0x00, 0x59), RingThickness + RingBackingExtra);
-        var ringTrack = CreateGaugeArc(GaugeSweepDegrees, CreateFrozenBrush(0xFF, 0xFF, 0xFF, 0x4D), 1.2);
+        _musicZone = new Grid { Visibility = Visibility.Collapsed };
+        _musicZone.Children.Add(_musicGauge.Visual);
+        _musicZone.Children.Add(_musicBarsPanel);
+        _musicZone.Children.Add(_musicDot);
+        _musicZone.Children.Add(_musicGlyph);
 
-        _ringFillArc = new ArcSegment
-        {
-            Size = new System.Windows.Size(RingRadius, RingRadius),
-            SweepDirection = SweepDirection.Clockwise
-        };
-        var fillFigure = new PathFigure
-        {
-            StartPoint = GaugePoint(GaugeStartAngle),
-            IsClosed = false,
-            IsFilled = false,
-            Segments = { _ringFillArc }
-        };
-        _ringFill = new System.Windows.Shapes.Path
-        {
-            Data = new PathGeometry { Figures = { fillFigure } },
-            Stroke = _ringBrush,
-            StrokeThickness = RingThickness,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            Visibility = Visibility.Collapsed
-        };
-
-        // The notch stays a centered element; the transform chain lifts it up
-        // onto the ring and then rotates it about its original centered origin,
-        // so the rotation orbits it around the dot while keeping it radial.
-        _notchRotate = new RotateTransform(GaugeStartAngle);
-        _notch = new System.Windows.Shapes.Rectangle
-        {
-            Width = NotchWidth,
-            Height = NotchLength,
-            RadiusX = NotchWidth / 2,
-            RadiusY = NotchWidth / 2,
-            Fill = CreateFrozenBrush(0xFF, 0xFF, 0xFF, 0xE6),
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            RenderTransformOrigin = new System.Windows.Point(0.5, 0.5),
-            RenderTransform = new TransformGroup
-            {
-                Children = { new TranslateTransform(0, -RingRadius), _notchRotate }
-            },
-            Visibility = Visibility.Collapsed
-        };
-
-        _meterLayer = new Grid { Visibility = Visibility.Collapsed };
-        _meterLayer.Children.Add(ringBacking);
-        _meterLayer.Children.Add(ringTrack);
-        _meterLayer.Children.Add(_ringFill);
-        _meterLayer.Children.Add(_notch);
+        var micZone = new Grid();
+        micZone.Children.Add(_micGauge.Visual);
+        micZone.Children.Add(_dot);
+        micZone.Children.Add(_glyph);
 
         var root = new Grid { IsHitTestVisible = false };
-        root.Children.Add(_meterLayer);
-        root.Children.Add(_musicBarsPanel);
-        root.Children.Add(_dot);
-        root.Children.Add(_glyph);
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DotZoneSize) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DotZoneSize) });
+        Grid.SetColumn(_musicZone, 0);
+        Grid.SetColumn(micZone, 1);
+        root.Children.Add(_musicZone);
+        root.Children.Add(micZone);
         Content = root;
 
         _topmostTimer = new DispatcherTimer { Interval = TopmostInterval };
         _topmostTimer.Tick += (_, _) =>
         {
             // Reposition too: resolution or work-area changes would otherwise
-            // strand the dot mid-screen or off-screen.
+            // strand the dots mid-screen or off-screen.
             PositionTopRight();
             EnsureTopmost();
         };
     }
 
-    /// <summary>Whether the outgoing-level meter may be shown (user setting).</summary>
+    /// <summary>Whether the level rings may be shown (user setting). Applies to both circles.</summary>
     public bool MeterEnabled
     {
         get => _meterEnabled;
@@ -289,13 +297,13 @@ public sealed class OverlayIndicatorWindow : Window
             }
 
             _meterEnabled = value;
-            UpdateMusicVisuals();
+            UpdateVisuals();
         }
     }
 
     /// <summary>
     /// Calibration offset in dB added to the measured loudness before it is mapped
-    /// onto the meter's dB window. Positive values make the meter read hotter, so
+    /// onto the meters' dB window. Positive values make the meters read hotter, so
     /// the bar and every color band react earlier. The sample-peak clip flash is
     /// deliberately unaffected: digital clipping does not depend on perception.
     /// </summary>
@@ -305,7 +313,7 @@ public sealed class OverlayIndicatorWindow : Window
         set => _meterSensitivityDb = Math.Clamp(value, -12f, 12f);
     }
 
-    /// <summary>Shows, hides, and recolors the dot. No-op when the state is unchanged.</summary>
+    /// <summary>Shows, hides, and recolors the mic dot. No-op when the state is unchanged.</summary>
     public void SetState(OverlayIndicatorState state)
     {
         if (state == _state)
@@ -318,7 +326,7 @@ public sealed class OverlayIndicatorWindow : Window
         if (state == OverlayIndicatorState.Hidden)
         {
             _topmostTimer.Stop();
-            UpdateMusicVisuals();
+            UpdateVisuals();
             Hide();
             return;
         }
@@ -336,87 +344,320 @@ public sealed class OverlayIndicatorWindow : Window
             Show();
         }
 
-        UpdateMusicVisuals();
+        UpdateVisuals();
         EnsureTopmost();
         _topmostTimer.Start();
     }
 
     /// <summary>
-    /// Signals whether music is currently being routed into the mic channel.
-    /// Starts/stops the equalizer bars. No-op when unchanged.
+    /// Sets the music circle: hidden while no music is active, otherwise where
+    /// the music currently goes. No-op when unchanged.
     /// </summary>
-    public void SetMusicActive(bool active)
+    public void SetMusicState(OverlayMusicState state)
     {
-        if (_musicActive == active)
+        if (_musicState == state)
         {
             return;
         }
 
-        _musicActive = active;
-        UpdateMusicVisuals();
+        _musicState = state;
+        UpdateVisuals();
     }
 
     /// <summary>
-    /// Feeds the meter with the latest outgoing mix levels: sample peak (0..1,
+    /// Feeds the mic ring with the latest outgoing mix levels: sample peak (0..1,
     /// clipping detection) and block RMS (perceived loudness, drives the arc and
-    /// color). Cheap no-op while the meter is hidden. Peak-hold decay happens
+    /// color). Cheap no-op while the ring is hidden. Peak-hold decay happens
     /// here, so call this on a steady tick (~50 ms) while the overlay exists.
     /// </summary>
     public void SetOutputLevel(float peak, float rms)
     {
-        if (_meterLayer.Visibility != Visibility.Visible)
+        _micGauge.Feed(peak, rms, _meterSensitivityDb);
+    }
+
+    /// <summary>
+    /// Feeds the music ring with the latest music-branch levels (after the music
+    /// volume, before its cable gate). Same contract as <see cref="SetOutputLevel"/>.
+    /// </summary>
+    public void SetMusicLevel(float peak, float rms)
+    {
+        _musicGauge.Feed(peak, rms, _meterSensitivityDb);
+    }
+
+    private void UpdateVisuals()
+    {
+        bool shown = _state != OverlayIndicatorState.Hidden;
+        bool musicShown = shown && _musicState != OverlayMusicState.Hidden;
+
+        // The mic ring shows the complete outgoing mix, so it follows the mic
+        // dot's visibility rather than the music state.
+        _micGauge.SetVisible(shown && _meterEnabled);
+
+        if (musicShown)
+        {
+            (_musicDot.Fill, _musicGlyph.Data) = _musicState switch
+            {
+                OverlayMusicState.MonitorOnly => (MusicMonitorOnlyBrush, HeadphonesGlyph),
+                OverlayMusicState.Blocked => (StatusTheme.StoppedBrush, MusicNoteOffGlyph),
+                _ => (MusicSendingBrush, MusicNoteGlyph)
+            };
+            _musicZone.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _musicZone.Visibility = Visibility.Collapsed;
+        }
+
+        _musicGauge.SetVisible(musicShown && _meterEnabled);
+
+        // Bars dance while the music is audible somewhere; in the blocked state
+        // they stay visible frozen at minimum height (a paused look) so the
+        // difference between "plays but blocked" and "sends" is unmistakable.
+        if (musicShown && _musicState != OverlayMusicState.Blocked)
+        {
+            StartMusicBars();
+        }
+        else
+        {
+            StopMusicBars(keepVisible: musicShown);
+        }
+    }
+
+    private void StartMusicBars()
+    {
+        if (_musicBarsRunning)
+        {
+            _musicBarsPanel.Visibility = Visibility.Visible;
+            return;
+        }
+
+        _musicBarsRunning = true;
+
+        for (int i = 0; i < _musicBars.Length; i++)
+        {
+            // Each bar bounces on its own period, phase-shifted, so the trio
+            // dances instead of pumping in lockstep.
+            var bounce = new DoubleAnimation(MusicBarMinHeight / MusicBarMaxHeight, 1, MusicBarPeriods[i])
+            {
+                BeginTime = TimeSpan.FromMilliseconds(90 * i),
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+            };
+            Timeline.SetDesiredFrameRate(bounce, MusicBarFrameRate);
+            _musicBarScales[i].BeginAnimation(ScaleTransform.ScaleYProperty, bounce);
+        }
+
+        _musicBarsPanel.Visibility = Visibility.Visible;
+    }
+
+    private void StopMusicBars(bool keepVisible = false)
+    {
+        _musicBarsPanel.Visibility = keepVisible ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!_musicBarsRunning)
         {
             return;
         }
 
-        if (peak >= ClipThreshold)
+        _musicBarsRunning = false;
+
+        for (int i = 0; i < _musicBars.Length; i++)
         {
-            _clipHoldUntil = DateTime.UtcNow + ClipHold;
+            // Detach the animation clocks entirely so an idle overlay renders nothing.
+            _musicBarScales[i].BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            _musicBarScales[i].ScaleY = MusicBarMinHeight / MusicBarMaxHeight;
+        }
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        long exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        exStyle |= WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(exStyle));
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        StopMusicBars();
+        _topmostTimer.Stop();
+        base.OnClosed(e);
+    }
+
+    private void PositionTopRight()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Right - Width - EdgeMargin;
+        Top = workArea.Top + EdgeMargin;
+    }
+
+    /// <summary>
+    /// One 270° level-ring gauge (backing, hairline track, colored fill arc and a
+    /// peak-hold notch) centered in a dot zone, together with all its decay and
+    /// color-easing state. Both overlay circles own one instance each.
+    /// </summary>
+    private sealed class LevelRingGauge
+    {
+        private readonly System.Windows.Shapes.Path _fill;
+        private readonly ArcSegment _fillArc;
+        private readonly System.Windows.Shapes.Rectangle _notch;
+        private readonly RotateTransform _notchRotate;
+        private readonly SolidColorBrush _brush;
+        private float _fillPeak;   // fast decay: drives the arc sweep
+        private float _zonePeak;   // slow decay: drives the arc color, so it doesn't flip between beats
+        private float _notchPeak;  // slowest decay: drives the peak-hold notch
+        private DateTime _clipHoldUntil = DateTime.MinValue;
+        private double _renderedSweep = -1; // last sweep pushed to the arc, to skip sub-degree redraws
+        private System.Windows.Media.Color _color = MeterGoodColor;   // displayed color, eased toward the ramp target
+
+        public LevelRingGauge()
+        {
+            _brush = new SolidColorBrush(MeterGoodColor);
+
+            // A dark backing arc keeps the gauge readable on bright scenes, a
+            // hairline track shows the scale while unfilled, the colored fill
+            // arc is the meter itself and a white notch holds the recent peak.
+            var backing = CreateGaugeArc(GaugeSweepDegrees, CreateFrozenBrush(0x00, 0x00, 0x00, 0x59), RingThickness + RingBackingExtra);
+            var track = CreateGaugeArc(GaugeSweepDegrees, CreateFrozenBrush(0xFF, 0xFF, 0xFF, 0x4D), 1.2);
+
+            _fillArc = new ArcSegment
+            {
+                Size = new System.Windows.Size(RingRadius, RingRadius),
+                SweepDirection = SweepDirection.Clockwise
+            };
+            var fillFigure = new PathFigure
+            {
+                StartPoint = GaugePoint(GaugeStartAngle),
+                IsClosed = false,
+                IsFilled = false,
+                Segments = { _fillArc }
+            };
+            _fill = new System.Windows.Shapes.Path
+            {
+                Data = new PathGeometry { Figures = { fillFigure } },
+                Stroke = _brush,
+                StrokeThickness = RingThickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                Visibility = Visibility.Collapsed
+            };
+
+            // The notch stays a centered element; the transform chain lifts it up
+            // onto the ring and then rotates it about its original centered origin,
+            // so the rotation orbits it around the dot while keeping it radial.
+            _notchRotate = new RotateTransform(GaugeStartAngle);
+            _notch = new System.Windows.Shapes.Rectangle
+            {
+                Width = NotchWidth,
+                Height = NotchLength,
+                RadiusX = NotchWidth / 2,
+                RadiusY = NotchWidth / 2,
+                Fill = CreateFrozenBrush(0xFF, 0xFF, 0xFF, 0xE6),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                RenderTransformOrigin = new System.Windows.Point(0.5, 0.5),
+                RenderTransform = new TransformGroup
+                {
+                    Children = { new TranslateTransform(0, -RingRadius), _notchRotate }
+                },
+                Visibility = Visibility.Collapsed
+            };
+
+            Visual = new Grid { Visibility = Visibility.Collapsed };
+            Visual.Children.Add(backing);
+            Visual.Children.Add(track);
+            Visual.Children.Add(_fill);
+            Visual.Children.Add(_notch);
         }
 
-        float loudness = NormalizeLoudness(rms);
-        _fillPeak = Math.Max(loudness, _fillPeak * 0.78f);
-        _zonePeak = Math.Max(loudness, _zonePeak * 0.96f);
-        _notchPeak = Math.Max(loudness, _notchPeak - NotchDecayPerTick);
+        public Grid Visual { get; }
 
-        double sweep = _fillPeak * GaugeSweepDegrees;
-        if (Math.Abs(sweep - _renderedSweep) >= 1.0)
+        public void SetVisible(bool visible)
         {
-            _renderedSweep = sweep;
-            if (sweep < 1.0)
+            if (visible && Visual.Visibility != Visibility.Visible)
             {
-                _ringFill.Visibility = Visibility.Collapsed;
+                Reset();
+                Visual.Visibility = Visibility.Visible;
+            }
+            else if (!visible && Visual.Visibility == Visibility.Visible)
+            {
+                Visual.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>See <see cref="OverlayIndicatorWindow.SetOutputLevel"/>. No-op while hidden.</summary>
+        public void Feed(float peak, float rms, float sensitivityDb)
+        {
+            if (Visual.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+
+            if (peak >= ClipThreshold)
+            {
+                _clipHoldUntil = DateTime.UtcNow + ClipHold;
+            }
+
+            float loudness = NormalizeLoudness(rms, sensitivityDb);
+            _fillPeak = Math.Max(loudness, _fillPeak * 0.78f);
+            _zonePeak = Math.Max(loudness, _zonePeak * 0.96f);
+            _notchPeak = Math.Max(loudness, _notchPeak - NotchDecayPerTick);
+
+            double sweep = _fillPeak * GaugeSweepDegrees;
+            if (Math.Abs(sweep - _renderedSweep) >= 1.0)
+            {
+                _renderedSweep = sweep;
+                if (sweep < 1.0)
+                {
+                    _fill.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    _fillArc.Point = GaugePoint(GaugeStartAngle + sweep);
+                    _fillArc.IsLargeArc = sweep > 180.0;
+                    _fill.Visibility = Visibility.Visible;
+                }
+            }
+
+            if (_notchPeak <= NotchVisibleFloor)
+            {
+                _notch.Visibility = Visibility.Collapsed;
             }
             else
             {
-                _ringFillArc.Point = GaugePoint(GaugeStartAngle + sweep);
-                _ringFillArc.IsLargeArc = sweep > 180.0;
-                _ringFill.Visibility = Visibility.Visible;
+                double notchAngle = GaugeStartAngle + _notchPeak * GaugeSweepDegrees;
+                if (Math.Abs(notchAngle - _notchRotate.Angle) >= 1.0)
+                {
+                    _notchRotate.Angle = notchAngle;
+                }
+                _notch.Visibility = Visibility.Visible;
             }
-        }
 
-        if (_notchPeak <= NotchVisibleFloor)
-        {
-            _notch.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            double notchAngle = GaugeStartAngle + _notchPeak * GaugeSweepDegrees;
-            if (Math.Abs(notchAngle - _notchRotate.Angle) >= 1.0)
+            // Clipping snaps to red instantly (that signal should be crisp); everything
+            // else eases toward the ramp color so zone changes glide instead of snapping.
+            var target = DateTime.UtcNow < _clipHoldUntil ? MeterClipColor : ColorForLevel(_zonePeak);
+            _color = target == MeterClipColor ? target : LerpColor(_color, target, 0.22f);
+
+            if (_brush.Color != _color)
             {
-                _notchRotate.Angle = notchAngle;
+                _brush.Color = _color;
             }
-            _notch.Visibility = Visibility.Visible;
         }
 
-        // Clipping snaps to red instantly (that signal should be crisp); everything
-        // else eases toward the ramp color so zone changes glide instead of snapping.
-        var target = DateTime.UtcNow < _clipHoldUntil ? MeterClipColor : ColorForLevel(_zonePeak);
-        _meterColor = target == MeterClipColor ? target : LerpColor(_meterColor, target, 0.22f);
-
-        if (_ringBrush.Color != _meterColor)
+        private void Reset()
         {
-            _ringBrush.Color = _meterColor;
+            _fillPeak = 0f;
+            _zonePeak = 0f;
+            _notchPeak = 0f;
+            _clipHoldUntil = DateTime.MinValue;
+            _renderedSweep = -1;
+            _fill.Visibility = Visibility.Collapsed;
+            _notch.Visibility = Visibility.Collapsed;
+            _color = MeterGoodColor;
+            _brush.Color = _color;
         }
     }
 
@@ -461,14 +702,14 @@ public sealed class OverlayIndicatorWindow : Window
     }
 
     /// <summary>Maps a linear RMS value onto the meter's dB window as 0..1, after the sensitivity offset.</summary>
-    private float NormalizeLoudness(float rms)
+    private static float NormalizeLoudness(float rms, float sensitivityDb)
     {
         if (rms <= 0f)
         {
             return 0f;
         }
 
-        float db = 20f * (float)Math.Log10(rms) + _meterSensitivityDb;
+        float db = 20f * (float)Math.Log10(rms) + sensitivityDb;
         return Math.Clamp((db - MeterFloorDb) / (MeterCeilingDb - MeterFloorDb), 0f, 1f);
     }
 
@@ -488,110 +729,6 @@ public sealed class OverlayIndicatorWindow : Window
             (byte)Math.Round(from.R + (to.R - from.R) * t),
             (byte)Math.Round(from.G + (to.G - from.G) * t),
             (byte)Math.Round(from.B + (to.B - from.B) * t));
-    }
-
-    private void UpdateMusicVisuals()
-    {
-        bool shown = _state != OverlayIndicatorState.Hidden;
-        bool meterVisible = shown && _meterEnabled;
-
-        if (_musicActive && shown)
-        {
-            StartMusicBars();
-        }
-        else
-        {
-            StopMusicBars();
-        }
-
-        // The meter shows the complete outgoing mix, so it follows the dot's
-        // visibility rather than the music state.
-        if (meterVisible && _meterLayer.Visibility != Visibility.Visible)
-        {
-            _fillPeak = 0f;
-            _zonePeak = 0f;
-            _notchPeak = 0f;
-            _clipHoldUntil = DateTime.MinValue;
-            _renderedSweep = -1;
-            _ringFill.Visibility = Visibility.Collapsed;
-            _notch.Visibility = Visibility.Collapsed;
-            _meterColor = MeterGoodColor;
-            _ringBrush.Color = _meterColor;
-            _meterLayer.Visibility = Visibility.Visible;
-        }
-        else if (!meterVisible && _meterLayer.Visibility == Visibility.Visible)
-        {
-            _meterLayer.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void StartMusicBars()
-    {
-        if (_musicBarsRunning)
-        {
-            return;
-        }
-
-        _musicBarsRunning = true;
-
-        for (int i = 0; i < _musicBars.Length; i++)
-        {
-            // Each bar bounces on its own period, phase-shifted, so the trio
-            // dances instead of pumping in lockstep.
-            var bounce = new DoubleAnimation(MusicBarMinHeight / MusicBarMaxHeight, 1, MusicBarPeriods[i])
-            {
-                BeginTime = TimeSpan.FromMilliseconds(90 * i),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
-            };
-            Timeline.SetDesiredFrameRate(bounce, MusicBarFrameRate);
-            _musicBarScales[i].BeginAnimation(ScaleTransform.ScaleYProperty, bounce);
-        }
-
-        _musicBarsPanel.Visibility = Visibility.Visible;
-    }
-
-    private void StopMusicBars()
-    {
-        if (!_musicBarsRunning)
-        {
-            return;
-        }
-
-        _musicBarsRunning = false;
-        _musicBarsPanel.Visibility = Visibility.Collapsed;
-
-        for (int i = 0; i < _musicBars.Length; i++)
-        {
-            // Detach the animation clocks entirely so an idle overlay renders nothing.
-            _musicBarScales[i].BeginAnimation(ScaleTransform.ScaleYProperty, null);
-            _musicBarScales[i].ScaleY = MusicBarMinHeight / MusicBarMaxHeight;
-        }
-    }
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-
-        IntPtr hwnd = new WindowInteropHelper(this).Handle;
-        long exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
-        exStyle |= WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(exStyle));
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        StopMusicBars();
-        _topmostTimer.Stop();
-        base.OnClosed(e);
-    }
-
-    private void PositionTopRight()
-    {
-        var workArea = SystemParameters.WorkArea;
-        Left = workArea.Right - Width - EdgeMargin;
-        Top = workArea.Top + EdgeMargin;
     }
 
     /// <summary>
@@ -671,6 +808,13 @@ public sealed class OverlayIndicatorWindow : Window
         var brush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(a, r, g, b));
         brush.Freeze();
         return brush;
+    }
+
+    private static Geometry CreateFrozenGeometry(string pathData)
+    {
+        var geometry = Geometry.Parse(pathData);
+        geometry.Freeze();
+        return geometry;
     }
 
     // --- Win32 interop ---

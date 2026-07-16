@@ -13,16 +13,32 @@ public sealed class AudioRouter : IDisposable
     private InputRoute? _moddedRoute;
     private bool _useModdedInput;
     private bool _outputGateOpen = true;
+    private bool _musicIgnoresPushToTalk;
+    private bool _musicMonitorOnly;
     private bool _outputMeteringEnabled;
+    private bool _musicMeteringEnabled;
     private float _outputPeak;
     private float _outputRms;
+    private float _musicPeak;
+    private float _musicRms;
     private bool _disposed;
 
     public bool IsRouting => _player?.PlaybackState == PlaybackState.Playing;
     public bool UseModdedInput => Volatile.Read(ref _useModdedInput);
     public bool OutputGateOpen => Volatile.Read(ref _outputGateOpen);
+    public bool MusicIgnoresPushToTalk => Volatile.Read(ref _musicIgnoresPushToTalk);
+    public bool MusicMonitorOnly => Volatile.Read(ref _musicMonitorOnly);
     public float NormalPeak => _normalRoute?.CurrentPeak ?? 0f;
     public float ModdedPeak => _moddedRoute?.CurrentPeak ?? 0f;
+
+    /// <summary>
+    /// Whether the music branch currently reaches the virtual cable: monitor-only
+    /// cuts it entirely, otherwise it follows the push-to-talk gate unless music
+    /// is set to ignore it.
+    /// </summary>
+    public bool MusicRouteOpen =>
+        !Volatile.Read(ref _musicMonitorOnly)
+        && (Volatile.Read(ref _outputGateOpen) || Volatile.Read(ref _musicIgnoresPushToTalk));
 
     /// <summary>
     /// Optional factory that provides a music source in the routing target format.
@@ -61,32 +77,45 @@ public sealed class AudioRouter : IDisposable
                 : null;
 
             var micSource = new SwitchingSampleProvider(normalRoute, moddedRoute, () => UseModdedInput);
-            ISampleProvider source = micSource;
+            ISampleProvider? musicSource = MusicSourceFactory?.Invoke(targetFormat);
 
-            if (MusicSourceFactory != null)
-            {
-                var mixer = new MixingSampleProvider(micSource.WaveFormat) { ReadFully = true };
-                mixer.AddMixerInput(micSource);
-                mixer.AddMixerInput(MusicSourceFactory(targetFormat));
-                source = mixer;
-            }
-
-            // Fan the finished pre-gate mix out to the optional secondary output.
-            // The tap sits before the gate so that branch keeps carrying mic + music
-            // while push-to-talk holds the cable silent. A secondary start failure
-            // only skips the branch — the cable routing continues untouched.
+            // A secondary start failure only skips that branch — the cable
+            // routing continues untouched.
             var secondaryOutput = SecondaryOutput;
-            if (secondaryOutput != null && secondaryOutput.TryStartForRouting(source.WaveFormat, () => OutputGateOpen))
-            {
-                source = new TapSampleProvider(source, secondaryOutput.Write);
-            }
+            bool secondaryStarted = secondaryOutput != null
+                && secondaryOutput.TryStartForRouting(micSource.WaveFormat);
 
-            // The gate sits last in the chain so push-to-talk silences the entire
-            // outgoing mix (mic and music) while upstream sources keep advancing.
-            source = new GateSampleProvider(source, () => OutputGateOpen);
+            // The secondary branch gates mic and music separately, like the
+            // cable: the mic follows push-to-talk unless the secondary ignores
+            // it, while the music also flows whenever it is audible to the
+            // streamer — sent to the cable or previewed in monitor-only mode —
+            // so the UI's promise "the secondary output still carries the
+            // music" holds even when the secondary follows push-to-talk.
+            Func<bool> secondaryMicOpen = secondaryStarted
+                ? () => secondaryOutput!.IgnorePushToTalk || OutputGateOpen
+                : static () => false;
+            Func<bool> secondaryMusicOpen = secondaryStarted
+                ? () => secondaryOutput!.IgnorePushToTalk || MusicMonitorOnly || MusicRouteOpen
+                : static () => false;
 
-            // Tap after the gate: the peak reflects exactly what the cable receives,
-            // so the overlay meter reads empty while push-to-talk holds silence.
+            // Mic and music pass separate gates before being mixed for the cable:
+            // push-to-talk always gates the mic, while the music branch can bypass
+            // it (music ignores push-to-talk) or be cut from the cable entirely
+            // (monitor-only preview). Upstream sources keep advancing regardless,
+            // so music never rewinds while a gate is closed.
+            ISampleProvider source = new MixFanoutSampleProvider(
+                micSource,
+                musicSource,
+                micGateOpen: () => OutputGateOpen,
+                musicGateOpen: () => MusicRouteOpen,
+                secondaryMicOpen: secondaryMicOpen,
+                secondaryMusicOpen: secondaryMusicOpen,
+                secondaryWrite: secondaryStarted ? secondaryOutput!.Write : null,
+                musicMeteringEnabled: () => MusicMeteringEnabled,
+                onMusicLevels: MergeMusicLevels);
+
+            // Tap after the gates: the peak reflects exactly what the cable receives,
+            // so the overlay meter reads empty while nothing is sent.
             source = new OutputPeakTapProvider(source, this);
 
             player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 50);
@@ -95,13 +124,27 @@ public sealed class AudioRouter : IDisposable
 
             normalRoute.Start();
             moddedRoute?.Start();
-            player.Play();
 
             lock (_syncRoot)
             {
                 _normalRoute = normalRoute;
                 _moddedRoute = moddedRoute;
                 _player = player;
+
+                try
+                {
+                    // Publish the complete session before Play(): an output can
+                    // fail immediately and raise PlaybackStopped on another
+                    // thread before Play() returns.
+                    player.Play();
+                }
+                catch
+                {
+                    _normalRoute = null;
+                    _moddedRoute = null;
+                    _player = null;
+                    throw;
+                }
             }
         }
         catch (Exception ex)
@@ -114,8 +157,23 @@ public sealed class AudioRouter : IDisposable
                 player.Dispose();
             }
 
-            normalRoute?.Dispose();
-            moddedRoute?.Dispose();
+            try
+            {
+                normalRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped normal input route could not be disposed cleanly.");
+            }
+
+            try
+            {
+                moddedRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped modded input route could not be disposed cleanly.");
+            }
             Stop();
             RaiseError(ex.Message);
         }
@@ -140,12 +198,12 @@ public sealed class AudioRouter : IDisposable
     }
 
     /// <summary>
-    /// Levels of the complete outgoing mix (mic + music, after the push-to-talk
-    /// gate) since the last call, then resets. Peak is the max absolute sample
-    /// (clipping detection); Rms is the highest block RMS (perceived loudness —
-    /// what a volume indicator should judge, since limited music runs peaks near
-    /// full scale while sounding far louder than speech at the same peak).
-    /// Both are 0 while routing is stopped, the gate is closed, or
+    /// Levels of the complete outgoing mix (mic + music, after the gates) since
+    /// the last call, then resets. Peak is the max absolute sample (clipping
+    /// detection); Rms is the highest block RMS (perceived loudness — what a
+    /// volume indicator should judge, since limited music runs peaks near full
+    /// scale while sounding far louder than speech at the same peak). Both are 0
+    /// while routing is stopped, nothing passes the gates, or
     /// <see cref="OutputMeteringEnabled"/> is off.
     /// </summary>
     public (float Peak, float Rms) ReadAndResetOutputLevels()
@@ -155,9 +213,72 @@ public sealed class AudioRouter : IDisposable
         return (Interlocked.Exchange(ref _outputPeak, 0f), Interlocked.Exchange(ref _outputRms, 0f));
     }
 
+    /// <summary>
+    /// Gates the per-sample music level computation, exactly like
+    /// <see cref="OutputMeteringEnabled"/> gates the mix tap.
+    /// </summary>
+    public bool MusicMeteringEnabled
+    {
+        get => Volatile.Read(ref _musicMeteringEnabled);
+        set
+        {
+            Volatile.Write(ref _musicMeteringEnabled, value);
+            if (!value)
+            {
+                Interlocked.Exchange(ref _musicPeak, 0f);
+                Interlocked.Exchange(ref _musicRms, 0f);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Levels of the music branch alone (after the music volume, before its cable
+    /// gate) since the last call, then resets. Pre-gate on purpose: the music ring
+    /// should show the level the music holds — also while previewing in
+    /// monitor-only mode, so the volume can be set right before unleashing it.
+    /// The overlay states, not this meter, tell where the music actually goes.
+    /// </summary>
+    public (float Peak, float Rms) ReadAndResetMusicLevels()
+    {
+        return (Interlocked.Exchange(ref _musicPeak, 0f), Interlocked.Exchange(ref _musicRms, 0f));
+    }
+
+    /// <summary>
+    /// Max-merges one measured music block into the pending meter values. Runs on
+    /// the audio thread; a lost race against the read/reset only costs one meter
+    /// frame, so plain volatile reads/writes are enough.
+    /// </summary>
+    private void MergeMusicLevels(float peak, float rms)
+    {
+        if (peak > Volatile.Read(ref _musicPeak))
+        {
+            Volatile.Write(ref _musicPeak, peak);
+        }
+
+        if (rms > Volatile.Read(ref _musicRms))
+        {
+            Volatile.Write(ref _musicRms, rms);
+        }
+    }
+
     public void SetUseModdedInput(bool useModdedInput)
     {
         Volatile.Write(ref _useModdedInput, useModdedInput);
+    }
+
+    /// <summary>Lets the music branch keep reaching the cable while push-to-talk holds the mic silent.</summary>
+    public void SetMusicIgnoresPushToTalk(bool ignoresPushToTalk)
+    {
+        Volatile.Write(ref _musicIgnoresPushToTalk, ignoresPushToTalk);
+    }
+
+    /// <summary>
+    /// Preview mode: cuts the music branch from the cable entirely. Local
+    /// monitoring and the secondary output still carry the music.
+    /// </summary>
+    public void SetMusicMonitorOnly(bool monitorOnly)
+    {
+        Volatile.Write(ref _musicMonitorOnly, monitorOnly);
     }
 
     /// <summary>
@@ -209,10 +330,14 @@ public sealed class AudioRouter : IDisposable
         moddedRoute?.Dispose();
         SecondaryOutput?.Stop();
 
+        // The music routing flags survive Stop(): they are user configuration,
+        // not transient session state like the gate.
         Volatile.Write(ref _useModdedInput, false);
         Volatile.Write(ref _outputGateOpen, true);
         Volatile.Write(ref _outputPeak, 0f);
         Volatile.Write(ref _outputRms, 0f);
+        Volatile.Write(ref _musicPeak, 0f);
+        Volatile.Write(ref _musicRms, 0f);
     }
 
     public void Dispose()
@@ -224,11 +349,91 @@ public sealed class AudioRouter : IDisposable
 
     private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
     {
-        if (e.Exception != null)
+        if (sender is not WasapiOut stoppedPlayer)
         {
-            Log.Error(e.Exception, "Audio playback stopped with exception.");
-            RaiseError(e.Exception.Message);
+            return;
         }
+
+        InputRoute? normalRoute;
+        InputRoute? moddedRoute;
+
+        lock (_syncRoot)
+        {
+            // PlaybackStopped may already be queued when Stop() replaces a
+            // routing session. Never let that stale event tear down the new one.
+            if (!ReferenceEquals(_player, stoppedPlayer))
+            {
+                return;
+            }
+
+            _player = null;
+            normalRoute = _normalRoute;
+            moddedRoute = _moddedRoute;
+            _normalRoute = null;
+            _moddedRoute = null;
+
+            // Keep the secondary branch from running after its master clock has
+            // stopped. Holding the router lock prevents a concurrent Start()
+            // from opening a new secondary session until this stop is complete.
+            SecondaryOutput?.Stop();
+        }
+
+        stoppedPlayer.PlaybackStopped -= OnPlaybackStopped;
+        Volatile.Write(ref _useModdedInput, false);
+        Volatile.Write(ref _outputGateOpen, true);
+        Volatile.Write(ref _outputPeak, 0f);
+        Volatile.Write(ref _outputRms, 0f);
+        Volatile.Write(ref _musicPeak, 0f);
+        Volatile.Write(ref _musicRms, 0f);
+
+        string message = e.Exception?.Message ?? "Ljudutgången stoppades oväntat.";
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                stoppedPlayer.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped audio output could not be disposed cleanly.");
+            }
+
+            try
+            {
+                normalRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped normal input route could not be disposed cleanly.");
+            }
+
+            try
+            {
+                moddedRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped modded input route could not be disposed cleanly.");
+            }
+
+            if (e.Exception != null)
+            {
+                Log.Error(e.Exception, "Audio playback stopped with exception.");
+            }
+            else
+            {
+                Log.Warning("Audio playback stopped unexpectedly without an exception.");
+            }
+
+            try
+            {
+                RaiseError(message);
+            }
+            catch (Exception subscriberException)
+            {
+                Log.Error(subscriberException, "Audio router error subscriber failed.");
+            }
+        });
     }
 
     private void RaiseError(string message)

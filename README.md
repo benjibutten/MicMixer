@@ -15,6 +15,10 @@ routing.
 - Supports setups without a modified microphone.
 - Supports a configurable release delay before switching back to the normal mic.
 - Provides push-to-talk for the complete outgoing mix, including music.
+- Optionally lets music bypass push-to-talk, so the music keeps playing into the
+  virtual cable while the voice stays gated.
+- Provides a monitor-only preview mode that keeps music out of the virtual cable
+  entirely while you listen to it in local monitoring.
 - Displays input levels for the normal and modified microphones.
 - Plays MP3 files and mixes them into the virtual microphone channel.
 - Captures audio directly from an external application such as Spotify.
@@ -27,6 +31,7 @@ routing.
   optional outgoing level meter.
 - Uses a responsive, resizable window layout and remembers its size and state.
 - Runs in the system tray and redirects additional launches to the existing instance.
+- Can start automatically with Windows, hidden in the system tray.
 - Writes rotating logs for troubleshooting.
 
 ## Requirements
@@ -83,6 +88,9 @@ cable receives silence. Neither microphone audio nor music is sent.
 - Local music monitoring is not muted by push-to-talk.
 - The tray icon and overlay turn red with a crossed-out mic while the outgoing mix
   is muted.
+- With **Musik ignorerar push-to-talk** enabled (music card), push-to-talk gates
+  only the microphone: the music keeps flowing into the virtual cable as long as
+  it plays. See [Music routing](#music-routing).
 
 ## Music sources
 
@@ -130,14 +138,39 @@ separate device and volume control and does not change the level sent to other
 people through the virtual microphone. Select a physical playback device rather
 than the virtual cable.
 
+## Music routing
+
+Two toggles in the music card control how the music relates to push-to-talk and
+the virtual cable. Both apply immediately, also while routing runs, and both work
+in external capture mode as well.
+
+- **Musik ignorerar push-to-talk**: the music keeps flowing into the virtual
+  cable as long as it plays, while push-to-talk still gates the microphone.
+  Typical use: the game should hear the music continuously, but your voice only
+  while you hold the hotkey. The toggle is only active while push-to-talk is
+  enabled — without push-to-talk, playing music is always sent.
+- **Endast medhörning**: preview mode. The music is never sent to the virtual
+  cable; you hear it through local monitoring and can check a track or set its
+  volume before anyone else hears it. The secondary output still receives the
+  music, so a stream capturing that device (e.g. OBS) hears what you hear. An
+  amber hint below the toggle states exactly where the music goes while the mode
+  is active. Monitor-only overrides the ignore-push-to-talk toggle.
+
+The status panel and the overlay always reflect the outcome: when push-to-talk
+mutes the mic while music still flows, the status reads "Mic tyst (push-to-talk)
+— musiken sänds", and the overlay's music circle shows the current destination.
+
 ## Secondary output
 
 The **Sekundär ut** section routes the complete finished mix — microphone and
-music — to one extra playback device while routing is active. The tap sits
-*before* the push-to-talk gate, so with **Ignorera push-to-talk** enabled
+music — to one extra playback device while routing is active. The branch has its
+own gates, independent of the cable's: with **Ignorera push-to-talk** enabled
 (default) the secondary device keeps receiving mic + music even while the
 virtual cable receives silence. Disable that option to make the secondary
-output follow the same push-to-talk gate as the cable.
+microphone follow the same push-to-talk gate as the cable; the music then still
+flows whenever you can hear it — while it is sent to the cable or previewed in
+monitor-only mode — so a stream capturing the secondary device always hears the
+music you hear.
 
 Typical use with OBS:
 
@@ -167,17 +200,29 @@ routing to the virtual cable continues.
 ## Overlay indicator
 
 The optional click-through overlay remains visible above borderless/windowed games
-without stealing focus or intercepting mouse input. It shows the same status colors
-and glyphs as the tray icon:
+without stealing focus or intercepting mouse input. The mic circle shows the same
+status colors and glyphs as the tray icon:
 
 - Green with a mic: the normal microphone is heard.
 - Blue with a modified-mic glyph: the modified microphone is heard.
 - Red with a crossed-out mic: push-to-talk is muted.
 - Gray (tray icon only): routing is stopped.
 
-Animated rings indicate that music is being routed. The optional meter shows the
-level of the complete outgoing mix after the push-to-talk gate. Exclusive fullscreen
-applications may prevent desktop overlays from being visible.
+While music is active, a separate music circle appears to the left of the mic
+circle and tells where the music goes:
+
+- Purple with a note and dancing equalizer bars: the music is sent into the mic
+  channel.
+- Amber with headphones: monitor-only preview — only you (and the secondary
+  output) hear it.
+- Gray with a crossed-out note and frozen bars: the music plays but push-to-talk
+  currently blocks it from the cable.
+
+The optional level rings wrap each circle: the mic ring shows the complete
+outgoing mix after the gates (exactly what the cable receives), and the music
+ring shows the music branch alone after the music volume — also during a
+monitor-only preview, so the level can be set before anyone else hears it.
+Exclusive fullscreen applications may prevent desktop overlays from being visible.
 
 ## Local data
 
