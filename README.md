@@ -29,6 +29,8 @@ routing.
 - Includes playlist search, multiple music folders, a queue, and transport controls.
 - Provides a click-through status overlay with mic state, music animation, and an
   optional outgoing level meter.
+- Serves the same overlay as a local web page for an OBS Browser source, so
+  viewers see the mic and music status even when OBS captures only the game.
 - Uses a responsive, resizable window layout and remembers its size and state.
 - Runs in the system tray and redirects additional launches to the existing instance.
 - Can start automatically with Windows, hidden in the system tray.
@@ -223,6 +225,18 @@ outgoing mix after the gates (exactly what the cable receives), and the music
 ring shows the music branch alone after the music volume — also during a
 monitor-only preview, so the level can be set before anyone else hears it.
 Exclusive fullscreen applications may prevent desktop overlays from being visible.
+
+## OBS overlay
+
+When OBS captures a game as an individual process (Game Capture), desktop
+overlays are not part of the captured image, so viewers never see the overlay
+indicator. Enable **OBS-overlay** in the routing settings and MicMixer serves
+the same overlay as a local web page (`http://127.0.0.1:4573/` by default)
+that is added to OBS as a Browser source and layered on top of the game. The
+page mirrors the desktop overlay exactly — states, level rings, equalizer bars,
+and the hidden state while routing is stopped — and reconnects automatically
+when MicMixer restarts. See [docs/obs-overlay.md](docs/obs-overlay.md) for OBS
+setup steps, URL parameters, and the wire protocol.
 
 ## Local data
 
