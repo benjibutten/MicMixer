@@ -31,6 +31,7 @@ routing.
   optional outgoing level meter.
 - Uses a responsive, resizable window layout and remembers its size and state.
 - Runs in the system tray and redirects additional launches to the existing instance.
+- Can start automatically with Windows, hidden in the system tray.
 - Writes rotating logs for troubleshooting.
 
 ## Requirements

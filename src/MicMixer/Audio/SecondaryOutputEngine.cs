@@ -190,7 +190,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         Stop();
 
         using var enumerator = new MMDeviceEnumerator();
-        var device = enumerator.GetDevice(deviceId);
+        using var device = enumerator.GetDevice(deviceId);
         var mixFormat = device.AudioClient.MixFormat;
 
         // No gate here: the router applies the secondary's mic and music gates

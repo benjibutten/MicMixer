@@ -336,7 +336,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private void StartMonitor(string deviceId, int version)
     {
         using var enumerator = new MMDeviceEnumerator();
-        var device = enumerator.GetDevice(deviceId);
+        using var device = enumerator.GetDevice(deviceId);
         var mixFormat = device.AudioClient.MixFormat;
 
         var head = new MonitorHeadProvider(this);
@@ -403,18 +403,37 @@ public sealed class MusicPlaybackEngine : IDisposable
 
     private void OnMonitorStopped(object? sender, StoppedEventArgs e)
     {
-        if (e.Exception == null)
+        if (sender is not WasapiOut stoppedOutput)
         {
             return;
         }
 
-        Log.Error(e.Exception, "Music monitor playback stopped with exception.");
-
         WasapiOut? oldOut;
         lock (_syncRoot)
         {
+            // Ignore an event that was already queued when an older monitor was
+            // replaced. It must never tear down the current monitor session.
+            if (!ReferenceEquals(_monitorOut, stoppedOutput))
+            {
+                return;
+            }
+
             // Fall back to direct (router-driven) mode so mixing keeps working.
+            _monitorConfigVersion++;
             oldOut = DetachMonitorLocked();
+            _monitorDeviceId = null;
+        }
+
+        stoppedOutput.PlaybackStopped -= OnMonitorStopped;
+
+        string message = e.Exception?.Message ?? "Ljudenheten stoppades oväntat.";
+        if (e.Exception != null)
+        {
+            Log.Error(e.Exception, "Music monitor playback stopped with exception.");
+        }
+        else
+        {
+            Log.Warning("Music monitor playback stopped unexpectedly without an exception.");
         }
 
         // Dispose on the thread pool: this event fires on the render thread itself.
@@ -433,7 +452,7 @@ public sealed class MusicPlaybackEngine : IDisposable
             });
         }
 
-        Error?.Invoke(this, $"Medhörning stoppades: {e.Exception.Message}");
+        Error?.Invoke(this, $"Medhörning stoppades: {message}");
     }
 
     /// <summary>

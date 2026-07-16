@@ -124,13 +124,27 @@ public sealed class AudioRouter : IDisposable
 
             normalRoute.Start();
             moddedRoute?.Start();
-            player.Play();
 
             lock (_syncRoot)
             {
                 _normalRoute = normalRoute;
                 _moddedRoute = moddedRoute;
                 _player = player;
+
+                try
+                {
+                    // Publish the complete session before Play(): an output can
+                    // fail immediately and raise PlaybackStopped on another
+                    // thread before Play() returns.
+                    player.Play();
+                }
+                catch
+                {
+                    _normalRoute = null;
+                    _moddedRoute = null;
+                    _player = null;
+                    throw;
+                }
             }
         }
         catch (Exception ex)
@@ -143,8 +157,23 @@ public sealed class AudioRouter : IDisposable
                 player.Dispose();
             }
 
-            normalRoute?.Dispose();
-            moddedRoute?.Dispose();
+            try
+            {
+                normalRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped normal input route could not be disposed cleanly.");
+            }
+
+            try
+            {
+                moddedRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped modded input route could not be disposed cleanly.");
+            }
             Stop();
             RaiseError(ex.Message);
         }
@@ -320,11 +349,91 @@ public sealed class AudioRouter : IDisposable
 
     private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
     {
-        if (e.Exception != null)
+        if (sender is not WasapiOut stoppedPlayer)
         {
-            Log.Error(e.Exception, "Audio playback stopped with exception.");
-            RaiseError(e.Exception.Message);
+            return;
         }
+
+        InputRoute? normalRoute;
+        InputRoute? moddedRoute;
+
+        lock (_syncRoot)
+        {
+            // PlaybackStopped may already be queued when Stop() replaces a
+            // routing session. Never let that stale event tear down the new one.
+            if (!ReferenceEquals(_player, stoppedPlayer))
+            {
+                return;
+            }
+
+            _player = null;
+            normalRoute = _normalRoute;
+            moddedRoute = _moddedRoute;
+            _normalRoute = null;
+            _moddedRoute = null;
+
+            // Keep the secondary branch from running after its master clock has
+            // stopped. Holding the router lock prevents a concurrent Start()
+            // from opening a new secondary session until this stop is complete.
+            SecondaryOutput?.Stop();
+        }
+
+        stoppedPlayer.PlaybackStopped -= OnPlaybackStopped;
+        Volatile.Write(ref _useModdedInput, false);
+        Volatile.Write(ref _outputGateOpen, true);
+        Volatile.Write(ref _outputPeak, 0f);
+        Volatile.Write(ref _outputRms, 0f);
+        Volatile.Write(ref _musicPeak, 0f);
+        Volatile.Write(ref _musicRms, 0f);
+
+        string message = e.Exception?.Message ?? "Ljudutgången stoppades oväntat.";
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                stoppedPlayer.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped audio output could not be disposed cleanly.");
+            }
+
+            try
+            {
+                normalRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped normal input route could not be disposed cleanly.");
+            }
+
+            try
+            {
+                moddedRoute?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Stopped modded input route could not be disposed cleanly.");
+            }
+
+            if (e.Exception != null)
+            {
+                Log.Error(e.Exception, "Audio playback stopped with exception.");
+            }
+            else
+            {
+                Log.Warning("Audio playback stopped unexpectedly without an exception.");
+            }
+
+            try
+            {
+                RaiseError(message);
+            }
+            catch (Exception subscriberException)
+            {
+                Log.Error(subscriberException, "Audio router error subscriber failed.");
+            }
+        });
     }
 
     private void RaiseError(string message)

@@ -29,6 +29,8 @@ public partial class App : System.Windows.Application
 
     internal static bool StartupBenchmarkMode { get; private set; }
 
+    internal static bool StartHiddenInTray { get; private set; }
+
     private Mutex? _instanceMutex;
     private EventWaitHandle? _showEvent;
     private Thread? _listenerThread;
@@ -72,6 +74,7 @@ public partial class App : System.Windows.Application
 
         StartupBenchmarkMode = e.Args.Any(arg =>
             string.Equals(arg, "--startup-benchmark", StringComparison.OrdinalIgnoreCase));
+        StartHiddenInTray = HasStartHiddenInTrayArgument(e.Args);
 
         Log.Information("MicMixer startup begin. BenchmarkMode={BenchmarkMode}", StartupBenchmarkMode);
         StartupTrace("OnStartup begin");
@@ -96,16 +99,20 @@ public partial class App : System.Windows.Application
 
         if (!createdNew)
         {
-            // Another instance is already running — signal it to show its window.
-            Log.Information("Second app instance detected; signaling existing instance.");
-            try
+            // Windows startup must not unexpectedly surface an instance that is
+            // already running. An ordinary second launch still activates it.
+            if (!StartHiddenInTray)
             {
-                using var signal = EventWaitHandle.OpenExisting(EventName);
-                signal.Set();
-            }
-            catch
-            {
-                // If the event doesn't exist yet the other instance will surface on its own.
+                Log.Information("Second app instance detected; signaling existing instance.");
+                try
+                {
+                    using var signal = EventWaitHandle.OpenExisting(EventName);
+                    signal.Set();
+                }
+                catch
+                {
+                    // If the event doesn't exist yet the other instance will surface on its own.
+                }
             }
 
             _instanceMutex.Dispose();
@@ -132,9 +139,20 @@ public partial class App : System.Windows.Application
         _controlServer = new MicMixerControlServer(mainWindow);
         _controlServer.Start();
         StartupTrace("Control server started");
-        mainWindow.Show();
-        StartupTrace("MainWindow shown");
+        if (StartHiddenInTray)
+        {
+            mainWindow.StartHiddenInTray();
+            StartupTrace("MainWindow started hidden in tray");
+        }
+        else
+        {
+            mainWindow.Show();
+            StartupTrace("MainWindow shown");
+        }
     }
+
+    internal static bool HasStartHiddenInTrayArgument(IEnumerable<string> args) =>
+        args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -187,15 +205,10 @@ public partial class App : System.Windows.Application
 
             Dispatcher.BeginInvoke(() =>
             {
-                var window = MainWindow;
-                if (window == null) return;
-
-                window.Show();
-                window.WindowState = WindowState.Normal;
-                window.Activate();
-                window.Topmost = true;
-                window.Topmost = false;
-                window.Focus();
+                if (MainWindow is MainWindow window)
+                {
+                    window.ShowAndActivate();
+                }
             });
         }
     }

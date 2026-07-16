@@ -467,6 +467,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <Grid x:Name="HotkeyConfigPanel" Grid.Row="0" SizeChanged="OnHotkeyConfigSizeChanged">
@@ -634,6 +635,25 @@
                                     </Grid.ToolTip>
                                 </Grid>
                             </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="2" Margin="0,10,0,0" Padding="0,10,0,0"
+                                BorderBrush="#E9EEF3" BorderThickness="0,1,0,0">
+                            <CheckBox x:Name="StartWithWindowsCheck" FontSize="11.5" Foreground="#10233A"
+                                      Checked="OnStartWithWindowsChanged" Unchecked="OnStartWithWindowsChanged"
+                                      ToolTipService.ShowDuration="60000">
+                                <TextBlock Text="Starta med Windows — öppnas minimerad i systemfältet"
+                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <CheckBox.ToolTip>
+                                    <ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="Starta MicMixer automatiskt"/>
+                                            <TextBlock Style="{StaticResource TipBody}"
+                                                       Text="Lägger till MicMixer i Windows autostart. Vid inloggning startar appen dold i systemfältet utan att öppna huvudfönstret."/>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </CheckBox.ToolTip>
+                            </CheckBox>
                         </Border>
                     </Grid>
                 </Border>

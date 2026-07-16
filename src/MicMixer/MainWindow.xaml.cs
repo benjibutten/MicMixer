@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Navigation;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using System.IO;
 using MicMixer.Audio;
@@ -28,6 +29,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly SecondaryOutputEngine _secondaryOutput;
     private readonly GlobalHotkeyListener _hotkeyListener;
     private readonly SettingsStore _settingsStore;
+    private readonly StartupRegistrySyncService _startupRegistrySyncService;
     private readonly DispatcherTimer _levelTimer;
     private readonly DispatcherTimer _releaseDelayTimer;
     private readonly System.Windows.Forms.NotifyIcon _trayIcon;
@@ -77,6 +79,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private bool _isUpdatingUi;
     private bool _isReallyClosing;
     private bool _devicesLoaded;
+    private bool _startupCompleted;
     private string? _deviceLoadError;
     private MicStatus _lastTrayStatus = MicStatus.Stopped;
     private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
@@ -91,6 +94,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _hotkeyListener = new GlobalHotkeyListener();
         App.StartupTrace("GlobalHotkeyListener created");
         _settingsStore = new SettingsStore();
+        _startupRegistrySyncService = new StartupRegistrySyncService();
         App.StartupTrace("SettingsStore created");
 
         _music = new MusicPlaybackEngine();
@@ -148,12 +152,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SecondaryOutputCombo.IsEnabled = false;
 
         _isUpdatingUi = true;
+        StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
         SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
         SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
         SecondaryVolumeSlider.Value = Math.Clamp(_settings.SecondaryOutputVolume, 0f, 1f);
         _isUpdatingUi = false;
         UpdateSecondaryVolumePercentText();
         ApplySecondaryOutputConfig();
+        SyncStartWithWindows();
 
         _music.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
         _music.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
@@ -217,26 +223,42 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         App.StartupTrace("MainWindow ctor done");
 
-        ContentRendered += (_, _) =>
+        ContentRendered += (_, _) => CompleteStartup();
+    }
+
+    public void StartHiddenInTray()
+    {
+        ShowInTaskbar = false;
+        new WindowInteropHelper(this).EnsureHandle();
+        Hide();
+        Dispatcher.BeginInvoke(CompleteStartup, DispatcherPriority.Loaded);
+    }
+
+    private void CompleteStartup()
+    {
+        if (_startupCompleted)
         {
-            App.StartupTrace("ContentRendered (startup complete)");
-            App.StartupStopwatch.Stop();
+            return;
+        }
 
-            if (!App.StartupBenchmarkMode)
-            {
-                App.StartupTrace("Device refresh queued");
-                _ = RefreshDevicesAsync();
-            }
+        _startupCompleted = true;
+        App.StartupTrace("Startup complete");
+        App.StartupStopwatch.Stop();
 
-            if (App.StartupBenchmarkMode)
+        if (!App.StartupBenchmarkMode)
+        {
+            App.StartupTrace("Device refresh queued");
+            _ = RefreshDevicesAsync();
+        }
+
+        if (App.StartupBenchmarkMode)
+        {
+            Dispatcher.BeginInvoke(() =>
             {
-                Dispatcher.BeginInvoke(() =>
-                {
-                    _isReallyClosing = true;
-                    System.Windows.Application.Current.Shutdown();
-                }, DispatcherPriority.Background);
-            }
-        };
+                _isReallyClosing = true;
+                System.Windows.Application.Current.Shutdown();
+            }, DispatcherPriority.Background);
+        }
     }
 
     private async Task RefreshDevicesAsync()
@@ -375,17 +397,24 @@ public partial class MainWindow : Window, IMicMixerControlHost
         using var enumerator = new MMDeviceEnumerator();
         App.StartupTrace("MMDeviceEnumerator created (lazy)");
 
-        var inputs = enumerator
-            .EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .Select(device => new AudioDeviceOption(device.ID, device.FriendlyName))
-            .ToList();
-
-        var outputs = enumerator
-            .EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .Select(device => new AudioDeviceOption(device.ID, device.FriendlyName))
-            .ToList();
+        var inputs = ReadDeviceOptions(enumerator, DataFlow.Capture);
+        var outputs = ReadDeviceOptions(enumerator, DataFlow.Render);
 
         return (inputs, outputs);
+    }
+
+    private static List<AudioDeviceOption> ReadDeviceOptions(MMDeviceEnumerator enumerator, DataFlow dataFlow)
+    {
+        var options = new List<AudioDeviceOption>();
+        foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(dataFlow, DeviceState.Active))
+        {
+            using (device)
+            {
+                options.Add(new AudioDeviceOption(device.ID, device.FriendlyName));
+            }
+        }
+
+        return options;
     }
 
     private async void OnToggleClick(object sender, RoutedEventArgs e)
@@ -518,9 +547,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void StartRoutingByDeviceId(string dryInputId, string? moddedInputId, string outputId, bool startMuted)
     {
         using var enumerator = new MMDeviceEnumerator();
-        var dryInput = enumerator.GetDevice(dryInputId);
-        var moddedInput = moddedInputId != null ? enumerator.GetDevice(moddedInputId) : null;
-        var output = enumerator.GetDevice(outputId);
+        using var dryInput = enumerator.GetDevice(dryInputId);
+        using var moddedInput = moddedInputId != null ? enumerator.GetDevice(moddedInputId) : null;
+        using var output = enumerator.GetDevice(outputId);
 
         _router.SetUseModdedInput(false);
         // Push-to-talk must start silent; the gate opens when the hotkey is pressed.
@@ -991,6 +1020,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void SaveSettings()
     {
+        _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
         _settings.NormalInputDeviceId = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
         _settings.SkipModdedMic = IsModdedMicSkipped;
 
@@ -1060,6 +1090,44 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         _settingsSaveTimer.Stop();
         _settingsSaveTimer.Start();
+    }
+
+    private void OnStartWithWindowsChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
+        try
+        {
+            // Save the loaded settings object directly: device lists may still be
+            // loading, and a full UI snapshot would otherwise clear saved ids.
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to save the Start with Windows setting.");
+            StatusText.Text = $"Kunde inte spara inställningen: {ex.Message}";
+        }
+
+        SyncStartWithWindows();
+    }
+
+    private void SyncStartWithWindows()
+    {
+        try
+        {
+            if (!_startupRegistrySyncService.Sync(_settings.StartWithWindows, Environment.ProcessPath))
+            {
+                Log.Warning("Could not open the Windows startup registry key.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to synchronize the Start with Windows registry setting.");
+        }
     }
 
     private void UpdateStatusText()
@@ -3424,15 +3492,21 @@ public partial class MainWindow : Window, IMicMixerControlHost
         System.Windows.Application.Current.Shutdown();
     }
 
-    private void RestoreFromTray()
+    internal void ShowAndActivate()
     {
+        ShowInTaskbar = true;
         Show();
         if (WindowState == WindowState.Minimized)
         {
             WindowState = _lastNonMinimizedWindowState;
         }
         Activate();
+        Topmost = true;
+        Topmost = false;
+        Focus();
     }
+
+    private void RestoreFromTray() => ShowAndActivate();
 
     private MicStatus ComputeMicStatus()
     {

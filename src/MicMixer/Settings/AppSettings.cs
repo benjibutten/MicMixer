@@ -2,6 +2,8 @@ namespace MicMixer.Settings;
 
 public sealed class AppSettings
 {
+    public bool StartWithWindows { get; set; }
+
     public string? NormalInputDeviceId { get; set; }
 
     public string? ModdedInputDeviceId { get; set; }
