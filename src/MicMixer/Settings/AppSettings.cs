@@ -72,6 +72,12 @@ public sealed class AppSettings
     /// </summary>
     public float MeterSensitivityDb { get; set; }
 
+    /// <summary>Serves the overlay as a local web page for an OBS Browser source.</summary>
+    public bool ObsOverlayEnabled { get; set; }
+
+    /// <summary>Loopback port for the OBS overlay server.</summary>
+    public int ObsOverlayPort { get; set; } = Overlay.ObsOverlayServer.DefaultPort;
+
     public string? ExternalAppName { get; set; }
 
     /// <summary>Last window size; 0 means never saved, so the XAML default is used.</summary>

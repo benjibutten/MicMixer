@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<title>MicMixer Overlay</title>
+<style>
+  /* Transparent everywhere so OBS composites only the drawn shapes. */
+  html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
+  body.debug { background: #2b2f36; }
+  svg { width: 100%; height: 100%; display: block; }
+
+  /* Equalizer bars: same trio as the desktop overlay — each bar bounces
+     between min and max height on its own period (360/280/440 ms) with a
+     90 ms stagger, quadratic ease, anchored at the bottom. When not running
+     they rest frozen at minimum height (the "blocked" paused look). */
+  .bars rect {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    transform: scaleY(0.3125); /* MusicBarMinHeight / MusicBarMaxHeight */
+  }
+  .bars.run rect { animation: barBounce ease-in-out infinite alternate; }
+  .bars.run rect:nth-child(1) { animation-duration: 360ms; animation-delay: 0ms; }
+  .bars.run rect:nth-child(2) { animation-duration: 280ms; animation-delay: 90ms; }
+  .bars.run rect:nth-child(3) { animation-duration: 440ms; animation-delay: 180ms; }
+  @keyframes barBounce {
+    from { transform: scaleY(0.3125); }
+    to   { transform: scaleY(1); }
+  }
+
+  #status {
+    position: absolute; left: 6px; bottom: 4px; display: none;
+    font: 11px/1.4 Consolas, monospace; color: #9adfff; white-space: pre;
+  }
+  body.debug #status { display: block; }
+</style>
+</head>
+<body>
+<!-- Geometry mirrors OverlayIndicatorWindow: two 58x58 zones side by side,
+     34 px dots, a 270-degree level ring (r 21.75, opening at the bottom) and
+     the equalizer bars inside the music ring's opening. -->
+<svg id="root" viewBox="0 0 116 58" preserveAspectRatio="xMidYMid meet" visibility="hidden">
+  <defs>
+    <!-- WPF DropShadowEffect: BlurRadius 7 (~stdDeviation 1.75), depth 1, opacity 0.35. -->
+    <filter id="ds" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.75" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <g id="musicZone" visibility="hidden">
+    <g id="musicGauge" visibility="hidden">
+      <path class="ring-backing" fill="none" stroke="rgba(0,0,0,0.349)" stroke-width="5.5" stroke-linecap="round"/>
+      <path class="ring-track" fill="none" stroke="rgba(255,255,255,0.302)" stroke-width="1.2" stroke-linecap="round"/>
+      <path class="ring-fill" fill="none" stroke-width="3.5" stroke-linecap="round" visibility="hidden"/>
+      <rect class="ring-notch" x="27.9" y="4.25" width="2.2" height="6" rx="1.1" fill="rgba(255,255,255,0.902)" visibility="hidden"/>
+    </g>
+    <g id="musicBars" class="bars" visibility="hidden">
+      <rect x="22.5" y="48" width="3" height="8" rx="1.5" fill="rgba(255,255,255,0.902)"/>
+      <rect x="27.5" y="48" width="3" height="8" rx="1.5" fill="rgba(255,255,255,0.902)"/>
+      <rect x="32.5" y="48" width="3" height="8" rx="1.5" fill="rgba(255,255,255,0.902)"/>
+    </g>
+    <circle id="musicDot" cx="29" cy="29" r="17" fill="#7C3AED" filter="url(#ds)"/>
+    <path id="musicGlyph" fill="#FFFFFF"/>
+  </g>
+
+  <g id="micZone">
+    <g id="micGauge" visibility="hidden">
+      <path class="ring-backing" fill="none" stroke="rgba(0,0,0,0.349)" stroke-width="5.5" stroke-linecap="round"/>
+      <path class="ring-track" fill="none" stroke="rgba(255,255,255,0.302)" stroke-width="1.2" stroke-linecap="round"/>
+      <path class="ring-fill" fill="none" stroke-width="3.5" stroke-linecap="round" visibility="hidden"/>
+      <rect class="ring-notch" x="85.9" y="4.25" width="2.2" height="6" rx="1.1" fill="rgba(255,255,255,0.902)" visibility="hidden"/>
+    </g>
+    <circle id="micDot" cx="87" cy="29" r="17" fill="#16A34A" filter="url(#ds)"/>
+    <path id="micGlyph" fill="#FFFFFF"/>
+  </g>
+</svg>
+<div id="status"></div>
+
+<script>
+'use strict';
+
+// --- Shared vocabulary with OverlayIndicatorWindow / StatusTheme ---
+
+// MDI glyphs, identical path data to the WPF overlay.
+const GLYPHS = {
+  mic: 'M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z',
+  micModded: 'M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19M3,9H1V15H3V9M21,9H23V15H21V9',
+  micOff: 'M19,11C19,12.19 18.66,13.3 18.1,14.28L16.87,13.05C17.14,12.43 17.3,11.74 17.3,11H19M15,11.16L9,5.18V5A3,3 0 0,1 12,2A3,3 0 0,1 15,5V11L15,11.16M4.27,3L21,19.73L19.73,21L15.54,16.81C14.77,17.27 13.91,17.58 13,17.72V21H11V17.72C7.72,17.23 5,14.41 5,11H6.7C6.7,14 9.24,16.1 12,16.1C12.81,16.1 13.6,15.91 14.31,15.58L12.65,13.92L12,14A3,3 0 0,1 9,11V10.28L3,4.27L4.27,3Z',
+  note: 'M12,3V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V7H18V3H12Z',
+  noteOff: 'M4.27,3L3,4.27L12,13.27V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V15.27L19.73,21L21,19.73L4.27,3M14,7H18V3H12V8.18L14,10.18V7Z',
+  headphones: 'M12,1C7,1 3,5 3,10V17A3,3 0 0,0 6,20H9V12H5V10A7,7 0 0,1 12,3A7,7 0 0,1 19,10V12H15V20H18A3,3 0 0,0 21,17V10C21,5 17,1 12,1Z'
+};
+
+// Mic dot: same palette as StatusTheme (green live / blue modded / red muted).
+const MIC_STYLE = {
+  live:   { fill: '#16A34A', glyph: GLYPHS.mic,       box: 16 },
+  modded: { fill: '#2563EB', glyph: GLYPHS.micModded, box: 16 },
+  muted:  { fill: '#DC2626', glyph: GLYPHS.micOff,    box: 16 }
+};
+
+// Music dot: purple sending / amber monitor-only / stopped-gray blocked.
+const MUSIC_STYLE = {
+  sending:     { fill: '#7C3AED', glyph: GLYPHS.note,       box: 15, bars: true },
+  monitorOnly: { fill: '#D97706', glyph: GLYPHS.headphones, box: 15, bars: true },
+  blocked:     { fill: '#6B7280', glyph: GLYPHS.noteOff,    box: 15, bars: false }
+};
+
+// Level ring geometry: 270-degree gauge, opening at the bottom, angles in
+// degrees clockwise from 12 o'clock. Radius = 34/2 + 3 gap + 3.5/2 stroke.
+const RING_RADIUS = 21.75;
+const GAUGE_START = 225;
+const GAUGE_SWEEP = 270;
+
+// Meter behavior constants, identical to LevelRingGauge.
+const METER_FLOOR_DB = -42, METER_CEILING_DB = -6;
+const CLIP_THRESHOLD = 0.97, CLIP_HOLD_MS = 1200;
+const NOTCH_DECAY_PER_TICK = 0.015, NOTCH_VISIBLE_FLOOR = 0.03;
+const LOW_END = 0.17, GOOD_START = 0.33, GOOD_END = 0.67, HOT_START = 0.81, RED_START = 0.92;
+const GOOD = [34, 197, 94], WARN = [245, 158, 11], CLIP = [239, 68, 68];
+
+// --- Page options ---
+const params = new URLSearchParams(location.search);
+// The desktop overlay window renders at 72% opacity; mirror it, overridable
+// with ?opacity=1 for streamers who prefer a solid overlay.
+const opacity = params.has('opacity')
+  ? Math.min(1, Math.max(0.05, parseFloat(params.get('opacity')) || 0.72))
+  : 0.72;
+const debug = params.get('debug') === '1';
+// Demo mode renders a representative state with synthetic levels and never
+// connects, so the Browser source can be sized and placed in OBS while
+// routing is stopped (the live page would show nothing then). Optional
+// &mic= / &music= / &meter=0 pick the shown state.
+const demo = params.get('demo') === '1';
+
+const root = document.getElementById('root');
+root.style.opacity = String(opacity);
+if (debug) document.body.classList.add('debug');
+const statusBox = document.getElementById('status');
+
+// --- Geometry helpers ---
+
+function gaugePoint(cx, cy, angleDegrees) {
+  const r = angleDegrees * Math.PI / 180;
+  return [cx + RING_RADIUS * Math.sin(r), cy - RING_RADIUS * Math.cos(r)];
+}
+
+function arcPath(cx, cy, sweepDegrees) {
+  const [sx, sy] = gaugePoint(cx, cy, GAUGE_START);
+  const [ex, ey] = gaugePoint(cx, cy, GAUGE_START + sweepDegrees);
+  const large = sweepDegrees > 180 ? 1 : 0;
+  return `M ${sx.toFixed(3)} ${sy.toFixed(3)} A ${RING_RADIUS} ${RING_RADIUS} 0 ${large} 1 ${ex.toFixed(3)} ${ey.toFixed(3)}`;
+}
+
+/* Hide with an explicit attribute, show by removing it so the element falls
+   back to inheriting visibility. An explicit visibility="visible" would leak
+   through hidden ancestors (SVG visibility inherits per element), leaving
+   frozen rings on stream after the root hides. */
+function setShown(el, shown) {
+  if (shown) {
+    el.removeAttribute('visibility');
+  } else {
+    el.setAttribute('visibility', 'hidden');
+  }
+}
+
+/* Uniformly fit a glyph into a centered box, like WPF Stretch.Uniform. */
+function fitGlyph(el, box, cx, cy) {
+  const bb = el.getBBox();
+  if (bb.width <= 0 || bb.height <= 0) return;
+  const s = Math.min(box / bb.width, box / bb.height);
+  const tx = cx - (bb.x + bb.width / 2) * s;
+  const ty = cy - (bb.y + bb.height / 2) * s;
+  el.setAttribute('transform', `translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${s.toFixed(4)})`);
+}
+
+// --- Meter math (ported from LevelRingGauge) ---
+
+function normalizeLoudness(rms, sensitivityDb) {
+  if (rms <= 0) return 0;
+  const db = 20 * Math.log10(rms) + sensitivityDb;
+  return Math.min(1, Math.max(0, (db - METER_FLOOR_DB) / (METER_CEILING_DB - METER_FLOOR_DB)));
+}
+
+function lerpColor(from, to, t) {
+  return [
+    Math.round(from[0] + (to[0] - from[0]) * t),
+    Math.round(from[1] + (to[1] - from[1]) * t),
+    Math.round(from[2] + (to[2] - from[2]) * t)
+  ];
+}
+
+/* Amber (too low) -> green (good) -> amber (hot) -> red, with soft crossfades. */
+function colorForLevel(level) {
+  if (level < LOW_END) return WARN;
+  if (level < GOOD_START) return lerpColor(WARN, GOOD, (level - LOW_END) / (GOOD_START - LOW_END));
+  if (level < GOOD_END) return GOOD;
+  if (level < HOT_START) return lerpColor(GOOD, WARN, (level - GOOD_END) / (HOT_START - GOOD_END));
+  return lerpColor(WARN, CLIP, Math.min(1, (level - HOT_START) / (RED_START - HOT_START)));
+}
+
+function sameColor(a, b) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
+
+/* One level-ring gauge with the same decay and color-easing state machine as
+   the desktop overlay: fast fill decay, slow color-zone decay, slowest
+   peak-hold notch, instant red on clipping. Fed once per incoming frame
+   (the server ticks ~50 ms, matching the WPF feed cadence). */
+class Gauge {
+  constructor(groupId, cx, cy) {
+    this.group = document.getElementById(groupId);
+    this.fill = this.group.querySelector('.ring-fill');
+    this.notch = this.group.querySelector('.ring-notch');
+    this.cx = cx;
+    this.cy = cy;
+    this.visible = false;
+    this.group.querySelector('.ring-backing').setAttribute('d', arcPath(cx, cy, GAUGE_SWEEP));
+    this.group.querySelector('.ring-track').setAttribute('d', arcPath(cx, cy, GAUGE_SWEEP));
+    this.reset();
+  }
+
+  setVisible(visible) {
+    if (visible === this.visible) return;
+    this.visible = visible;
+    if (visible) this.reset();
+    // Show by removing the attribute, never by an explicit "visible": SVG
+    // visibility inherits, and an explicit visible on a child would override
+    // a hidden ancestor (the root hides everything when routing stops).
+    setShown(this.group, visible);
+  }
+
+  reset() {
+    this.fillPeak = 0;
+    this.zonePeak = 0;
+    this.notchPeak = 0;
+    this.clipHoldUntil = 0;
+    this.renderedSweep = -1;
+    this.notchAngle = GAUGE_START;
+    this.color = GOOD;
+    setShown(this.fill, false);
+    setShown(this.notch, false);
+    this.applyColor();
+  }
+
+  feed(peak, rms, sensitivityDb) {
+    if (!this.visible) return;
+
+    const now = performance.now();
+    if (peak >= CLIP_THRESHOLD) this.clipHoldUntil = now + CLIP_HOLD_MS;
+
+    const loudness = normalizeLoudness(rms, sensitivityDb);
+    this.fillPeak = Math.max(loudness, this.fillPeak * 0.78);
+    this.zonePeak = Math.max(loudness, this.zonePeak * 0.96);
+    this.notchPeak = Math.max(loudness, this.notchPeak - NOTCH_DECAY_PER_TICK);
+
+    const sweep = this.fillPeak * GAUGE_SWEEP;
+    if (Math.abs(sweep - this.renderedSweep) >= 1) {
+      this.renderedSweep = sweep;
+      if (sweep < 1) {
+        setShown(this.fill, false);
+      } else {
+        this.fill.setAttribute('d', arcPath(this.cx, this.cy, sweep));
+        setShown(this.fill, true);
+      }
+    }
+
+    if (this.notchPeak <= NOTCH_VISIBLE_FLOOR) {
+      setShown(this.notch, false);
+    } else {
+      const angle = GAUGE_START + this.notchPeak * GAUGE_SWEEP;
+      if (Math.abs(angle - this.notchAngle) >= 1) {
+        this.notchAngle = angle;
+        this.notch.setAttribute('transform', `rotate(${angle.toFixed(2)} ${this.cx} ${this.cy})`);
+      }
+      setShown(this.notch, true);
+    }
+
+    const target = now < this.clipHoldUntil ? CLIP : colorForLevel(this.zonePeak);
+    this.color = sameColor(target, CLIP) ? CLIP : lerpColor(this.color, target, 0.22);
+    this.applyColor();
+  }
+
+  applyColor() {
+    const rgb = `rgb(${this.color[0]},${this.color[1]},${this.color[2]})`;
+    if (this.lastApplied !== rgb) {
+      this.lastApplied = rgb;
+      this.fill.setAttribute('stroke', rgb);
+    }
+  }
+}
+
+// --- Elements and state application ---
+
+const micDot = document.getElementById('micDot');
+const micGlyphEl = document.getElementById('micGlyph');
+const musicZone = document.getElementById('musicZone');
+const musicDot = document.getElementById('musicDot');
+const musicGlyphEl = document.getElementById('musicGlyph');
+const musicBars = document.getElementById('musicBars');
+const micGauge = new Gauge('micGauge', 87, 29);
+const musicGauge = new Gauge('musicGauge', 29, 29);
+
+let sensitivityDb = 0;
+let shownMicGlyph = null;
+let shownMusicGlyph = null;
+let lastState = null;
+
+function applyState(state) {
+  lastState = state;
+  sensitivityDb = state.sensitivityDb || 0;
+
+  // Mirror the desktop overlay: hidden state means nothing on stream at all.
+  if (state.mic === 'hidden') {
+    setShown(root, false);
+    micGauge.setVisible(false);
+    musicGauge.setVisible(false);
+    musicBars.classList.remove('run');
+    updateStatus();
+    return;
+  }
+
+  const micStyle = MIC_STYLE[state.mic] || MIC_STYLE.live;
+  micDot.setAttribute('fill', micStyle.fill);
+  if (shownMicGlyph !== micStyle.glyph) {
+    shownMicGlyph = micStyle.glyph;
+    micGlyphEl.setAttribute('d', micStyle.glyph);
+    fitGlyph(micGlyphEl, micStyle.box, 87, 29);
+  }
+  micGauge.setVisible(state.meter === true);
+
+  const musicStyle = MUSIC_STYLE[state.music];
+  if (musicStyle) {
+    musicDot.setAttribute('fill', musicStyle.fill);
+    if (shownMusicGlyph !== musicStyle.glyph) {
+      shownMusicGlyph = musicStyle.glyph;
+      musicGlyphEl.setAttribute('d', musicStyle.glyph);
+      fitGlyph(musicGlyphEl, musicStyle.box, 29, 29);
+    }
+    setShown(musicZone, true);
+    setShown(musicBars, true);
+    // Blocked keeps the bars visible but frozen at minimum height.
+    musicBars.classList.toggle('run', musicStyle.bars);
+    musicGauge.setVisible(state.meter === true);
+  } else {
+    setShown(musicZone, false);
+    musicBars.classList.remove('run');
+    musicGauge.setVisible(false);
+  }
+
+  setShown(root, true);
+  updateStatus();
+}
+
+function hideAll() {
+  setShown(root, false);
+  micGauge.setVisible(false);
+  musicGauge.setVisible(false);
+  musicBars.classList.remove('run');
+}
+
+// --- WebSocket with reconnect ---
+
+let connected = false;
+let retryDelay = 500;
+
+function updateStatus() {
+  if (!debug) return;
+  const source = demo ? 'demo' : connected ? 'ansluten' : 'frånkopplad — försöker igen…';
+  statusBox.textContent = (demo || connected)
+    ? `${source} — mic: ${lastState ? lastState.mic : '?'}  musik: ${lastState ? lastState.music : '?'}  meter: ${lastState && lastState.meter ? 'på' : 'av'}`
+    : source;
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    connected = true;
+    retryDelay = 500;
+    updateStatus();
+    // The server pushes the current state immediately on connect.
+  };
+
+  ws.onmessage = (event) => {
+    let message;
+    try { message = JSON.parse(event.data); } catch { return; }
+    if (message.type === 'state') {
+      applyState(message);
+    } else if (message.type === 'levels') {
+      micGauge.feed(message.op, message.or, sensitivityDb);
+      musicGauge.feed(message.mp, message.mr, sensitivityDb);
+    }
+  };
+
+  ws.onclose = () => {
+    // MicMixer stopped or restarting: vanish from the stream and retry quietly.
+    connected = false;
+    hideAll();
+    updateStatus();
+    setTimeout(connect, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 5000);
+  };
+}
+
+if (demo) {
+  applyState({
+    mic: params.get('mic') || 'live',
+    music: params.get('music') || 'sending',
+    meter: params.get('meter') !== '0',
+    sensitivityDb: 0
+  });
+  // Speech- and music-shaped waves so rings, colors, and the peak-hold notch
+  // all show; fed on the same 50 ms cadence as the live server.
+  let t = 0;
+  setInterval(() => {
+    t += 0.05;
+    const outputRms = 0.09 + 0.09 * Math.sin(t * 2.2);
+    const musicRms = 0.06 + 0.05 * Math.sin(t * 3.1 + 1);
+    micGauge.feed(Math.min(1, outputRms * 4), outputRms, sensitivityDb);
+    musicGauge.feed(Math.min(1, musicRms * 4), musicRms, sensitivityDb);
+  }, 50);
+} else {
+  connect();
+}
+</script>
+</body>
+</html>

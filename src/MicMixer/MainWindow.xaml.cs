@@ -174,6 +174,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         MeterSensitivitySlider.Value = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
+        ObsOverlayCheck.IsChecked = _settings.ObsOverlayEnabled;
+        _obsOverlayPort = Overlay.ObsOverlayServer.ClampPort(_settings.ObsOverlayPort);
+        ObsOverlayPortBox.Text = _obsOverlayPort.ToString(CultureInfo.InvariantCulture);
         _isUpdatingMusicUi = false;
         ApplyMusicRoutingModes();
         UpdateMeterSensitivityText();
@@ -219,6 +222,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         UpdateStatusText();
         UpdateTrayIcon();
         ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
+        ApplyObsOverlaySetting(_settings.ObsOverlayEnabled);
         Closing += OnClosing;
 
         App.StartupTrace("MainWindow ctor done");
@@ -601,14 +605,22 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void OnLevelTimerTick(object? sender, EventArgs e)
     {
         // Feeds the overlay volume meters; the Set*Level calls no-op while their
-        // rings are hidden, and the reads reset the levels so stale values never linger.
-        if (_overlayIndicator is { } overlay)
+        // rings are hidden, and the reads reset the levels so stale values never
+        // linger. The reads are shared between the desktop overlay and the OBS
+        // overlay pages, because reading also resets the accumulators.
+        bool obsWantsLevels = _obsOverlayServer is { HasClients: true };
+        if (_overlayIndicator != null || obsWantsLevels)
         {
             var (outputPeak, outputRms) = _router.ReadAndResetOutputLevels();
-            overlay.SetOutputLevel(outputPeak, outputRms);
-
             var (musicPeak, musicRms) = _router.ReadAndResetMusicLevels();
-            overlay.SetMusicLevel(musicPeak, musicRms);
+
+            _overlayIndicator?.SetOutputLevel(outputPeak, outputRms);
+            _overlayIndicator?.SetMusicLevel(musicPeak, musicRms);
+
+            if (obsWantsLevels && OverlayVolumeMeterCheck.IsChecked == true)
+            {
+                _obsOverlayServer!.PublishLevels(outputPeak, outputRms, musicPeak, musicRms);
+            }
         }
 
         if (_appCapture is { } capture)
@@ -1009,6 +1021,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settingsSaveTimer.Stop();
         _overlayIndicator?.Close();
         _overlayIndicator = null;
+        StopObsOverlayServer();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
         _router.Dispose();
@@ -1060,6 +1073,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
         _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         _settings.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
+        _settings.ObsOverlayEnabled = ObsOverlayCheck.IsChecked == true;
+        _settings.ObsOverlayPort = _obsOverlayPort;
         // Only the deliberate double-click mode survives a restart; the one-shot
         // state is transient by design.
         _settings.SingleTrackMode = _singleTrackMode == SingleTrackPlayMode.Always;
@@ -1452,6 +1467,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         UpdateMusicRoutingWarning();
         _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
+        PublishObsOverlayState();
 
         if (_isExternalMode)
         {
@@ -3524,9 +3540,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         var newStatus = ComputeMicStatus();
 
-        // The overlay mirrors the tray state; SetState no-ops when unchanged.
+        // The overlay mirrors the tray state; SetState no-ops when unchanged,
+        // and the OBS overlay server dedupes identical snapshots the same way.
         _overlayIndicator?.SetState(ToOverlayIndicatorState(newStatus));
         _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
+        PublishObsOverlayState();
 
         if (newStatus == _lastTrayStatus)
             return;
@@ -3620,6 +3638,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         UpdateOutputMeteringEnabled();
+        PublishObsOverlayState();
         SaveSettings();
     }
 
@@ -3635,6 +3654,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             overlay.MeterSensitivityDb = (float)e.NewValue;
         }
+        PublishObsOverlayState();
         _settings.MeterSensitivityDb = (float)e.NewValue;
 
         UpdateMeterSensitivityText();
@@ -3669,7 +3689,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void UpdateOutputMeteringEnabled()
     {
-        bool metering = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
+        // The OBS overlay only needs levels while a page is actually connected,
+        // so an idle server keeps the audio thread as cheap as no overlay at all.
+        bool metering = (_overlayIndicator != null || _obsOverlayServer is { HasClients: true })
+            && OverlayVolumeMeterCheck.IsChecked == true;
         _router.OutputMeteringEnabled = metering;
         _router.MusicMeteringEnabled = metering;
     }

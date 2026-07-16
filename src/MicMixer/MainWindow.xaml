@@ -10,6 +10,7 @@
         PreviewMouseDown="OnPreviewHotkeyMouseDown">
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <!-- Mic icon (clean cardioid mic outline) -->
         <Geometry x:Key="MicIcon">M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z</Geometry>
         <!-- Waveform / modded mic icon -->
@@ -570,9 +571,23 @@
                                     </CheckBox.ToolTip>
                                 </CheckBox>
                                 <CheckBox x:Name="OverlayVolumeMeterCheck" Margin="22,6,0,0" FontSize="11.5" Foreground="#10233A"
-                                          IsEnabled="{Binding IsChecked, ElementName=OverlayIndicatorCheck}"
                                           Checked="OnOverlayVolumeMeterChanged" Unchecked="OnOverlayVolumeMeterChanged"
                                           ToolTipService.ShowDuration="60000">
+                                    <!-- The meter applies to both the desktop overlay and the OBS
+                                         overlay, so either of them enables the checkbox. -->
+                                    <CheckBox.Style>
+                                        <Style TargetType="CheckBox">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsChecked, ElementName=OverlayIndicatorCheck}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="True"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsChecked, ElementName=ObsOverlayCheck}" Value="True">
+                                                    <Setter Property="IsEnabled" Value="True"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </CheckBox.Style>
                                     <TextBlock Text="Volymindikator — nivåringar runt indikatorerna som visar om ljudnivån är bra" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
@@ -597,6 +612,13 @@
                                                 <MultiDataTrigger>
                                                     <MultiDataTrigger.Conditions>
                                                         <Condition Binding="{Binding IsChecked, ElementName=OverlayIndicatorCheck}" Value="True"/>
+                                                        <Condition Binding="{Binding IsChecked, ElementName=OverlayVolumeMeterCheck}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="IsEnabled" Value="True"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsChecked, ElementName=ObsOverlayCheck}" Value="True"/>
                                                         <Condition Binding="{Binding IsChecked, ElementName=OverlayVolumeMeterCheck}" Value="True"/>
                                                     </MultiDataTrigger.Conditions>
                                                     <Setter Property="IsEnabled" Value="True"/>
@@ -634,6 +656,45 @@
                                         </ToolTip>
                                     </Grid.ToolTip>
                                 </Grid>
+                                <CheckBox x:Name="ObsOverlayCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A"
+                                          Checked="OnObsOverlayChanged" Unchecked="OnObsOverlayChanged"
+                                          ToolTipService.ShowDuration="60000">
+                                    <TextBlock Text="OBS-overlay — visa samma overlay i streamen (Browser-källa)"
+                                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <CheckBox.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Overlay i OBS för tittarna"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Fångar OBS bara spelet (Game Capture) syns inte skärm-overlayen i streamen. Det här startar en liten lokal webbsida som visar exakt samma overlay — cirklar, nivåringar och equalizer — så att den kan läggas som ett eget lager i OBS ovanpå spelet."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Gör så här i OBS: Lägg till källa → Webbläsare, klistra in adressen nedan, sätt t.ex. bredd 232 och höjd 116 och placera den där du vill. Sidan är genomskinlig och visar ingenting när routningen är stoppad — precis som skärm-overlayen. Lägg till ?opacity=1 sist i adressen för helt ogenomskinliga cirklar."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Servern går bara att nå från den här datorn (127.0.0.1) och skickar bara status och ljudnivåer — inget ljud, ingen bild. Den fungerar oberoende av skärm-overlayen ovan, så du kan ha den ena, båda eller ingen."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
+                                <!-- Server address and port. Visible only while the OBS overlay is on;
+                                     the port rarely needs changing (only on a conflict). -->
+                                <StackPanel Margin="22,4,0,0"
+                                            Visibility="{Binding IsChecked, ElementName=ObsOverlayCheck, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Port" FontSize="10.5" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="ObsOverlayPortBox" Width="56" MaxLength="5" Height="24" FontSize="11"
+                                                 VerticalContentAlignment="Center"
+                                                 LostFocus="OnObsOverlayPortBoxLostFocus" KeyDown="OnObsOverlayPortBoxKeyDown"
+                                                 ToolTip="Lokal port för overlay-sidan. Ändra bara om porten krockar med något annat program."/>
+                                        <Button Content="Kopiera adress" Margin="10,0,0,0" Padding="8,2" FontSize="10.5"
+                                                VerticalAlignment="Center" Click="OnObsOverlayCopyClick"
+                                                ToolTip="Kopierar overlay-adressen så att den kan klistras in i OBS webbläsar-källa."/>
+                                    </StackPanel>
+                                    <TextBlock Margin="0,4,0,0" FontSize="10.5" Foreground="#6B7280" TextWrapping="Wrap">
+                                        <Hyperlink Click="OnObsOverlayLinkClick" ToolTip="Öppna overlay-sidan i webbläsaren för att testa den.">
+                                            <Run x:Name="ObsOverlayLinkText"/>
+                                        </Hyperlink><Run x:Name="ObsOverlayClientsText"/>
+                                    </TextBlock>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
