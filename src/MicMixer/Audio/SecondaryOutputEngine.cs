@@ -5,15 +5,18 @@ using Serilog;
 namespace MicMixer.Audio;
 
 /// <summary>
-/// Optional second render output that plays the finished mic + music mix taken
-/// before the push-to-talk gate, so e.g. OBS can capture the mix from a chosen
-/// device while the virtual cable stays gated.
+/// Optional second render output that plays the mic + music mix on an extra
+/// device, so e.g. OBS can capture it while the virtual cable stays gated. The
+/// router builds this branch's mix with its own per-source gates (see
+/// <see cref="MixFanoutSampleProvider"/>): the mic follows push-to-talk unless
+/// <see cref="IgnorePushToTalk"/> is set, and the music also flows whenever it is
+/// audible to the streamer — including monitor-only previews.
 ///
 /// The primary routing output remains the master clock: <see cref="AudioRouter"/>
-/// tees each pre-gate block into a bounded buffer via <see cref="Write"/>, and the
-/// secondary WasapiOut drains that buffer at its own pace (the same drift-absorption
-/// pattern as the music monitor fanout). The secondary device can never block or
-/// stop the primary chain — a failure here tears down only this engine.
+/// tees each finished secondary block into a bounded buffer via <see cref="Write"/>,
+/// and the secondary WasapiOut drains that buffer at its own pace (the same
+/// drift-absorption pattern as the music monitor fanout). The secondary device can
+/// never block or stop the primary chain — a failure here tears down only this engine.
 /// </summary>
 public sealed class SecondaryOutputEngine : IDisposable
 {
@@ -48,9 +51,11 @@ public sealed class SecondaryOutputEngine : IDisposable
     }
 
     /// <summary>
-    /// When true the secondary output keeps playing while push-to-talk holds the
-    /// cable silent; when false it follows the same gate state as the cable.
-    /// Takes effect immediately, also while running.
+    /// When true the secondary output keeps playing everything while push-to-talk
+    /// holds the cable silent; when false its mic follows the same gate state as
+    /// the cable (music still flows whenever the streamer can hear it — the
+    /// router consumes this flag when building the secondary mix). Takes effect
+    /// immediately, also while running.
     /// </summary>
     public bool IgnorePushToTalk
     {
@@ -77,11 +82,11 @@ public sealed class SecondaryOutputEngine : IDisposable
 
     /// <summary>
     /// Starts the secondary output if it is enabled and has a device configured.
-    /// Returns true when the caller should install the pre-gate tap. Failures are
-    /// logged and surfaced via <see cref="Error"/> but never thrown, so a broken
-    /// secondary device can never prevent the cable routing from starting.
+    /// Returns true when the caller should start feeding <see cref="Write"/>.
+    /// Failures are logged and surfaced via <see cref="Error"/> but never thrown,
+    /// so a broken secondary device can never prevent the cable routing from starting.
     /// </summary>
-    public bool TryStartForRouting(WaveFormat sourceFormat, Func<bool> primaryGateOpen)
+    public bool TryStartForRouting(WaveFormat sourceFormat)
     {
         string? deviceId;
 
@@ -97,7 +102,7 @@ public sealed class SecondaryOutputEngine : IDisposable
 
         try
         {
-            Start(deviceId, sourceFormat, primaryGateOpen);
+            Start(deviceId, sourceFormat);
             return true;
         }
         catch (Exception ex)
@@ -109,10 +114,11 @@ public sealed class SecondaryOutputEngine : IDisposable
     }
 
     /// <summary>
-    /// Copies one pre-gate block from the primary audio thread into the bounded
-    /// fanout buffer. Non-blocking, and a no-op while the secondary output is stopped.
-    /// A failure here must never travel up the primary chain's Read into the cable's
-    /// WasapiOut: the branch is detached immediately and torn down off-thread.
+    /// Copies one finished secondary-mix block from the primary audio thread into
+    /// the bounded fanout buffer. Non-blocking, and a no-op while the secondary
+    /// output is stopped. A failure here must never travel up the primary chain's
+    /// Read into the cable's WasapiOut: the branch is detached immediately and
+    /// torn down off-thread.
     /// </summary>
     public void Write(float[] buffer, int offset, int count)
     {
@@ -179,7 +185,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         Stop();
     }
 
-    private void Start(string deviceId, WaveFormat sourceFormat, Func<bool> primaryGateOpen)
+    private void Start(string deviceId, WaveFormat sourceFormat)
     {
         Stop();
 
@@ -187,9 +193,10 @@ public sealed class SecondaryOutputEngine : IDisposable
         var device = enumerator.GetDevice(deviceId);
         var mixFormat = device.AudioClient.MixFormat;
 
-        // The branch gate follows the cable's push-to-talk state unless the user
-        // opted out — IgnorePushToTalk keeps the gate permanently open.
-        var branch = new SecondaryTapBranch(sourceFormat, () => _ignorePushToTalk || primaryGateOpen());
+        // No gate here: the router applies the secondary's mic and music gates
+        // (driven by IgnorePushToTalk) before each Write, so the branch just
+        // buffers, scales and plays the finished mix.
+        var branch = new SecondaryTapBranch(sourceFormat);
         var normalized = FormatNormalizer.Normalize(branch, mixFormat);
 
         var output = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
