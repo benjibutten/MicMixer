@@ -74,7 +74,9 @@ internal sealed record MusicControlState(
     double? DownloadPercent,
     string DownloadStatus,
     string StatusText,
-    bool VolumesLinked = false);
+    bool VolumesLinked = false,
+    bool MusicIgnoresPushToTalk = false,
+    bool MusicMonitorOnly = false);
 
 internal sealed record RemoteTrack(
     string Id,

@@ -163,10 +163,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
         PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
+        MusicIgnorePttCheck.IsChecked = _settings.MusicIgnoresPushToTalk;
+        MusicMonitorOnlyCheck.IsChecked = _settings.MusicMonitorOnly;
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         MeterSensitivitySlider.Value = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
         _isUpdatingMusicUi = false;
+        ApplyMusicRoutingModes();
         UpdateMeterSensitivityText();
         UpdateDelayedPlayIdleUi();
         SetSingleTrackMode(_settings.SingleTrackMode ? SingleTrackPlayMode.Always : SingleTrackPlayMode.Off,
@@ -568,12 +571,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnLevelTimerTick(object? sender, EventArgs e)
     {
-        // Feeds the overlay volume meter; SetOutputLevel no-ops while it is hidden,
-        // and the read itself resets the levels so stale values never linger.
+        // Feeds the overlay volume meters; the Set*Level calls no-op while their
+        // rings are hidden, and the reads reset the levels so stale values never linger.
         if (_overlayIndicator is { } overlay)
         {
             var (outputPeak, outputRms) = _router.ReadAndResetOutputLevels();
             overlay.SetOutputLevel(outputPeak, outputRms);
+
+            var (musicPeak, musicRms) = _router.ReadAndResetMusicLevels();
+            overlay.SetMusicLevel(musicPeak, musicRms);
         }
 
         if (_appCapture is { } capture)
@@ -715,6 +721,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void UpdateSecondaryOutputStatus()
     {
+        // The monitor-only hint mentions the secondary output while it runs.
+        UpdateMusicRouteHint();
+
         if (_router.IsRouting && _secondaryOutput.IsRunning)
         {
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D));
@@ -744,6 +753,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C));
             SecondaryOutputStatusText.Text = $"Sekundär ut stoppades: {message} — routningen till kabeln fortsätter.";
             SecondaryOutputStatusText.Visibility = Visibility.Visible;
+            UpdateMusicRouteHint();
             UpdateStatusText();
         });
     }
@@ -799,6 +809,69 @@ public partial class MainWindow : Window, IMicMixerControlHost
         bool engaged = IsHotkeyEngaged();
         _router.SetUseModdedInput(!IsModdedMicSkipped && engaged);
         _router.SetOutputGateOpen(!IsPushToTalk || engaged);
+    }
+
+    private void OnMusicRoutingModeChanged(object sender, RoutedEventArgs e)
+    {
+        // Fires while XAML is still being parsed when a checkbox default raises
+        // Checked before the later controls exist.
+        if (MusicRouteHintText == null || _isUpdatingMusicUi || _isUpdatingUi)
+        {
+            return;
+        }
+
+        ApplyMusicRoutingModes();
+        SaveSettings();
+        UpdateStatusText();
+        UpdateMusicUi();
+    }
+
+    /// <summary>
+    /// Pushes the music routing toggles into the router (they apply immediately,
+    /// also while routing runs) and refreshes the honest-state hint below them.
+    /// </summary>
+    private void ApplyMusicRoutingModes()
+    {
+        _router.SetMusicIgnoresPushToTalk(MusicIgnorePttCheck.IsChecked == true);
+        _router.SetMusicMonitorOnly(MusicMonitorOnlyCheck.IsChecked == true);
+        UpdateMusicRouteHint();
+    }
+
+    /// <summary>
+    /// The amber hint under the music routing toggles: states exactly where the
+    /// music goes while monitor-only preview is active, including the cases the
+    /// user could otherwise be surprised by (secondary output still carrying it,
+    /// or monitoring being off so nothing is audible locally).
+    /// </summary>
+    private void UpdateMusicRouteHint()
+    {
+        if (MusicMonitorOnlyCheck.IsChecked != true)
+        {
+            MusicRouteHintText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        string text = "Endast medhörning: musiken sänds inte till mic-kanalen.";
+        if (_secondaryOutput.IsRunning)
+        {
+            text += " Sekundär ut får den fortfarande.";
+        }
+
+        if (_isExternalMode)
+        {
+            text += " I app-läget hör du appen direkt.";
+        }
+        else if (MonitorEnabledCheck.IsChecked != true)
+        {
+            text += " Obs: medhörningen är avstängd — du hör ingen musik just nu.";
+        }
+
+        if (MusicRouteHintText.Text != text)
+        {
+            MusicRouteHintText.Text = text;
+        }
+
+        MusicRouteHintText.Visibility = Visibility.Visible;
     }
 
     private void UpdateOutputCableWarning()
@@ -952,6 +1025,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
         _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
         _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
+        _settings.MusicIgnoresPushToTalk = MusicIgnorePttCheck.IsChecked == true;
+        _settings.MusicMonitorOnly = MusicMonitorOnlyCheck.IsChecked == true;
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
         _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         _settings.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
@@ -1003,8 +1078,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
             RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
             RoutingStateIcon.Fill = StatusTheme.BrushFor(status);
 
+            // Muted with the music branch still open must say so: "tyst" would be
+            // a lie while music keeps playing into the cable past push-to-talk.
             ActiveSourceText.Text = status switch
             {
+                MicStatus.Muted when _router.MusicRouteOpen && HasActiveMusicSignal()
+                    => "Aktiv källa: Mic tyst (push-to-talk) — musiken sänds",
                 MicStatus.Muted => "Aktiv källa: Tyst (push-to-talk)",
                 MicStatus.Modded => "Aktiv källa: Moddad mic",
                 _ => "Aktiv källa: Vanlig mic"
@@ -1304,7 +1383,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void UpdateMusicUi()
     {
         UpdateMusicRoutingWarning();
-        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
+        _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
 
         if (_isExternalMode)
         {
@@ -2338,6 +2417,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // (it just sends play to the app after the countdown).
         SingleTrackBtn.IsEnabled = !external;
 
+        UpdateMusicRouteHint();
         UpdateQueueUi();
         UpdateCaptureUi();
     }
@@ -2947,6 +3027,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         SaveSettings();
+        UpdateMusicRouteHint();
         _ = ApplyMonitorConfigAsync();
     }
 
@@ -3371,7 +3452,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         // The overlay mirrors the tray state; SetState no-ops when unchanged.
         _overlayIndicator?.SetState(ToOverlayIndicatorState(newStatus));
-        _overlayIndicator?.SetMusicActive(IsMusicRoutedOut());
+        _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
 
         if (newStatus == _lastTrayStatus)
             return;
@@ -3411,14 +3492,25 @@ public partial class MainWindow : Window, IMicMixerControlHost
         };
     }
 
-    /// <summary>True while music actually reaches the virtual cable: routing runs, the push-to-talk gate is open and a source plays.</summary>
-    private bool IsMusicRoutedOut()
+    /// <summary>
+    /// State of the overlay's music circle: hidden without active music, otherwise
+    /// exactly where the music currently goes — sent to the cable, previewed in
+    /// monitor-only mode, or blocked by push-to-talk.
+    /// </summary>
+    private OverlayMusicState ComputeOverlayMusicState()
     {
-        if (!_router.IsRouting || !_router.OutputGateOpen)
+        if (!_router.IsRouting || !HasActiveMusicSignal())
         {
-            return false;
+            return OverlayMusicState.Hidden;
         }
 
+        return _router.MusicMonitorOnly
+            ? OverlayMusicState.MonitorOnly
+            : _router.MusicRouteOpen ? OverlayMusicState.Sending : OverlayMusicState.Blocked;
+    }
+
+    private bool HasActiveMusicSignal()
+    {
         if (!_isExternalMode)
         {
             return _music.IsPlaying;
@@ -3503,7 +3595,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void UpdateOutputMeteringEnabled()
     {
-        _router.OutputMeteringEnabled = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
+        bool metering = _overlayIndicator != null && OverlayVolumeMeterCheck.IsChecked == true;
+        _router.OutputMeteringEnabled = metering;
+        _router.MusicMeteringEnabled = metering;
     }
 
     private void ApplyOverlayIndicatorSetting(bool enabled)
@@ -3516,7 +3610,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
                 _overlayIndicator.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
                 _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeMicStatus()));
-                _overlayIndicator.SetMusicActive(IsMusicRoutedOut());
+                _overlayIndicator.SetMusicState(ComputeOverlayMusicState());
             }
             catch (Exception ex)
             {

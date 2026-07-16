@@ -12,7 +12,7 @@ internal sealed class MicMixerControlServer : IAsyncDisposable
     private static readonly string[] Capabilities =
     [
         "state", "library", "transport", "seek", "volume", "queue", "delayedStart", "singleTrack",
-        "sourceMode", "download", "folders"
+        "sourceMode", "download", "folders", "musicRouting"
     ];
 
     private readonly IMicMixerControlHost _host;

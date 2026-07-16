@@ -16,6 +16,12 @@ public sealed class AppSettings
 
     public bool PushToTalkMode { get; set; }
 
+    /// <summary>Music keeps flowing to the virtual cable while push-to-talk holds the mic silent.</summary>
+    public bool MusicIgnoresPushToTalk { get; set; }
+
+    /// <summary>Preview mode: music is never sent to the virtual cable — only local monitoring (and the secondary output) carry it.</summary>
+    public bool MusicMonitorOnly { get; set; }
+
     public string? MusicMonitorDeviceId { get; set; }
 
     /// <summary>Plays the finished pre-gate mix (mic + music) on an extra render device, e.g. for OBS capture.</summary>
