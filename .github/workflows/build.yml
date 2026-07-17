@@ -1,16 +1,13 @@
-name: Pull Request Build
+name: Build
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-build-${{ github.event.pull_request.number || github.ref }}
+  group: build-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -22,10 +19,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 

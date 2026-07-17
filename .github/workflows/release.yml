@@ -26,12 +26,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -39,9 +39,25 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          $version = "1.0.${{ github.run_number }}"
+          # Date-based version: <year>.<month>.<sequence within the month>,
+          # where the sequence is derived from existing release tags so no
+          # external counter is needed.
+          $now = [DateTime]::UtcNow
+          $tagPrefix = "v$($now.Year).$($now.Month)."
+          $maxSeq = 0
+
+          foreach ($tag in (git tag --list "$tagPrefix*"))
+          {
+            $seq = 0
+            if ([int]::TryParse($tag.Substring($tagPrefix.Length), [ref]$seq) -and $seq -gt $maxSeq)
+            {
+              $maxSeq = $seq
+            }
+          }
+
+          $version = "$($now.Year).$($now.Month).$($maxSeq + 1)"
           $tagName = "v$version"
-          $assemblyVersion = "1.0.${{ github.run_number }}.0"
+          $assemblyVersion = "$version.0"
           $releaseName = "MicMixer $version"
           $assetName = "MicMixer-win-x64.zip"
 
@@ -69,6 +85,7 @@ jobs:
             -c Release `
             -r $env:RUNTIME_ID `
             --self-contained true `
+            -p:ContinuousIntegrationBuild=true `
             -p:DebugType=None `
             -p:DebugSymbols=false `
             -p:PublishSingleFile=true `
@@ -94,7 +111,7 @@ jobs:
           Compress-Archive -Path "artifacts/publish/$env:RUNTIME_ID/*" -DestinationPath $zipPath
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: micmixer-${{ steps.meta.outputs.version }}-win-x64
           path: artifacts/${{ steps.meta.outputs.asset_name }}

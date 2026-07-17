@@ -228,7 +228,11 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
-                <TextBlock Text="MicMixer" FontSize="22" FontWeight="SemiBold" Foreground="#10233A"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="MicMixer" FontSize="22" FontWeight="SemiBold" Foreground="#10233A"/>
+                    <TextBlock x:Name="VersionText" FontSize="11" Foreground="#9CA3AF" Margin="8,0,0,4"
+                               VerticalAlignment="Bottom"/>
+                </StackPanel>
                 <TextBlock Foreground="#6B7280" FontSize="11.5" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                            Text="Virtuell mic-switch — håll hotkey för moddad mic"/>
             </StackPanel>
@@ -742,7 +746,7 @@
                         </StackPanel>
 
                         <!-- Level meters -->
-                        <Border Grid.Row="2" VerticalAlignment="Top" Padding="12,10" CornerRadius="8"
+                        <Border Grid.Row="2" VerticalAlignment="Top" Padding="12,7" CornerRadius="8"
                                 Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1">
                             <Grid>
                                 <Grid.ColumnDefinitions>

@@ -10,6 +10,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using System.IO;
 using MicMixer.Audio;
+using MicMixer.Diagnostics;
 using MicMixer.Input;
 using MicMixer.Music;
 using MicMixer.Overlay;
@@ -127,6 +128,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _singleTrackAnnounceTimer.Tick += OnSingleTrackAnnounceTick;
         InitializeComponent();
         App.StartupTrace("InitializeComponent done");
+        VersionText.Text = AppVersion.DisplayText;
         RestoreWindowBounds();
         _lastNonMinimizedWindowState = WindowState == WindowState.Maximized
             ? WindowState.Maximized
