@@ -49,9 +49,10 @@ public partial class MainWindow
             }
 
             StopObsOverlayServer();
+            ObsOverlayServer? server = null;
             try
             {
-                var server = new ObsOverlayServer(_obsOverlayPort);
+                server = new ObsOverlayServer(_obsOverlayPort);
                 server.ClientCountChanged += OnObsOverlayClientCountChanged;
                 server.Start();
                 _obsOverlayServer = server;
@@ -60,6 +61,20 @@ public partial class MainWindow
             }
             catch (Exception ex)
             {
+                if (server != null)
+                {
+                    server.ClientCountChanged -= OnObsOverlayClientCountChanged;
+
+                    try
+                    {
+                        server.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    }
+                    catch (Exception disposeException)
+                    {
+                        Log.Warning(disposeException, "Failed to clean up the OBS overlay server after startup failed.");
+                    }
+                }
+
                 // Typically the port is taken by another app; keep the app
                 // running and tell the user which port failed.
                 Log.Error(ex, "Failed to start the OBS overlay server on port {Port}.", _obsOverlayPort);
