@@ -1,0 +1,61 @@
+MicMixer third-party notices
+============================
+
+MicMixer is distributed under the MIT License. It incorporates or uses the
+following third-party software. Each component remains subject to its own
+license terms.
+
+Components included with MicMixer
+---------------------------------
+
+CliWrap 3.10.2
+Copyright (c) Alexey Golub and contributors
+License: MIT
+Source: https://github.com/Tyrrrz/CliWrap
+
+NAudio 2.3.0 (including its NAudio subpackages)
+Copyright (c) Mark Heath and contributors
+License: MIT
+Source: https://github.com/naudio/NAudio
+
+Serilog 4.4.0 and Serilog.Sinks.File 7.0.0
+Copyright (c) Serilog Contributors
+License: Apache License 2.0
+Sources: https://github.com/serilog/serilog
+         https://github.com/serilog/serilog-sinks-file
+
+Material Design Icons
+Copyright Google LLC, Pictogrammers, and/or the respective icon contributors
+License: Apache License 2.0
+Sources: https://github.com/google/material-design-icons
+         https://pictogrammers.com/library/mdi/
+
+Tools downloaded separately by MicMixer
+----------------------------------------
+
+The following executables are not included in the MicMixer application
+archive. MicMixer downloads them from their upstream release pages when the
+media-download feature is first used.
+
+yt-dlp
+License: The core project is released under The Unlicense. Standalone release
+binaries also contain third-party components under additional licenses; see
+the THIRD_PARTY_LICENSES.txt supplied by the yt-dlp project.
+Source and license information: https://github.com/yt-dlp/yt-dlp
+
+FFmpeg (yt-dlp FFmpeg-Builds GPL build)
+License: GNU General Public License, version 2 or later, together with the
+licenses of the libraries enabled in the selected build.
+Build source: https://github.com/yt-dlp/FFmpeg-Builds
+Upstream source and license information: https://ffmpeg.org/
+
+License texts
+-------------
+
+MIT: https://opensource.org/license/mit
+Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+GPL-2.0-or-later: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+The Unlicense: https://unlicense.org/
+
+The authoritative license and notice files supplied by each upstream project
+take precedence over this summary.

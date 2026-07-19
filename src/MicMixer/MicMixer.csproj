@@ -29,6 +29,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\LICENSE"
+          Link="LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" />
+    <None Include="..\..\THIRD-PARTY-NOTICES.txt"
+          Link="THIRD-PARTY-NOTICES.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.10.2" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Serilog" Version="4.4.0" />

@@ -306,6 +306,20 @@ build, creates a zip archive, and creates or updates the latest GitHub Release.
 Documentation- and workflow-only pushes do not trigger an application release. A
 release can also be started manually through `workflow_dispatch`.
 
+## Support and acknowledgements
+
+MicMixer is built and maintained by BenjiButten and released free of charge as
+open-source software. A special thank you goes to [Pixlexi](https://www.twitch.tv/pixlexi),
+who has contributed the use cases behind the app, hands-on testing, and valuable
+feedback throughout development.
+
+If you enjoy MicMixer and would like to give something back, please consider
+gifting a sub to [Pixlexi](https://www.twitch.tv/pixlexi) on Twitch.
+
+Third-party components and their license information are listed in
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). Both that file and the
+project license are included in published distributions.
+
 ## License
 
 See [LICENSE](LICENSE).

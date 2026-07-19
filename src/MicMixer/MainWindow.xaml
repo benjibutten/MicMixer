@@ -219,6 +219,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header row: title + action buttons -->
@@ -1514,5 +1515,27 @@
                 </StackPanel>
             </Border>
         </Expander>
+
+        <!-- Project and contributor footer -->
+        <Border Grid.Row="3" Margin="0,10,0,0" Padding="12,8"
+                Background="#E8EDF3" BorderBrush="#D7DEE7" BorderThickness="1" CornerRadius="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" FontSize="11.5" Foreground="#526173" TextWrapping="Wrap">
+                    <Run Text="Gillar du MicMixer? Överväg gärna att ge bort en sub till "/>
+                    <Hyperlink NavigateUri="https://www.twitch.tv/pixlexi"
+                               RequestNavigate="OnGuideNavigate"
+                               Foreground="#7C3AED" FontWeight="SemiBold">Pixlexi</Hyperlink><Run Text=" på Twitch."/>
+                </TextBlock>
+                <Button Grid.Column="1" Margin="14,0,0,0" Padding="10,4"
+                        Click="OnAboutClick" Content="Mer information"
+                        FontSize="11" FontWeight="SemiBold" Cursor="Hand"
+                        Background="#F8FAFC" Foreground="#334155"
+                        BorderBrush="#C9D2DD" BorderThickness="1"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

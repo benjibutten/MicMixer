@@ -1064,6 +1064,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
         e.Handled = true;
     }
 
+    private void OnAboutClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AboutDialog(
+            "MicMixer",
+            "https://github.com/benjibutten/MicMixer")
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+    }
+
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         PersistWindowBounds();
