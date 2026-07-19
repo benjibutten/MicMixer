@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy - MicMixer</title>
+<meta name="description" content="Privacy policy for the MicMixer Windows application.">
+<style>
+  :root { --text:#23292f; --muted:#5b6570; --line:#dde2e8; --soft:#f4f6f8; --accent:#0e7466; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--text); background:#fff; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:1rem; line-height:1.65; }
+  .wrap { max-width:820px; margin:0 auto; padding:0 22px; }
+  header { border-bottom:1px solid var(--line); }
+  header .wrap { min-height:58px; display:flex; align-items:center; gap:20px; }
+  header a { color:var(--muted); text-decoration:none; }
+  header a:first-child { color:var(--text); font-weight:650; margin-right:auto; }
+  main { padding:38px 22px 56px; }
+  h1 { font-size:1.9rem; line-height:1.25; margin:0 0 8px; }
+  h2 { font-size:1.25rem; margin:30px 0 8px; }
+  p, ul { margin:0 0 14px; }
+  ul { padding-left:24px; }
+  code { background:var(--soft); border:1px solid var(--line); border-radius:5px; padding:1px 5px; }
+  a { color:var(--accent); }
+  .updated { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <nav class="wrap" aria-label="Policy navigation">
+    <a href="./">MicMixer</a>
+    <a href="code-signing-policy.html">Code signing policy</a>
+    <a href="https://github.com/benjibutten/MicMixer">GitHub</a>
+  </nav>
+</header>
+<main class="wrap">
+  <h1>Privacy policy</h1>
+  <p class="updated">Effective and last updated: July 19, 2026</p>
+
+  <h2>Overview</h2>
+  <p>
+    MicMixer is a free and open-source Windows desktop application maintained by
+    <a href="https://github.com/benjibutten">BenjiButten</a>. It does not require an
+    account, contain advertising or analytics, or send telemetry or crash reports to the
+    maintainer. Audio processing and application settings remain on the user's computer.
+  </p>
+
+  <h2>Information stored locally</h2>
+  <p>MicMixer may store the following information under <code>%LOCALAPPDATA%\MicMixer</code>:</p>
+  <ul>
+    <li>audio-device choices, hotkeys, volumes, routing options, folders, and window state;</li>
+    <li>the user's local music library and any media the user chooses to download;</li>
+    <li>downloaded copies of yt-dlp and FFmpeg and their version markers;</li>
+    <li>the time of the most recent update check; and</li>
+    <li>diagnostic logs, which may contain device names, local file paths, operational errors, and media URLs entered by the user.</li>
+  </ul>
+  <p>
+    Logs rotate at 5 MB, are separated by day, and are retained for up to 14 files. MicMixer
+    does not automatically upload these files. A user may choose to provide a log when asking
+    for support. Local data can be removed by closing MicMixer and deleting
+    <code>%LOCALAPPDATA%\MicMixer</code>; doing so removes settings and may also remove the
+    default music library, so wanted music should be backed up first.
+  </p>
+
+  <h2>Audio and local integrations</h2>
+  <p>
+    Microphone, music, and application audio are processed locally and sent only to the audio
+    outputs selected by the user. MicMixer does not record or upload audio. The optional stream
+    overlay binds only to <code>127.0.0.1</code> and exposes status and level information to local
+    clients. The StreamDecky control integration uses a same-user local named pipe. Neither local
+    integration is an Internet service.
+  </p>
+
+  <h2>Network communication</h2>
+  <ul>
+    <li>
+      Release builds contact the GitHub API when the main window is open to check for updates,
+      at most once every 12 hours. The request identifies itself as the MicMixer updater. GitHub
+      receives normal connection information such as the user's IP address and request metadata.
+    </li>
+    <li>
+      If the user accepts an offered update, MicMixer downloads the release archive and checksum
+      from GitHub, verifies the SHA-256 checksum, and installs the update.
+    </li>
+    <li>
+      When the user first requests a media download, MicMixer downloads pinned copies of yt-dlp
+      and FFmpeg from GitHub and verifies their SHA-256 hashes.
+    </li>
+    <li>
+      When the user submits a media URL, yt-dlp communicates with the service identified by that
+      URL, such as YouTube. That service receives the information normally associated with the
+      request, including the user's IP address and the requested URL.
+    </li>
+  </ul>
+  <p>
+    These services process data under their own policies. See the
+    <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>
+    and, for YouTube, the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.
+    Other media sources supported by yt-dlp have their own terms and privacy policies.
+  </p>
+
+  <h2>Data received by the maintainer</h2>
+  <p>
+    The maintainer receives no personal data directly from normal application use. Information
+    voluntarily submitted through GitHub issues, support conversations, or attached log files is
+    handled through the service where the user submits it and is used to answer the request.
+  </p>
+
+  <h2>Changes and contact</h2>
+  <p>
+    Material changes to this policy will be published in the source repository and on this page.
+    Questions or privacy requests can be submitted through
+    <a href="https://github.com/benjibutten/MicMixer/issues">MicMixer's GitHub issue tracker</a>.
+  </p>
+</main>
+</body>
+</html>

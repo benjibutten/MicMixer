@@ -70,6 +70,19 @@ verify, install, and restart itself. You can also run a manual check from
 prompt, and Windows may show a security warning when a new build restarts.
 Development builds do not perform update checks.
 
+## Code signing and privacy
+
+Free code signing is provided by [SignPath.io](https://signpath.io/), certificate
+by [SignPath Foundation](https://signpath.org/), for eligible Windows release
+builds after enrollment and signing integration are complete. Until then, a
+release may be unsigned. The release notes state the actual signing status for
+each build.
+
+See the [code signing policy](https://benjibutten.github.io/MicMixer/code-signing-policy.html)
+for the signing scope, project roles, and build provenance. MicMixer's automatic
+update checks, user-initiated media downloads, local audio processing, settings,
+and logs are covered by the [privacy policy](https://benjibutten.github.io/MicMixer/privacy.html).
+
 ## Basic setup
 
 1. Install [VB-CABLE](https://vb-audio.com/Cable/).

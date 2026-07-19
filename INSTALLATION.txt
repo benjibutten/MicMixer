@@ -52,6 +52,18 @@ Automatic updates are downloaded from the official GitHub release and checked
 against its SHA-256 file before installation. A valid checksum detects a damaged
 or mismatched download; it is not a replacement for Windows code signing.
 
+Code signing and privacy
+------------------------
+Free code signing is provided by SignPath.io, certificate by SignPath Foundation,
+for eligible Windows release builds after enrollment and signing integration are
+complete. The GitHub release notes state the actual signing status of each build.
+
+Code signing policy:
+https://benjibutten.github.io/MicMixer/code-signing-policy.html
+
+Privacy policy, including automatic update checks and media downloads:
+https://benjibutten.github.io/MicMixer/privacy.html
+
 Set up VB-CABLE
 ---------------
 Skip this section if you already have a suitable virtual audio driver.
