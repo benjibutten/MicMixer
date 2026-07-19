@@ -118,11 +118,11 @@
     Everything can be switched live, mid-session.
   </p>
   <div class="actions">
-    <a class="download" href="https://github.com/benjibutten/MicMixer/releases/latest/download/MicMixer-win-x64.zip">Download for Windows</a>
+    <a class="download" data-release-download href="https://github.com/benjibutten/MicMixer/releases/latest">Download for Windows</a>
     <a class="alt" href="https://github.com/benjibutten/MicMixer">Source on GitHub</a>
   </div>
   <p class="fineprint">
-    Downloads <code>MicMixer-win-x64.zip</code> from the
+    Download the versioned <code>MicMixer-&lt;version&gt;-win-x64.zip</code> from the
     <a href="https://github.com/benjibutten/MicMixer/releases/latest">latest release</a>.
     Windows 10/11, x64. Self-contained, no .NET install needed. Apache-2.0.
   </p>
@@ -216,7 +216,7 @@
   <p>You need a virtual audio cable driver. The free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> works well.</p>
   <ol class="setup">
     <li>Install VB-CABLE and reboot if the installer asks.</li>
-    <li>Download <a href="https://github.com/benjibutten/MicMixer/releases/latest/download/MicMixer-win-x64.zip"><code>MicMixer-win-x64.zip</code></a>, extract it, run <code>MicMixer.exe</code>.</li>
+    <li>Download the <a data-release-download href="https://github.com/benjibutten/MicMixer/releases/latest">versioned <code>MicMixer-&lt;version&gt;-win-x64.zip</code></a>, extract it, and run <code>MicMixer.exe</code>.</li>
     <li>Pick your mic (and optionally a modded mic), and select <em>CABLE Input</em> as the virtual cable output.</li>
     <li>In the game or chat app, select <em>CABLE Output</em> as the microphone. Click <em>Enable</em> in MicMixer.</li>
   </ol>
@@ -241,6 +241,39 @@
     </p>
   </div>
 </footer>
+
+<script>
+  (() => {
+    const links = document.querySelectorAll('[data-release-download]');
+    const fallbackUrl = 'https://github.com/benjibutten/MicMixer/releases/latest';
+    const downloadUrl = fetch('https://api.github.com/repos/benjibutten/MicMixer/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json' }
+    })
+      .then(response => response.ok ? response.json() : Promise.reject())
+      .then(release => {
+        const assets = release.assets || [];
+        const zip = assets.find(asset =>
+          /^MicMixer-\d+\.\d+\.\d+-win-x64\.zip$/i.test(asset.name))
+          || assets.find(asset => /^MicMixer-win-x64\.zip$/i.test(asset.name));
+        return zip?.browser_download_url;
+      })
+      .catch(() => null);
+
+    downloadUrl.then(url => {
+      if (!url) return;
+      links.forEach(link => {
+        link.href = url;
+        link.dataset.downloadReady = 'true';
+      });
+    });
+
+    links.forEach(link => link.addEventListener('click', async event => {
+      if (link.dataset.downloadReady === 'true') return;
+      event.preventDefault();
+      window.location.assign(await downloadUrl || fallbackUrl);
+    }));
+  })();
+</script>
 
 </body>
 </html>

@@ -32,11 +32,11 @@ may therefore describe a newly published or unsigned build as an unrecognized
 app, even when it was downloaded from the official project.
 
 - Download releases only from https://github.com/benjibutten/MicMixer/releases
-- Each release includes MicMixer-win-x64.zip.sha256. To verify the download,
+- Each release includes a matching MicMixer-<version>-win-x64.zip.sha256 file. To verify the download,
   run this command in PowerShell and compare the result with the first value in
   that file:
 
-    Get-FileHash .\MicMixer-win-x64.zip -Algorithm SHA256
+    Get-FileHash .\MicMixer-*-win-x64.zip -Algorithm SHA256
 
 - If SmartScreen shows "Windows protected your PC", first verify the source and
   hash. Then choose "More info" followed by "Run anyway" only if you trust the

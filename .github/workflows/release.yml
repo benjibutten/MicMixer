@@ -61,7 +61,7 @@ jobs:
           $tagName = "v$version"
           $assemblyVersion = "$version.0"
           $releaseName = "MicMixer $version"
-          $assetName = "MicMixer-win-x64.zip"
+          $assetName = "MicMixer-$version-win-x64.zip"
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag_name=$tagName" >> $env:GITHUB_OUTPUT

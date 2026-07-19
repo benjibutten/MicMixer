@@ -51,7 +51,7 @@ Release archives are self-contained, so users normally do not need to install
 
 ## Download
 
-Download the latest `MicMixer-win-x64.zip` archive from
+Download the versioned `MicMixer-<version>-win-x64.zip` archive from
 [GitHub Releases](https://github.com/benjibutten/MicMixer/releases/latest), extract
 it, and run `MicMixer.exe`.
 

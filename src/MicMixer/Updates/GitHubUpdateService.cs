@@ -49,8 +49,8 @@ internal sealed class GitHubUpdateService
         if (!TryParseVersion(tagName, out Version? releaseVersion) || releaseVersion <= currentVersion)
             return null;
 
-        const string zipName = "MicMixer-win-x64.zip";
-        const string checksumName = "MicMixer-win-x64.zip.sha256";
+        string zipName = GetReleaseZipName(releaseVersion!);
+        string checksumName = $"{zipName}.sha256";
         Uri? zipUri = null;
         Uri? checksumUri = null;
 
@@ -144,6 +144,9 @@ internal sealed class GitHubUpdateService
 
     internal static bool TryParseVersion(string tagName, out Version? version) =>
         Version.TryParse(tagName.Trim().TrimStart('v', 'V'), out version);
+
+    internal static string GetReleaseZipName(Version version) =>
+        $"MicMixer-{version}-win-x64.zip";
 
     internal static string ParseChecksum(string value)
     {
