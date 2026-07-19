@@ -4,8 +4,11 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using MicMixer.Audio;
 using MicMixer.Diagnostics;
+using MicMixer.Music;
 using MicMixer.Remote;
+using MicMixer.Settings;
 using Serilog;
 
 namespace MicMixer;
@@ -35,6 +38,8 @@ public partial class App : System.Windows.Application
     private EventWaitHandle? _showEvent;
     private Thread? _listenerThread;
     private MicMixerControlServer? _controlServer;
+    private AudioRouter? _router;
+    private MusicPlaybackEngine? _music;
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
@@ -134,7 +139,12 @@ public partial class App : System.Windows.Application
         TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedTaskException;
 
         StartupTrace("Pre-MainWindow");
-        var mainWindow = new MainWindow();
+        var session = new MusicSession();
+        _router = new AudioRouter();
+        _music = new MusicPlaybackEngine();
+        var settingsStore = new SettingsStore();
+        var playlist = new PlaylistManager();
+        var mainWindow = new MainWindow(session, _router, _music, settingsStore, playlist);
         StartupTrace("MainWindow created");
         _controlServer = new MicMixerControlServer(mainWindow);
         _controlServer.Start();
@@ -165,6 +175,11 @@ public partial class App : System.Windows.Application
             _controlServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
             _controlServer = null;
         }
+
+        _router?.Dispose();
+        _router = null;
+        _music?.Dispose();
+        _music = null;
 
         _showEvent?.Set();   // unblock listener thread so it exits
         _showEvent?.Dispose();

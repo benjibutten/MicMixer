@@ -35,14 +35,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _releaseDelayTimer;
     private readonly System.Windows.Forms.NotifyIcon _trayIcon;
     private readonly MusicPlaybackEngine _music;
+    private readonly MusicSession _session;
     private readonly PlaylistManager _playlist;
     private readonly ToolBootstrapper _toolBootstrapper;
     private readonly YouTubeDownloader _youTubeDownloader;
     private readonly DispatcherTimer _musicTimer;
     private readonly DispatcherTimer _delayedStartTimer;
     private readonly DispatcherTimer _settingsSaveTimer;
-    private int _delayedStartRemainingSeconds;
-    private readonly List<string> _musicQueue = new();
     private List<TrackItem> _allTracks = new();
     private readonly Dictionary<string, TrackItem> _trackByPath = new(StringComparer.OrdinalIgnoreCase);
     private TrackItem? _playingTrackItem;
@@ -55,7 +54,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private System.Windows.Point _queueDragStart;
     private int _queueDragIndex = -1;
     private DateTime _queuePopupClosedAt = DateTime.MinValue;
-    private string? _lastPlayedTrackPath;
     private string? _acknowledgedNonCableOutputId;
     private string? _acknowledgedSameMicId;
     private bool _musicWasAutoPaused;
@@ -85,21 +83,28 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private MicStatus _lastTrayStatus = MicStatus.Stopped;
     private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
 
-    public MainWindow()
+    public MainWindow(
+        MusicSession session,
+        AudioRouter router,
+        MusicPlaybackEngine music,
+        SettingsStore settingsStore,
+        PlaylistManager playlist)
     {
-        _router = new AudioRouter();
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+        _router = router ?? throw new ArgumentNullException(nameof(router));
+        _music = music ?? throw new ArgumentNullException(nameof(music));
+        _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+        _playlist = playlist ?? throw new ArgumentNullException(nameof(playlist));
+
         _secondaryOutput = new SecondaryOutputEngine();
         _secondaryOutput.Error += OnSecondaryOutputError;
         _router.SecondaryOutput = _secondaryOutput;
         App.StartupTrace("AudioRouter created");
         _hotkeyListener = new GlobalHotkeyListener();
         App.StartupTrace("GlobalHotkeyListener created");
-        _settingsStore = new SettingsStore();
         _startupRegistrySyncService = new StartupRegistrySyncService();
         App.StartupTrace("SettingsStore created");
 
-        _music = new MusicPlaybackEngine();
-        _playlist = new PlaylistManager();
         _toolBootstrapper = new ToolBootstrapper();
         _youTubeDownloader = new YouTubeDownloader(_toolBootstrapper);
         _router.MusicSourceFactory = format => _music.CreateMixTap(format);
@@ -111,6 +116,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings = _settingsStore.Load();
         App.StartupTrace("Settings loaded");
         _releaseDelayMilliseconds = ClampReleaseDelay(_settings.ReleaseDelayMilliseconds);
+        _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
+        _settings.SecondaryOutputVolume = Math.Clamp(_settings.SecondaryOutputVolume, 0f, 1f);
+        _settings.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
+        _settings.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
+        _settings.MeterSensitivityDb = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
+        _settings.DelayedStartSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
+        _settings.ObsOverlayPort = Overlay.ObsOverlayServer.ClampPort(_settings.ObsOverlayPort);
         _releaseDelayTimer = new DispatcherTimer();
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         _delayedStartTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -157,14 +169,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
         StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
         SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
         SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
-        SecondaryVolumeSlider.Value = Math.Clamp(_settings.SecondaryOutputVolume, 0f, 1f);
+        SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
         _isUpdatingUi = false;
         UpdateSecondaryVolumePercentText();
         ApplySecondaryOutputConfig();
         SyncStartWithWindows();
 
-        _music.MusicVolume = Math.Clamp(_settings.MusicVolume, 0f, 1f);
-        _music.MonitorVolume = Math.Clamp(_settings.MonitorVolume, 0f, 1f);
+        _music.MusicVolume = _settings.MusicVolume;
+        _music.MonitorVolume = _settings.MonitorVolume;
         _isUpdatingMusicUi = true;
         MusicVolumeSlider.Value = _music.MusicVolume;
         MonitorVolumeSlider.Value = _music.MonitorVolume;
@@ -175,9 +187,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         MusicMonitorOnlyCheck.IsChecked = _settings.MusicMonitorOnly;
         OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
-        MeterSensitivitySlider.Value = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
+        MeterSensitivitySlider.Value = _settings.MeterSensitivityDb;
         ObsOverlayCheck.IsChecked = _settings.ObsOverlayEnabled;
-        _obsOverlayPort = Overlay.ObsOverlayServer.ClampPort(_settings.ObsOverlayPort);
+        _obsOverlayPort = _settings.ObsOverlayPort;
         ObsOverlayPortBox.Text = _obsOverlayPort.ToString(CultureInfo.InvariantCulture);
         _isUpdatingMusicUi = false;
         ApplyMusicRoutingModes();
@@ -379,7 +391,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
             UpdateOutputCableWarning();
             ApplySecondaryOutputConfig();
             UpdateSecondaryOutputWarning();
-            SaveSettings();
             await ApplyMonitorConfigAsync();
             App.StartupTrace("Devices refreshed");
         }
@@ -482,7 +493,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        if (SecondaryOutputEnabledCheck.IsChecked == true)
+        if (_settings.SecondaryOutputEnabled)
         {
             if (SecondaryOutputCombo.SelectedItem is not AudioDeviceOption secondaryDevice)
             {
@@ -539,6 +550,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
             SecondaryOutputEnabledCheck.IsEnabled = false;
             SecondaryOutputCombo.IsEnabled = false;
             UpdateSecondaryOutputStatus();
+            _settings.NormalInputDeviceId = dryInput.Id;
+            _settings.SkipModdedMic = skipModded;
+            if (!skipModded)
+            {
+                _settings.ModdedInputDeviceId = moddedInput!.Id;
+            }
+            _settings.OutputDeviceId = output.Id;
             SaveSettings();
             UpdateStatusText();
             ResumeMusicIfAutoPaused();
@@ -619,7 +637,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _overlayIndicator?.SetOutputLevel(outputPeak, outputRms);
             _overlayIndicator?.SetMusicLevel(musicPeak, musicRms);
 
-            if (obsWantsLevels && OverlayVolumeMeterCheck.IsChecked == true)
+            if (obsWantsLevels && _settings.OverlayVolumeMeterEnabled)
             {
                 _obsOverlayServer!.PublishLevels(outputPeak, outputRms, musicPeak, musicRms);
             }
@@ -659,6 +677,26 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        if (ReferenceEquals(sender, DryInputCombo)
+            && DryInputCombo.SelectedItem is AudioDeviceOption dryInput)
+        {
+            _settings.NormalInputDeviceId = dryInput.Id;
+        }
+        else if (ReferenceEquals(sender, ModdedInputCombo)
+            && ModdedInputCombo.SelectedItem is AudioDeviceOption moddedInput)
+        {
+            _settings.SkipModdedMic = moddedInput.Id == NoModdedMicOption.Id;
+            if (!_settings.SkipModdedMic)
+            {
+                _settings.ModdedInputDeviceId = moddedInput.Id;
+            }
+        }
+        else if (ReferenceEquals(sender, OutputDeviceCombo)
+            && OutputDeviceCombo.SelectedItem is AudioDeviceOption output)
+        {
+            _settings.OutputDeviceId = output.Id;
+        }
+
         ApplyModdedMicUiState();
         UpdateOutputCableWarning();
         UpdateSecondaryOutputWarning();
@@ -674,10 +712,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void ApplySecondaryOutputConfig()
     {
-        _secondaryOutput.Enabled = SecondaryOutputEnabledCheck.IsChecked == true;
-        _secondaryOutput.DeviceId = (SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        _secondaryOutput.IgnorePushToTalk = SecondaryIgnorePttCheck.IsChecked == true;
-        _secondaryOutput.Volume = (float)SecondaryVolumeSlider.Value;
+        _secondaryOutput.Enabled = _settings.SecondaryOutputEnabled;
+        _secondaryOutput.DeviceId = _settings.SecondaryOutputDeviceId;
+        _secondaryOutput.IgnorePushToTalk = _settings.SecondaryOutputIgnorePushToTalk;
+        _secondaryOutput.Volume = _settings.SecondaryOutputVolume;
     }
 
     private void OnSecondaryOutputConfigChanged(object sender, RoutedEventArgs e)
@@ -689,6 +727,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _settings.SecondaryOutputEnabled = SecondaryOutputEnabledCheck.IsChecked == true;
+        _settings.SecondaryOutputIgnorePushToTalk = SecondaryIgnorePttCheck.IsChecked == true;
         ApplySecondaryOutputConfig();
         UpdateSecondaryOutputWarning();
         SaveSettings();
@@ -701,6 +741,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        if (SecondaryOutputCombo.SelectedItem is AudioDeviceOption device)
+        {
+            _settings.SecondaryOutputDeviceId = device.Id;
+        }
         ApplySecondaryOutputConfig();
         UpdateSecondaryOutputWarning();
         SaveSettings();
@@ -722,6 +766,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         _secondaryOutput.Volume = (float)e.NewValue;
+        _settings.SecondaryOutputVolume = (float)e.NewValue;
         ScheduleSettingsSave();
     }
 
@@ -732,7 +777,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void UpdateSecondaryOutputWarning()
     {
-        if (SecondaryOutputEnabledCheck.IsChecked != true)
+        if (!_settings.SecondaryOutputEnabled)
         {
             SecondaryOutputWarningText.Visibility = Visibility.Collapsed;
             return;
@@ -804,7 +849,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// <summary>List entry in the modded-mic combo that disables the modded route entirely.</summary>
     private static readonly AudioDeviceOption NoModdedMicOption = new("__no_modded_mic__", "Ingen moddad mic");
 
-    private bool IsModdedMicSkipped => (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == NoModdedMicOption.Id;
+    private bool IsModdedMicSkipped => _settings.SkipModdedMic;
 
     private void ApplyModdedMicUiState()
     {
@@ -821,7 +866,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         Grid.SetColumnSpan(DryMeterPanel, skip ? 3 : 1);
     }
 
-    private bool IsPushToTalk => PushToTalkCheck.IsChecked == true;
+    private bool IsPushToTalk => _settings.PushToTalkMode;
 
     private void OnPushToTalkChanged(object sender, RoutedEventArgs e)
     {
@@ -830,6 +875,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
         ApplyModdedMicUiState();
         CancelPendingReleaseDelay();
 
@@ -863,6 +909,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _settings.MusicIgnoresPushToTalk = MusicIgnorePttCheck.IsChecked == true;
+        _settings.MusicMonitorOnly = MusicMonitorOnlyCheck.IsChecked == true;
         ApplyMusicRoutingModes();
         SaveSettings();
         UpdateStatusText();
@@ -875,8 +923,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void ApplyMusicRoutingModes()
     {
-        _router.SetMusicIgnoresPushToTalk(MusicIgnorePttCheck.IsChecked == true);
-        _router.SetMusicMonitorOnly(MusicMonitorOnlyCheck.IsChecked == true);
+        _router.SetMusicIgnoresPushToTalk(_settings.MusicIgnoresPushToTalk);
+        _router.SetMusicMonitorOnly(_settings.MusicMonitorOnly);
         UpdateMusicRouteHint();
     }
 
@@ -888,7 +936,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void UpdateMusicRouteHint()
     {
-        if (MusicMonitorOnlyCheck.IsChecked != true)
+        if (!_settings.MusicMonitorOnly)
         {
             MusicRouteHintText.Visibility = Visibility.Collapsed;
             return;
@@ -904,7 +952,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             text += " I app-läget hör du appen direkt.";
         }
-        else if (MonitorEnabledCheck.IsChecked != true)
+        else if (!_settings.MonitorEnabled)
         {
             text += " Obs: medhörningen är avstängd — du hör ingen musik just nu.";
         }
@@ -1026,72 +1074,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         StopObsOverlayServer();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();
-        _router.Dispose();
         _secondaryOutput.Dispose();
         _appCapture?.Dispose();
-        _music.Dispose();
         _hotkeyListener.Dispose();
     }
 
     private void SaveSettings()
     {
-        _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
-        _settings.NormalInputDeviceId = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        _settings.SkipModdedMic = IsModdedMicSkipped;
-
-        // Keep the last real device id so a stored selection survives toggling
-        // "Ingen moddad mic" on and off between sessions.
-        if (!IsModdedMicSkipped)
-        {
-            _settings.ModdedInputDeviceId = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        }
-        _settings.OutputDeviceId = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
-        _settings.SecondaryOutputEnabled = SecondaryOutputEnabledCheck.IsChecked == true;
-
-        // Keep the stored id while the device is unplugged (the combo is then
-        // empty), so the same device is found again once it is reconnected.
-        if (SecondaryOutputCombo.SelectedItem is AudioDeviceOption secondaryDevice)
-        {
-            _settings.SecondaryOutputDeviceId = secondaryDevice.Id;
-        }
-        _settings.SecondaryOutputIgnorePushToTalk = SecondaryIgnorePttCheck.IsChecked == true;
-        _settings.SecondaryOutputVolume = (float)SecondaryVolumeSlider.Value;
-        _settings.HotkeyId = _hotkeyBinding.SerializedValue;
-        _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
-        _settings.MusicMonitorDeviceId = (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
-
-        // The checkbox is force-unchecked in external mode; keep the stored
-        // preference so it comes back when the user returns to library mode.
-        if (!_isExternalMode)
-        {
-            _settings.MonitorEnabled = MonitorEnabledCheck.IsChecked == true;
-        }
-        _settings.MusicVolume = (float)MusicVolumeSlider.Value;
-        _settings.MonitorVolume = (float)MonitorVolumeSlider.Value;
-        _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
-        _settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
-        _settings.MusicIgnoresPushToTalk = MusicIgnorePttCheck.IsChecked == true;
-        _settings.MusicMonitorOnly = MusicMonitorOnlyCheck.IsChecked == true;
-        _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
-        _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
-        _settings.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
-        _settings.ObsOverlayEnabled = ObsOverlayCheck.IsChecked == true;
-        _settings.ObsOverlayPort = _obsOverlayPort;
-        // Only the deliberate double-click mode survives a restart; the one-shot
-        // state is transient by design.
-        _settings.SingleTrackMode = _singleTrackMode == SingleTrackPlayMode.Always;
-        _settings.MusicFolderPaths = _playlist.Folders.ToList();
-        // Keep the legacy field pointing at the first custom folder so an older
-        // app version reading these settings degrades gracefully.
-        _settings.MusicFolderPath = _playlist.Folders.FirstOrDefault(folder => !PlaylistManager.IsDefaultFolder(folder));
-        // Persist the user's own choice, not a temporary filter-chip override.
-        _settings.DownloadFolderPath = _userDownloadFolderPath;
-        _settings.ExternalCaptureMode = _isExternalMode;
-        if ((ExternalAppCombo.SelectedItem as AudioAppOption)?.ProcessName is string externalAppName)
-        {
-            _settings.ExternalAppName = externalAppName;
-        }
-
         try
         {
             _settingsStore.Save(_settings);
@@ -1242,6 +1231,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _isCapturingHotkey = false;
         CancelPendingReleaseDelay();
         _hotkeyListener.UpdateBinding(binding);
+        _settings.HotkeyId = binding.SerializedValue;
         ApplyEffectiveRoutingStates();
         UpdateHotkeyUi();
         SaveSettings();
@@ -1329,6 +1319,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         _releaseDelayMilliseconds = ClampReleaseDelay(releaseDelayMilliseconds);
+        _settings.ReleaseDelayMilliseconds = _releaseDelayMilliseconds;
         ReleaseDelayTextBox.Text = _releaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
 
         if (_isReleaseDelayPending)
@@ -1444,7 +1435,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        if (!_music.HasMonitorOutput && !_router.IsRouting)
+        if (!EvaluatePlaybackGate().CanStart)
         {
             return;
         }
@@ -1545,6 +1536,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                     _folderInfoByPath.GetValueOrDefault(file.Folder),
                     showFolderBadges))
                 .ToList();
+            _session.SetLibrary(_allTracks.Select(track => track.Path));
             _libraryVersion = RemoteId.VersionForPaths(_allTracks.Select(track => track.Path));
 
             _playingTrackItem = null;
@@ -1640,9 +1632,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         CancelDelayedStart(null);
 
-        if (!_music.HasMonitorOutput && !_router.IsRouting)
+        PlaybackGate gate = EvaluatePlaybackGate(hasExplicitTrack: true);
+        if (!gate.CanStart)
         {
-            MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
+            MusicStatusText.Text = PlaybackBlockedStatus(gate.BlockedReason);
             return false;
         }
 
@@ -1657,7 +1650,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return false;
         }
 
-        _lastPlayedTrackPath = path;
+        _session.LastPlayedTrackPath = path;
         _musicWasAutoPaused = false;
         MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(path)}";
 
@@ -1673,38 +1666,27 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void PlayNextTrack()
     {
-        while (_musicQueue.Count > 0)
-        {
-            string queued = _musicQueue[0];
-            _musicQueue.RemoveAt(0);
-            UpdateQueueUi();
-
-            if (File.Exists(queued))
-            {
-                PlayTrack(queued);
-                return;
-            }
-        }
-
+        string? queued = _session.ConsumeNextQueuedTrack();
         UpdateQueueUi();
+
+        if (queued != null)
+        {
+            PlayTrack(queued);
+            return;
+        }
 
         // Advance within the full playlist — the filter box is a search tool,
         // not a play scope.
-        if (_allTracks.Count == 0)
+        if (_session.LibraryCount == 0)
         {
             _music.Stop();
             UpdateMusicUi();
             return;
         }
 
-        string? current = _music.CurrentTrackPath ?? _lastPlayedTrackPath;
-        int index = current == null
-            ? -1
-            : _allTracks.FindIndex(track => string.Equals(track.Path, current, StringComparison.OrdinalIgnoreCase));
-
-        if (index >= 0 && index + 1 < _allTracks.Count)
+        if (_session.FindNextLibraryTrack(_music.CurrentTrackPath) is string next)
         {
-            PlayTrack(_allTracks[index + 1].Path);
+            PlayTrack(next);
         }
         else
         {
@@ -1716,9 +1698,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void UpdateQueueUi()
     {
-        if (_musicQueue.Count > 0 && !_isExternalMode)
+        if (_session.Queue.Count > 0 && !_isExternalMode)
         {
-            QueueChipBtn.Content = $"Kö: {_musicQueue.Count}";
+            QueueChipBtn.Content = $"Kö: {_session.Queue.Count}";
             QueueChipBtn.Visibility = Visibility.Visible;
             ClearQueueBtn.Visibility = Visibility.Visible;
         }
@@ -1729,28 +1711,19 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ClearQueueBtn.Visibility = Visibility.Collapsed;
         }
 
-        QueueListBox.ItemsSource = _musicQueue
+        QueueListBox.ItemsSource = _session.Queue
             .Select((path, index) => new QueueEntry(index, path))
             .ToList();
 
         foreach (var track in _allTracks)
         {
-            var positions = new List<int>();
-            for (int i = 0; i < _musicQueue.Count; i++)
-            {
-                if (string.Equals(_musicQueue[i], track.Path, StringComparison.OrdinalIgnoreCase))
-                {
-                    positions.Add(i + 1);
-                }
-            }
-
-            track.SetQueuePositions(positions);
+            track.SetQueuePositions(_session.GetQueuePositions(track.Path));
         }
     }
 
     private void OnClearQueueClick(object sender, RoutedEventArgs e)
     {
-        _musicQueue.Clear();
+        _session.ClearQueue();
         UpdateQueueUi();
         MusicStatusText.Text = "Kön rensad.";
     }
@@ -1847,7 +1820,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ClearQueueDropIndicators();
 
         if (e.Data.GetData(typeof(int)) is not int fromIndex ||
-            fromIndex < 0 || fromIndex >= _musicQueue.Count)
+            fromIndex < 0 || fromIndex >= _session.Queue.Count)
         {
             return;
         }
@@ -1858,15 +1831,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
             insertIndex--;
         }
 
-        insertIndex = Math.Clamp(insertIndex, 0, _musicQueue.Count - 1);
+        insertIndex = Math.Clamp(insertIndex, 0, _session.Queue.Count - 1);
         if (insertIndex == fromIndex)
         {
             return;
         }
 
-        string moved = _musicQueue[fromIndex];
-        _musicQueue.RemoveAt(fromIndex);
-        _musicQueue.Insert(insertIndex, moved);
+        _session.MoveQueueItem(fromIndex, insertIndex);
         UpdateQueueUi();
         e.Handled = true;
     }
@@ -1883,7 +1854,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _musicQueue.RemoveAt(entry.Index);
+        _session.RemoveQueueItemAt(entry.Index);
         UpdateQueueUi();
 
         if (File.Exists(entry.Path))
@@ -1903,7 +1874,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _musicQueue.RemoveAt(entry.Index);
+        _session.RemoveQueueItemAt(entry.Index);
         UpdateQueueUi();
     }
 
@@ -1911,8 +1882,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private bool IsQueueEntryCurrent(QueueEntry entry)
     {
         return entry.Index >= 0
-            && entry.Index < _musicQueue.Count
-            && string.Equals(_musicQueue[entry.Index], entry.Path, StringComparison.OrdinalIgnoreCase);
+            && entry.Index < _session.Queue.Count
+            && string.Equals(_session.Queue[entry.Index], entry.Path, StringComparison.OrdinalIgnoreCase);
     }
 
     private int ComputeQueueInsertIndex(System.Windows.DragEventArgs e)
@@ -1995,17 +1966,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         // Capture the mode together with the end notification. The UI may toggle
         // it again before the dispatcher gets around to processing this event.
-        SingleTrackPlayMode modeWhenTrackEnded = _singleTrackMode;
+        SingleTrackPlayMode modeWhenTrackEnded = _session.SingleTrackMode;
 
         Dispatcher.BeginInvoke(() =>
         {
-            // The event is queued from an audio thread; by the time it runs the user
-            // may have started another track, or this may be the end of an older
-            // track than the last one we started. Acting on a stale event would
-            // stop or advance from the wrong song — drop it instead.
-            if (_isExternalMode
-                || _music.HasTrack
-                || !string.Equals(endedPath, _lastPlayedTrackPath, StringComparison.OrdinalIgnoreCase))
+            // The event is queued from an audio thread; the session drops it as
+            // stale when the user started another track in the meantime, so we
+            // never stop or advance from the wrong song.
+            TrackEndAction action = _session.OnTrackEnded(
+                endedPath, modeWhenTrackEnded, _music.HasTrack, _isExternalMode);
+
+            if (action == TrackEndAction.Ignore)
             {
                 return;
             }
@@ -2013,7 +1984,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // Single-track mode: the engine already stopped by itself when the file
             // ran out — just reflect that instead of advancing. The queue stays
             // untouched; the next/play buttons resume it on explicit request.
-            if (modeWhenTrackEnded != SingleTrackPlayMode.Off)
+            if (action == TrackEndAction.StopSingleTrack)
             {
                 string finished = $"Klar: {Path.GetFileNameWithoutExtension(endedPath)}";
 
@@ -2063,7 +2034,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _musicQueue.Add(track.Path);
+        _session.Enqueue(track.Path);
         UpdateQueueUi();
         MusicStatusText.Text = $"Lade i kö: {track.Name}";
     }
@@ -2217,6 +2188,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void OnMusicFoldersChanged(string statusMessage)
     {
         RefreshMusicFolderUi();
+        _settings.MusicFolderPaths = _playlist.Folders.ToList();
+        // Retain the legacy first-custom-folder field for downgrade compatibility.
+        _settings.MusicFolderPath = _playlist.Folders.FirstOrDefault(
+            folder => !PlaylistManager.IsDefaultFolder(folder));
+        _settings.DownloadFolderPath = _userDownloadFolderPath;
         SaveSettings();
         RefreshPlaylist(null);
         MusicStatusText.Text = statusMessage;
@@ -2391,6 +2367,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if ((DownloadFolderCombo.SelectedItem as FolderInfo)?.Path is string pickedPath)
         {
             _userDownloadFolderPath = pickedPath;
+            _settings.DownloadFolderPath = pickedPath;
         }
 
         SaveSettings();
@@ -2440,6 +2417,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         _isExternalMode = external;
+        _settings.ExternalCaptureMode = external;
         CancelDelayedStart(null);
 
         if (external)
@@ -2487,9 +2465,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ExternalTransportHint.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
 
         // Monitoring is pointless in external mode (the user hears the app directly),
-        // so reflect that fully: unchecked and grayed out, restored from settings on
-        // the way back. SaveSettings skips MonitorEnabled while external, so the
-        // user's real preference survives the round trip.
+        // so render it unchecked and disabled. The settings state itself is untouched,
+        // and therefore restores the preference when returning to library mode.
         _isUpdatingMusicUi = true;
         MonitorEnabledCheck.IsChecked = !external && _settings.MonitorEnabled;
         _isUpdatingMusicUi = false;
@@ -2596,6 +2573,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _music.SetExternalSource(capture.SampleProvider!);
             _appCapture = capture;
             _captureTarget = app;
+            _settings.ExternalAppName = app.ProcessName;
             SaveSettings();
             UpdateExternalCaptureStatusText();
         }
@@ -2735,14 +2713,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private bool StartPlaybackFromCurrentState()
     {
+        PlaybackGate gate = EvaluatePlaybackGate();
+        if (!gate.CanStart)
+        {
+            MusicStatusText.Text = PlaybackBlockedStatus(gate.BlockedReason);
+            return false;
+        }
+
         if (_music.IsPaused)
         {
-            if (!_music.HasMonitorOutput && !_router.IsRouting)
-            {
-                MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
-                return false;
-            }
-
             _music.Resume();
             _musicWasAutoPaused = false;
             if (_music.CurrentTrackPath is string resumedPath)
@@ -2762,11 +2741,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             return PlayTrack(_allTracks[0].Path);
         }
-        else
-        {
-            MusicStatusText.Text = "Ingen musik ännu — klistra in en YouTube-länk ovan.";
-            return false;
-        }
+        return false;
     }
 
     private void OnPrevTrackClick(object sender, RoutedEventArgs e)
@@ -2799,11 +2774,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private static readonly System.Windows.Media.Brush TransportIdleBorderBrush = CreateFrozenBrush(0xD7, 0xDE, 0xE7);
     private static readonly System.Windows.Media.Brush TransportInkBrush = CreateFrozenBrush(0x10, 0x23, 0x3A);
 
-    private bool IsDelayedStartCountingDown => _delayedStartTimer.IsEnabled;
-
-    // Remote companions can arm the countdown for a specific track; the local
-    // button keeps its play-selected-or-resume behavior by leaving this null.
-    private string? _delayedStartTrackPath;
+    private bool IsDelayedStartCountingDown => _session.DelayedStart.IsCountingDown;
 
     private static int ClampDelayedStartSeconds(int seconds) => Math.Clamp(seconds, 1, 60);
 
@@ -2815,38 +2786,28 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        if (!_isExternalMode)
+        if (!_isExternalMode && _music.IsPlaying)
         {
-            if (_music.IsPlaying)
-            {
-                MusicStatusText.Text = "Musiken spelar redan.";
-                return;
-            }
-
-            if (!_music.HasMonitorOutput && !_router.IsRouting)
-            {
-                MusicStatusText.Text = "Starta routning eller aktivera medhörning för att spela musik.";
-                return;
-            }
-
-            if (!_music.IsPaused && _allTracks.Count == 0)
-            {
-                MusicStatusText.Text = "Ingen musik ännu — klistra in en YouTube-länk ovan.";
-                return;
-            }
+            MusicStatusText.Text = "Musiken spelar redan.";
+            return;
         }
 
-        _delayedStartTrackPath = null;
-        _delayedStartRemainingSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
+        PlaybackGate gate = EvaluatePlaybackGate();
+        if (!gate.CanStart && gate.BlockedReason != PlaybackBlockedReasons.ExternalModeActive)
+        {
+            MusicStatusText.Text = PlaybackBlockedStatus(gate.BlockedReason);
+            return;
+        }
+
+        _session.DelayedStart.Arm(ClampDelayedStartSeconds(_settings.DelayedStartSeconds), trackPath: null);
         _delayedStartTimer.Start();
         UpdateDelayedPlayCountdownUi();
     }
 
     private void OnDelayedStartTick(object? sender, EventArgs e)
     {
-        _delayedStartRemainingSeconds--;
-
-        if (_delayedStartRemainingSeconds > 0)
+        DelayedStartTick tick = _session.DelayedStart.Tick();
+        if (!tick.IsReady)
         {
             UpdateDelayedPlayCountdownUi();
             return;
@@ -2855,9 +2816,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _delayedStartTimer.Stop();
         UpdateDelayedPlayIdleUi();
 
-        string? armedTrackPath = _delayedStartTrackPath;
-        _delayedStartTrackPath = null;
-
         if (_isExternalMode)
         {
             MediaKeySender.SendPlayPause();
@@ -2865,9 +2823,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        if (armedTrackPath != null)
+        if (tick.ArmedTrackPath != null)
         {
-            PlayTrack(armedTrackPath);
+            PlayTrack(tick.ArmedTrackPath);
             return;
         }
 
@@ -2881,8 +2839,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _session.DelayedStart.Cancel();
         _delayedStartTimer.Stop();
-        _delayedStartTrackPath = null;
         UpdateDelayedPlayIdleUi();
 
         if (statusMessage != null)
@@ -2897,8 +2855,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         DelayedPlayBtn.BorderBrush = CaptureAccentBrush;
         DelayedPlayIcon.Fill = System.Windows.Media.Brushes.White;
         DelayedPlayText.Foreground = System.Windows.Media.Brushes.White;
-        DelayedPlayText.Text = _delayedStartRemainingSeconds.ToString(CultureInfo.InvariantCulture);
-        MusicStatusText.Text = $"Startar om {_delayedStartRemainingSeconds} s — klicka på knappen igen för att avbryta.";
+        DelayedPlayText.Text = _session.DelayedStart.RemainingSeconds.ToString(CultureInfo.InvariantCulture);
+        MusicStatusText.Text = $"Startar om {_session.DelayedStart.RemainingSeconds} s — klicka på knappen igen för att avbryta.";
     }
 
     private void UpdateDelayedPlayIdleUi()
@@ -2909,6 +2867,21 @@ public partial class MainWindow : Window, IMicMixerControlHost
         DelayedPlayText.Foreground = TransportInkBrush;
         DelayedPlayText.Text = $"{ClampDelayedStartSeconds(_settings.DelayedStartSeconds)} s";
     }
+
+    private PlaybackGate EvaluatePlaybackGate(bool hasExplicitTrack = false) => _session.EvaluatePlaybackGate(
+        _music.HasMonitorOutput,
+        _router.IsRouting,
+        _music.IsPaused,
+        _isExternalMode,
+        hasExplicitTrack);
+
+    private static string PlaybackBlockedStatus(string? blockedReason) => blockedReason switch
+    {
+        PlaybackBlockedReasons.ExternalModeActive => "Byt till musikbiblioteket för att spela MicMixer-musik.",
+        PlaybackBlockedReasons.NoPlaybackClock => "Starta routning eller aktivera medhörning för att spela musik.",
+        PlaybackBlockedReasons.EmptyLibrary => "Ingen musik ännu — klistra in en YouTube-länk ovan.",
+        _ => "Musiken kunde inte startas."
+    };
 
     private void OnDelayedStartMenuOpened(object sender, RoutedEventArgs e)
     {
@@ -2936,8 +2909,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             // Picking a new delay mid-countdown restarts the countdown with the
             // new value; stop/start also resets the timer's one-second phase.
+            string? armedTrackPath = _session.DelayedStart.ArmedTrackPath;
+            _session.DelayedStart.Arm(_settings.DelayedStartSeconds, armedTrackPath);
             _delayedStartTimer.Stop();
-            _delayedStartRemainingSeconds = _settings.DelayedStartSeconds;
             _delayedStartTimer.Start();
             UpdateDelayedPlayCountdownUi();
             return;
@@ -2947,18 +2921,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         MusicStatusText.Text = $"Fördröjd start: {_settings.DelayedStartSeconds} s.";
     }
 
-    /// <summary>How the single-track button behaves when the current track ends.</summary>
-    private enum SingleTrackPlayMode
-    {
-        /// <summary>Playlist advances as usual.</summary>
-        Off,
-        /// <summary>Stop after the playing track, then fall back to <see cref="Off"/> automatically.</summary>
-        Once,
-        /// <summary>Stop after every track until the user turns it off (double-click).</summary>
-        Always
-    }
-
-    private SingleTrackPlayMode _singleTrackMode;
     private readonly DispatcherTimer _singleTrackAnnounceTimer;
     private string _pendingSingleTrackStatus = "";
 
@@ -2974,7 +2936,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
         else
         {
-            SetSingleTrackMode(_singleTrackMode == SingleTrackPlayMode.Off
+            SetSingleTrackMode(_session.SingleTrackMode == SingleTrackPlayMode.Off
                 ? SingleTrackPlayMode.Once
                 : SingleTrackPlayMode.Off);
         }
@@ -2983,11 +2945,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void SetSingleTrackMode(SingleTrackPlayMode mode, bool save = true, bool announce = true)
     {
         _singleTrackAnnounceTimer.Stop();
-        _singleTrackMode = mode;
+        _session.SingleTrackMode = mode;
         SingleTrackBtn.Tag = mode.ToString();
 
         if (save)
         {
+            // Once is transient; only the deliberate persistent mode survives restart.
+            _settings.SingleTrackMode = mode == SingleTrackPlayMode.Always;
             SaveSettings();
         }
 
@@ -3051,7 +3015,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // Linked mode keeps a fixed offset between the sliders. The follower is
         // clamped at its edge, but the offset itself is preserved so the gap
         // comes back when the user drags in the other direction.
-        if (VolumeLinkToggle.IsChecked == true && !_isSyncingLinkedVolume)
+        if (_settings.LinkVolumes && !_isSyncingLinkedVolume)
         {
             _isSyncingLinkedVolume = true;
             MonitorVolumeSlider.Value = Math.Clamp(e.NewValue + _volumeLinkOffset, 0d, 1d);
@@ -3072,7 +3036,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _music.MonitorVolume = (float)e.NewValue;
         _settings.MonitorVolume = (float)e.NewValue;
 
-        if (VolumeLinkToggle.IsChecked == true && !_isSyncingLinkedVolume)
+        if (_settings.LinkVolumes && !_isSyncingLinkedVolume)
         {
             _isSyncingLinkedVolume = true;
             MusicVolumeSlider.Value = Math.Clamp(e.NewValue - _volumeLinkOffset, 0d, 1d);
@@ -3090,8 +3054,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
+
         // Lock in whatever gap the sliders have right now as the linked offset.
-        if (VolumeLinkToggle.IsChecked == true)
+        if (_settings.LinkVolumes)
         {
             _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         }
@@ -3112,6 +3078,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        // External-mode rendering force-unchecks this control under an update guard,
+        // so only a deliberate library-mode event can change the preference.
+        _settings.MonitorEnabled = MonitorEnabledCheck.IsChecked == true;
         SaveSettings();
         UpdateMusicRouteHint();
         _ = ApplyMonitorConfigAsync();
@@ -3124,6 +3093,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        if (MonitorDeviceCombo.SelectedItem is AudioDeviceOption device)
+        {
+            _settings.MusicMonitorDeviceId = device.Id;
+        }
         SaveSettings();
         _ = ApplyMonitorConfigAsync();
     }
@@ -3132,8 +3105,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         // In external mode the user already hears the app directly; monitoring
         // would double the audio with an offset.
-        bool enabled = MonitorEnabledCheck.IsChecked == true && !_isExternalMode;
-        string? deviceId = enabled ? (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id : null;
+        bool enabled = _settings.MonitorEnabled && !_isExternalMode;
+        // The combo contributes only the currently available runtime endpoint.
+        // It never writes the persisted preference during device discovery.
+        string? deviceId = enabled
+            ? (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id
+            : null;
 
         try
         {
@@ -3623,7 +3600,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        ApplyOverlayIndicatorSetting(OverlayIndicatorCheck.IsChecked == true);
+        _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
+        ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
         SaveSettings();
     }
 
@@ -3634,9 +3612,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _settings.OverlayVolumeMeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
         if (_overlayIndicator is { } overlay)
         {
-            overlay.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
+            overlay.MeterEnabled = _settings.OverlayVolumeMeterEnabled;
         }
 
         UpdateOutputMeteringEnabled();
@@ -3674,7 +3653,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// <summary>The ±0 default stays visually quiet; any deviation is emphasized.</summary>
     private void UpdateMeterSensitivityText()
     {
-        int db = (int)Math.Round(MeterSensitivitySlider.Value);
+        int db = (int)Math.Round(_settings.MeterSensitivityDb);
         MeterSensitivityValueText.Text = db == 0 ? "±0 dB"
             : db > 0 ? $"+{db} dB"
             : $"−{-db} dB";
@@ -3694,7 +3673,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // The OBS overlay only needs levels while a page is actually connected,
         // so an idle server keeps the audio thread as cheap as no overlay at all.
         bool metering = (_overlayIndicator != null || _obsOverlayServer is { HasClients: true })
-            && OverlayVolumeMeterCheck.IsChecked == true;
+            && _settings.OverlayVolumeMeterEnabled;
         _router.OutputMeteringEnabled = metering;
         _router.MusicMeteringEnabled = metering;
     }
@@ -3706,8 +3685,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             try
             {
                 _overlayIndicator ??= new OverlayIndicatorWindow();
-                _overlayIndicator.MeterEnabled = OverlayVolumeMeterCheck.IsChecked == true;
-                _overlayIndicator.MeterSensitivityDb = (float)MeterSensitivitySlider.Value;
+                _overlayIndicator.MeterEnabled = _settings.OverlayVolumeMeterEnabled;
+                _overlayIndicator.MeterSensitivityDb = _settings.MeterSensitivityDb;
                 _overlayIndicator.SetState(ToOverlayIndicatorState(ComputeMicStatus()));
                 _overlayIndicator.SetMusicState(ComputeOverlayMusicState());
             }

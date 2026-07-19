@@ -34,7 +34,8 @@ public partial class MainWindow
             return;
         }
 
-        ApplyObsOverlaySetting(ObsOverlayCheck.IsChecked == true);
+        _settings.ObsOverlayEnabled = ObsOverlayCheck.IsChecked == true;
+        ApplyObsOverlaySetting(_settings.ObsOverlayEnabled);
         SaveSettings();
     }
 
@@ -138,8 +139,8 @@ public partial class MainWindow
         server.PublishState(new ObsOverlayState(
             mic,
             music,
-            OverlayVolumeMeterCheck.IsChecked == true,
-            (float)MeterSensitivitySlider.Value));
+            _settings.OverlayVolumeMeterEnabled,
+            _settings.MeterSensitivityDb));
     }
 
     private void OnObsOverlayClientCountChanged(int count)
@@ -246,6 +247,7 @@ public partial class MainWindow
         }
 
         _obsOverlayPort = port;
+        _settings.ObsOverlayPort = port;
         if (ObsOverlayCheck.IsChecked == true)
         {
             // Restart on the new port; ApplyObsOverlaySetting stops the old

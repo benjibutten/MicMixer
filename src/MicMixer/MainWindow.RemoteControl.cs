@@ -67,7 +67,7 @@ public partial class MainWindow
         if (_isExternalMode && RequiresLibraryMode(command))
         {
             return ControlResult.Fail(
-                "external_mode_active",
+                PlaybackBlockedReasons.ExternalModeActive,
                 "Direct control is available for MicMixer's built-in music library only.");
         }
 
@@ -167,7 +167,7 @@ public partial class MainWindow
         CancelDelayedStart(null);
         _music.Stop();
         _musicWasAutoPaused = false;
-        _lastPlayedTrackPath = null;
+        _session.LastPlayedTrackPath = null;
         PlaylistListBox.SelectedItem = null;
         MusicStatusText.Text = "Musiken stoppad — ingen låt är aktiv.";
         UpdateMusicUi();
@@ -189,16 +189,10 @@ public partial class MainWindow
             return ControlResult.Ok();
         }
 
-        string? current = _music.CurrentTrackPath ?? _lastPlayedTrackPath;
-        if (current != null)
+        if (_session.FindPreviousLibraryTrack(_music.CurrentTrackPath) is string previous)
         {
-            int index = _allTracks.FindIndex(track =>
-                string.Equals(track.Path, current, StringComparison.OrdinalIgnoreCase));
-            if (index > 0)
-            {
-                PlayTrack(_allTracks[index - 1].Path);
-                return ControlResult.Ok();
-            }
+            PlayTrack(previous);
+            return ControlResult.Ok();
         }
 
         _music.Seek(TimeSpan.Zero);
@@ -234,12 +228,20 @@ public partial class MainWindow
 
         if (monitor)
         {
-            MonitorVolumeSlider.Value = Math.Clamp(volume, 0, 1);
+            float value = (float)Math.Clamp(volume, 0, 1);
+            _settings.MonitorVolume = value;
+            _music.MonitorVolume = value;
+            MonitorVolumeSlider.Value = value;
         }
         else
         {
-            MusicVolumeSlider.Value = Math.Clamp(volume, 0, 1);
+            float value = (float)Math.Clamp(volume, 0, 1);
+            _settings.MusicVolume = value;
+            _music.MusicVolume = value;
+            MusicVolumeSlider.Value = value;
         }
+
+        ScheduleSettingsSave();
 
         return ControlResult.Ok();
     }
@@ -257,7 +259,7 @@ public partial class MainWindow
             return ControlResult.Fail("track_not_found", "The selected track is no longer in MicMixer's library.");
         }
 
-        _musicQueue.Add(track.Path);
+        _session.Enqueue(track.Path);
         UpdateQueueUi();
         MusicStatusText.Text = $"Lade i kö: {track.Name}";
         return ControlResult.Ok();
@@ -270,12 +272,11 @@ public partial class MainWindow
             return MissingArgument("index");
         }
 
-        if (index < 0 || index >= _musicQueue.Count)
+        if (!_session.RemoveQueueItemAt(index))
         {
             return ControlResult.Fail("queue_index_out_of_range", "The queue item no longer exists.");
         }
 
-        _musicQueue.RemoveAt(index);
         UpdateQueueUi();
         return ControlResult.Ok();
     }
@@ -288,26 +289,18 @@ public partial class MainWindow
             return ControlResult.Fail("invalid_argument", "fromIndex and toIndex are required.");
         }
 
-        if (fromIndex < 0 || fromIndex >= _musicQueue.Count
-            || toIndex < 0 || toIndex >= _musicQueue.Count)
+        if (!_session.MoveQueueItem(fromIndex, toIndex))
         {
             return ControlResult.Fail("queue_index_out_of_range", "The queue item no longer exists.");
         }
 
-        if (fromIndex != toIndex)
-        {
-            string path = _musicQueue[fromIndex];
-            _musicQueue.RemoveAt(fromIndex);
-            _musicQueue.Insert(toIndex, path);
-            UpdateQueueUi();
-        }
-
+        UpdateQueueUi();
         return ControlResult.Ok();
     }
 
     private ControlResult RemoteClearQueue()
     {
-        _musicQueue.Clear();
+        _session.ClearQueue();
         UpdateQueueUi();
         MusicStatusText.Text = "Kön rensad.";
         return ControlResult.Ok();
@@ -337,20 +330,13 @@ public partial class MainWindow
             return ControlResult.Fail("already_playing", "Music is already playing.");
         }
 
-        if (!_music.HasMonitorOutput && !_router.IsRouting)
+        PlaybackGate gate = EvaluatePlaybackGate();
+        if (!gate.CanStart)
         {
-            return ControlResult.Fail(
-                "no_playback_clock",
-                "Start routing or enable monitoring in MicMixer before starting music.");
+            return PlaybackGateFailed(gate);
         }
 
-        if (armedTrackPath == null && !_music.IsPaused && _allTracks.Count == 0)
-        {
-            return ControlResult.Fail("empty_library", "MicMixer's music library is empty.");
-        }
-
-        _delayedStartTrackPath = armedTrackPath;
-        _delayedStartRemainingSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
+        _session.DelayedStart.Arm(ClampDelayedStartSeconds(_settings.DelayedStartSeconds), armedTrackPath);
         _delayedStartTimer.Start();
         UpdateDelayedPlayCountdownUi();
         return ControlResult.Ok();
@@ -363,9 +349,9 @@ public partial class MainWindow
             return MissingArgument("linked");
         }
 
-        // Routes through the toggle so the Checked/Unchecked handlers keep the
-        // link offset and saved settings in sync, exactly like a local click.
+        _settings.LinkVolumes = linked;
         VolumeLinkToggle.IsChecked = linked;
+        SaveSettings();
         return ControlResult.Ok();
     }
 
@@ -378,7 +364,10 @@ public partial class MainWindow
 
         // Routes through the checkbox so the handler applies the router state,
         // hint text and saved settings exactly like a local click.
+        _settings.MusicIgnoresPushToTalk = enabled;
         MusicIgnorePttCheck.IsChecked = enabled;
+        ApplyMusicRoutingModes();
+        SaveSettings();
         return ControlResult.Ok();
     }
 
@@ -389,7 +378,10 @@ public partial class MainWindow
             return MissingArgument("enabled");
         }
 
+        _settings.MusicMonitorOnly = enabled;
         MusicMonitorOnlyCheck.IsChecked = enabled;
+        ApplyMusicRoutingModes();
+        SaveSettings();
         return ControlResult.Ok();
     }
 
@@ -411,8 +403,9 @@ public partial class MainWindow
 
         if (IsDelayedStartCountingDown)
         {
+            string? armedTrackPath = _session.DelayedStart.ArmedTrackPath;
+            _session.DelayedStart.Arm(_settings.DelayedStartSeconds, armedTrackPath);
             _delayedStartTimer.Stop();
-            _delayedStartRemainingSeconds = _settings.DelayedStartSeconds;
             _delayedStartTimer.Start();
             UpdateDelayedPlayCountdownUi();
         }
@@ -540,6 +533,7 @@ public partial class MainWindow
         }
 
         _userDownloadFolderPath = folder;
+        _settings.DownloadFolderPath = folder;
         SyncDownloadFolderToFilter(announce: false);
         SaveSettings();
         MusicStatusText.Text = $"Nya låtar laddas ner till: {folder}";
@@ -549,17 +543,7 @@ public partial class MainWindow
     private MusicControlState BuildControlState()
     {
         string? currentPath = _music.CurrentTrackPath;
-        bool canStart = !_isExternalMode
-            && (_music.HasMonitorOutput || _router.IsRouting)
-            && (_music.IsPaused || _allTracks.Count > 0);
-
-        string? blockedReason = canStart
-            ? null
-            : _isExternalMode
-                ? "external_mode_active"
-                : !_music.HasMonitorOutput && !_router.IsRouting
-                    ? "no_playback_clock"
-                    : "empty_library";
+        PlaybackGate gate = EvaluatePlaybackGate();
 
         string playbackState = _isExternalMode
             ? "External"
@@ -569,7 +553,7 @@ public partial class MainWindow
                     ? "Paused"
                     : "Stopped";
 
-        var queue = _musicQueue
+        var queue = _session.Queue
             .Select((path, index) => new RemoteQueueItem(
                 index,
                 RemoteId.FromPath(path),
@@ -587,27 +571,27 @@ public partial class MainWindow
             currentPath == null ? null : Path.GetFileNameWithoutExtension(currentPath),
             _music.Position.TotalSeconds,
             _music.Duration.TotalSeconds,
-            _music.MusicVolume,
-            _music.MonitorVolume,
+            _settings.MusicVolume,
+            _settings.MonitorVolume,
             _router.IsRouting,
             _music.HasMonitorOutput,
-            canStart,
-            blockedReason,
+            gate.CanStart,
+            gate.BlockedReason,
             IsDelayedStartCountingDown,
             ClampDelayedStartSeconds(_settings.DelayedStartSeconds),
-            IsDelayedStartCountingDown ? _delayedStartRemainingSeconds : 0,
-            _singleTrackMode.ToString(),
+            IsDelayedStartCountingDown ? _session.DelayedStart.RemainingSeconds : 0,
+            _session.SingleTrackMode.ToString(),
             _libraryVersion,
-            RemoteId.VersionForPaths(_musicQueue),
+            RemoteId.VersionForPaths(_session.Queue),
             BuildRemoteFolders(),
             queue,
             _isDownloading,
             downloadPercent,
             DownloadStatusText.Text ?? string.Empty,
             MusicStatusText.Text ?? string.Empty,
-            VolumeLinkToggle.IsChecked == true,
-            MusicIgnorePttCheck.IsChecked == true,
-            MusicMonitorOnlyCheck.IsChecked == true);
+            _settings.LinkVolumes,
+            _settings.MusicIgnoresPushToTalk,
+            _settings.MusicMonitorOnly);
     }
 
     private RemoteTrackPage BuildRemoteTrackPage(JsonElement? payload)
@@ -646,7 +630,7 @@ public partial class MainWindow
                 GetRemoteFolderName(track),
                 track.FolderPath ?? Path.GetDirectoryName(track.Path) ?? string.Empty,
                 string.Equals(_music.CurrentTrackPath, track.Path, StringComparison.OrdinalIgnoreCase),
-                GetRemoteQueuePositions(track.Path)))
+                _session.GetQueuePositions(track.Path)))
             .ToList();
 
         return new RemoteTrackPage(
@@ -691,20 +675,6 @@ public partial class MainWindow
             string.Equals(RemoteId.FromPath(folder), folderId, StringComparison.Ordinal));
     }
 
-    private IReadOnlyList<int> GetRemoteQueuePositions(string path)
-    {
-        var positions = new List<int>();
-        for (int i = 0; i < _musicQueue.Count; i++)
-        {
-            if (string.Equals(_musicQueue[i], path, StringComparison.OrdinalIgnoreCase))
-            {
-                positions.Add(i + 1);
-            }
-        }
-
-        return positions;
-    }
-
     private TrackItem? FindTrack(string trackId)
     {
         return _allTracks.FirstOrDefault(track =>
@@ -716,19 +686,27 @@ public partial class MainWindow
 
     private ControlResult PlaybackStartFailed()
     {
-        if (!_music.HasMonitorOutput && !_router.IsRouting)
-        {
-            return ControlResult.Fail(
-                "no_playback_clock",
-                "Start routing or enable monitoring in MicMixer before starting music.");
-        }
+        PlaybackGate gate = EvaluatePlaybackGate();
+        return gate.CanStart
+            ? ControlResult.Fail("playback_failed", "MicMixer could not start the selected track.")
+            : PlaybackGateFailed(gate);
+    }
 
-        if (!_music.IsPaused && _allTracks.Count == 0)
+    private static ControlResult PlaybackGateFailed(PlaybackGate gate)
+    {
+        return gate.BlockedReason switch
         {
-            return ControlResult.Fail("empty_library", "MicMixer's music library is empty.");
-        }
-
-        return ControlResult.Fail("playback_failed", "MicMixer could not start the selected track.");
+            PlaybackBlockedReasons.ExternalModeActive => ControlResult.Fail(
+                PlaybackBlockedReasons.ExternalModeActive,
+                "Direct control is available for MicMixer's built-in music library only."),
+            PlaybackBlockedReasons.NoPlaybackClock => ControlResult.Fail(
+                PlaybackBlockedReasons.NoPlaybackClock,
+                "Start routing or enable monitoring in MicMixer before starting music."),
+            PlaybackBlockedReasons.EmptyLibrary => ControlResult.Fail(
+                PlaybackBlockedReasons.EmptyLibrary,
+                "MicMixer's music library is empty."),
+            _ => ControlResult.Fail("playback_failed", "MicMixer could not start playback.")
+        };
     }
 
     private static bool TryGetString(JsonElement? payload, string name, out string? value)

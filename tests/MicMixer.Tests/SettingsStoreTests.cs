@@ -62,6 +62,33 @@ public sealed class SettingsStoreTests : IDisposable
         settings.SecondaryOutputIgnorePushToTalk.Should().BeTrue();
     }
 
+    [Fact]
+    public void SavingAnUnrelatedStateChange_ShouldPreserveUnavailableDevicePreferences()
+    {
+        string path = Path.Combine(_root, "settings.json");
+        var sut = new SettingsStore(path);
+        sut.Save(new AppSettings
+        {
+            NormalInputDeviceId = "normal-mic",
+            ModdedInputDeviceId = "modded-mic",
+            OutputDeviceId = "virtual-cable",
+            MusicMonitorDeviceId = "unplugged-monitor",
+            SecondaryOutputDeviceId = "unplugged-secondary"
+        });
+
+        AppSettings state = sut.Load();
+        state.MusicVolume = 0.8f;
+        sut.Save(state);
+
+        AppSettings reloaded = sut.Load();
+        reloaded.NormalInputDeviceId.Should().Be("normal-mic");
+        reloaded.ModdedInputDeviceId.Should().Be("modded-mic");
+        reloaded.OutputDeviceId.Should().Be("virtual-cable");
+        reloaded.MusicMonitorDeviceId.Should().Be("unplugged-monitor");
+        reloaded.SecondaryOutputDeviceId.Should().Be("unplugged-secondary");
+        reloaded.MusicVolume.Should().Be(0.8f);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
