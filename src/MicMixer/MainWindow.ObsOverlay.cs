@@ -18,7 +18,6 @@ namespace MicMixer;
 public partial class MainWindow
 {
     private ObsOverlayServer? _obsOverlayServer;
-    private int _obsOverlayPort = ObsOverlayServer.DefaultPort;
 
     /// <summary>
     /// Persistent start failure shown next to the address until a start
@@ -34,7 +33,8 @@ public partial class MainWindow
             return;
         }
 
-        ApplyObsOverlaySetting(ObsOverlayCheck.IsChecked == true);
+        _settings.ObsOverlayEnabled = ObsOverlayCheck.IsChecked == true;
+        ApplyObsOverlaySetting(_settings.ObsOverlayEnabled);
         SaveSettings();
     }
 
@@ -42,7 +42,7 @@ public partial class MainWindow
     {
         if (enabled)
         {
-            if (_obsOverlayServer is { } running && running.Port == _obsOverlayPort)
+            if (_obsOverlayServer is { } running && running.Port == _settings.ObsOverlayPort)
             {
                 UpdateObsOverlayStatusText();
                 return;
@@ -52,7 +52,7 @@ public partial class MainWindow
             ObsOverlayServer? server = null;
             try
             {
-                server = new ObsOverlayServer(_obsOverlayPort);
+                server = new ObsOverlayServer(_settings.ObsOverlayPort);
                 server.ClientCountChanged += OnObsOverlayClientCountChanged;
                 server.Start();
                 _obsOverlayServer = server;
@@ -77,11 +77,11 @@ public partial class MainWindow
 
                 // Typically the port is taken by another app; keep the app
                 // running and tell the user which port failed.
-                Log.Error(ex, "Failed to start the OBS overlay server on port {Port}.", _obsOverlayPort);
+                Log.Error(ex, "Failed to start the OBS overlay server on port {Port}.", _settings.ObsOverlayPort);
                 _obsOverlayServer = null;
                 _obsOverlayError =
-                    $"Kunde inte starta på port {_obsOverlayPort} — porten kan vara upptagen. Byt port och tryck Enter.";
-                StatusText.Text = $"Kunde inte starta OBS-overlayn på port {_obsOverlayPort}: {ex.Message}";
+                    $"Kunde inte starta på port {_settings.ObsOverlayPort} — porten kan vara upptagen. Byt port och tryck Enter.";
+                StatusText.Text = $"Kunde inte starta OBS-overlayn på port {_settings.ObsOverlayPort}: {ex.Message}";
             }
         }
         else
@@ -138,8 +138,8 @@ public partial class MainWindow
         server.PublishState(new ObsOverlayState(
             mic,
             music,
-            OverlayVolumeMeterCheck.IsChecked == true,
-            (float)MeterSensitivitySlider.Value));
+            _settings.OverlayVolumeMeterEnabled,
+            _settings.MeterSensitivityDb));
     }
 
     private void OnObsOverlayClientCountChanged(int count)
@@ -203,7 +203,7 @@ public partial class MainWindow
     private void OnObsOverlayCopyClick(object sender, RoutedEventArgs e)
     {
         string url = _obsOverlayServer?.OverlayUrl
-            ?? $"http://127.0.0.1:{_obsOverlayPort}/";
+            ?? $"http://127.0.0.1:{_settings.ObsOverlayPort}/";
         try
         {
             System.Windows.Clipboard.SetText(url);
@@ -233,19 +233,19 @@ public partial class MainWindow
     {
         if (!int.TryParse(ObsOverlayPortBox.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int port))
         {
-            ObsOverlayPortBox.Text = _obsOverlayPort.ToString(CultureInfo.InvariantCulture);
+            ObsOverlayPortBox.Text = _settings.ObsOverlayPort.ToString(CultureInfo.InvariantCulture);
             return;
         }
 
         port = ObsOverlayServer.ClampPort(port);
         ObsOverlayPortBox.Text = port.ToString(CultureInfo.InvariantCulture);
 
-        if (port == _obsOverlayPort)
+        if (port == _settings.ObsOverlayPort)
         {
             return;
         }
 
-        _obsOverlayPort = port;
+        _settings.ObsOverlayPort = port;
         if (ObsOverlayCheck.IsChecked == true)
         {
             // Restart on the new port; ApplyObsOverlaySetting stops the old
