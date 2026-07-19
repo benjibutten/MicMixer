@@ -1,0 +1,70 @@
+MICMIXER - INSTALLATION AND QUICK START
+=======================================
+
+Requirements
+------------
+- Windows 10 or Windows 11 (64-bit).
+- A microphone.
+- A virtual audio device. VB-CABLE is recommended if you do not already use
+  another virtual audio driver: https://vb-audio.com/Cable/
+
+Install MicMixer
+----------------
+1. Extract the entire release zip to a permanent folder that you control, for
+   example:
+
+     %LOCALAPPDATA%\Programs\MicMixer
+
+2. Run MicMixer.exe from that folder. The release is self-contained, so a
+   separate .NET installation is normally not required.
+3. Optional: enable "Start with Windows" in MicMixer after the app is in its
+   permanent folder. Windows stores the current path to MicMixer.exe. Moving or
+   deleting the exe later will break autostart until you disable and re-enable
+   the setting from the new location.
+
+When updating, close MicMixer and extract the new release over the same folder.
+Keeping the same path also helps Windows retain its tray icon preferences.
+
+Set up VB-CABLE
+---------------
+Skip this section if you already have a suitable virtual audio driver.
+
+1. Download VB-CABLE from https://vb-audio.com/Cable/ and extract its archive.
+2. Run the appropriate VB-CABLE setup as administrator and install the driver.
+3. Restart Windows if the installer requests it.
+4. In MicMixer, select "CABLE Input (VB-Audio Virtual Cable)" as the
+   "Virtual cable output".
+5. In Discord, OBS, FiveM, your game, or another receiving app, select
+   "CABLE Output (VB-Audio Virtual Cable)" as its microphone/input device.
+
+Basic MicMixer setup
+--------------------
+1. Select your physical microphone under "Normal mic".
+2. Select your voice-modified microphone, or choose "No modded mic".
+3. Select your virtual device under "Virtual cable output".
+4. Click "Enable" to start routing.
+5. If you use a modified microphone, choose a global hotkey. Holding it switches
+   from the normal microphone to the modified microphone.
+6. Play music from MicMixer's library or capture a running application when you
+   want music mixed into the same virtual microphone channel.
+
+If music is heavily reduced in Discord, FiveM, or another receiving app, try
+disabling that app's noise suppression or automatic audio processing.
+
+Using MicMixer with StreamDecky
+-------------------------------
+StreamDecky's optional Music widget controls MicMixer over a local connection.
+No plug-in, network setup, or additional integration software is required.
+
+- MicMixer.exe must be running on the same Windows account for the widget to
+  connect and control its music player.
+- StreamDecky does not start MicMixer automatically. Enable "Start with Windows"
+  in both apps if you want both available after signing in.
+- If MicMixer is closed or restarted, the widget goes offline and reconnects
+  automatically when MicMixer is available again.
+
+More help
+---------
+The app contains a VB-CABLE setup guide and contextual explanations for its
+audio and music settings. Full documentation is available at:
+https://github.com/benjibutten/MicMixer

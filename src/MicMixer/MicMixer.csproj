@@ -30,6 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\INSTALLATION.txt"
+          Link="INSTALLATION.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" />
     <None Include="..\..\LICENSE"
           Link="LICENSE.txt"
           CopyToOutputDirectory="PreserveNewest"
