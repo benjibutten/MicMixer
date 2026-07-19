@@ -16,6 +16,26 @@ public sealed class MusicSessionTests
         return new MusicSession(path => !missing.Contains(path));
     }
 
+    [Theory]
+    [InlineData(false, false, false, false, ExternalCaptureRouteState.WaitingForAudio)]
+    [InlineData(false, true, false, true, ExternalCaptureRouteState.WaitingForAudio)]
+    [InlineData(true, false, false, false, ExternalCaptureRouteState.RoutingStopped)]
+    [InlineData(true, true, true, false, ExternalCaptureRouteState.MonitorOnly)]
+    [InlineData(true, true, false, false, ExternalCaptureRouteState.BlockedByPushToTalk)]
+    [InlineData(true, true, false, true, ExternalCaptureRouteState.Sending)]
+    public void ExternalCaptureRoute_ShouldExplainWhereAudioStops(
+        bool hasAudioSignal,
+        bool isRouting,
+        bool monitorOnly,
+        bool musicRouteOpen,
+        ExternalCaptureRouteState expected)
+    {
+        ExternalCaptureRouteState result = ExternalCaptureRoute.Evaluate(
+            hasAudioSignal, isRouting, monitorOnly, musicRouteOpen);
+
+        Assert.Equal(expected, result);
+    }
+
     public static IEnumerable<object?[]> PlaybackGateTruthTable()
     {
         foreach (bool externalMode in new[] { false, true })

@@ -349,9 +349,7 @@ public partial class MainWindow
             return MissingArgument("linked");
         }
 
-        _settings.LinkVolumes = linked;
-        VolumeLinkToggle.IsChecked = linked;
-        SaveSettings();
+        SetVolumesLinked(linked, renderControl: true);
         return ControlResult.Ok();
     }
 
@@ -362,12 +360,7 @@ public partial class MainWindow
             return MissingArgument("enabled");
         }
 
-        // Routes through the checkbox so the handler applies the router state,
-        // hint text and saved settings exactly like a local click.
-        _settings.MusicIgnoresPushToTalk = enabled;
-        MusicIgnorePttCheck.IsChecked = enabled;
-        ApplyMusicRoutingModes();
-        SaveSettings();
+        SetMusicRoutingModes(enabled, _settings.MusicMonitorOnly, renderControls: true);
         return ControlResult.Ok();
     }
 
@@ -378,10 +371,7 @@ public partial class MainWindow
             return MissingArgument("enabled");
         }
 
-        _settings.MusicMonitorOnly = enabled;
-        MusicMonitorOnlyCheck.IsChecked = enabled;
-        ApplyMusicRoutingModes();
-        SaveSettings();
+        SetMusicRoutingModes(_settings.MusicIgnoresPushToTalk, enabled, renderControls: true);
         return ControlResult.Ok();
     }
 
@@ -532,7 +522,6 @@ public partial class MainWindow
             return ControlResult.Fail("folder_not_found", "The selected music folder is no longer configured.");
         }
 
-        _userDownloadFolderPath = folder;
         _settings.DownloadFolderPath = folder;
         SyncDownloadFolderToFilter(announce: false);
         SaveSettings();
@@ -664,7 +653,7 @@ public partial class MainWindow
                     : Path.GetFileName(folder),
                 folder,
                 PlaylistManager.IsDefaultFolder(folder),
-                string.Equals(folder, _userDownloadFolderPath, StringComparison.OrdinalIgnoreCase),
+                string.Equals(folder, _settings.DownloadFolderPath, StringComparison.OrdinalIgnoreCase),
                 string.Equals(folder, effectiveDownloadFolder, StringComparison.OrdinalIgnoreCase)))
             .ToList();
     }

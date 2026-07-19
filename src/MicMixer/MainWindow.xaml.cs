@@ -49,8 +49,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private Dictionary<string, FolderInfo> _folderInfoByPath = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Active filter chips in the order they were turned on; the last one steers the download folder.</summary>
     private readonly List<string> _folderChipActivationOrder = new();
-    /// <summary>The download folder the user picked themselves — filter chips override the combo but never this.</summary>
-    private string? _userDownloadFolderPath;
     private System.Windows.Point _queueDragStart;
     private int _queueDragIndex = -1;
     private DateTime _queuePopupClosedAt = DateTime.MinValue;
@@ -67,6 +65,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private double _volumeLinkOffset;
     private bool _trayBalloonShown;
     private bool _isDownloading;
+    private ExternalCaptureRouteState? _lastExternalCaptureRouteState;
     private AppSettings _settings;
     private OverlayIndicatorWindow? _overlayIndicator;
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
@@ -189,8 +188,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
         MeterSensitivitySlider.Value = _settings.MeterSensitivityDb;
         ObsOverlayCheck.IsChecked = _settings.ObsOverlayEnabled;
-        _obsOverlayPort = _settings.ObsOverlayPort;
-        ObsOverlayPortBox.Text = _obsOverlayPort.ToString(CultureInfo.InvariantCulture);
+        ObsOverlayPortBox.Text = _settings.ObsOverlayPort.ToString(CultureInfo.InvariantCulture);
         _isUpdatingMusicUi = false;
         ApplyMusicRoutingModes();
         UpdateMeterSensitivityText();
@@ -208,7 +206,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 ? new List<string>()
                 : new List<string> { _settings.MusicFolderPath! };
         _playlist.SetFolders(storedFolders);
-        _userDownloadFolderPath = _settings.DownloadFolderPath;
         RefreshMusicFolderUi();
         RefreshPlaylist(null);
 
@@ -648,6 +645,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // Peak-hold with decay so short transients stay visible.
             float peak = capture.ReadAndResetPeak();
             CaptureLevelMeter.Value = Math.Min(1d, Math.Max(peak, CaptureLevelMeter.Value * 0.82));
+            UpdateExternalCaptureStatusText();
         }
 
         if (_router.IsRouting)
@@ -849,7 +847,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// <summary>List entry in the modded-mic combo that disables the modded route entirely.</summary>
     private static readonly AudioDeviceOption NoModdedMicOption = new("__no_modded_mic__", "Ingen moddad mic");
 
-    private bool IsModdedMicSkipped => _settings.SkipModdedMic;
+    private bool IsModdedMicSkipped =>
+        (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == NoModdedMicOption.Id;
 
     private void ApplyModdedMicUiState()
     {
@@ -909,8 +908,31 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _settings.MusicIgnoresPushToTalk = MusicIgnorePttCheck.IsChecked == true;
-        _settings.MusicMonitorOnly = MusicMonitorOnlyCheck.IsChecked == true;
+        SetMusicRoutingModes(
+            MusicIgnorePttCheck.IsChecked == true,
+            MusicMonitorOnlyCheck.IsChecked == true,
+            renderControls: false);
+    }
+
+    private void SetMusicRoutingModes(bool ignoresPushToTalk, bool monitorOnly, bool renderControls)
+    {
+        _settings.MusicIgnoresPushToTalk = ignoresPushToTalk;
+        _settings.MusicMonitorOnly = monitorOnly;
+
+        if (renderControls)
+        {
+            _isUpdatingMusicUi = true;
+            try
+            {
+                MusicIgnorePttCheck.IsChecked = ignoresPushToTalk;
+                MusicMonitorOnlyCheck.IsChecked = monitorOnly;
+            }
+            finally
+            {
+                _isUpdatingMusicUi = false;
+            }
+        }
+
         ApplyMusicRoutingModes();
         SaveSettings();
         UpdateStatusText();
@@ -2192,7 +2214,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // Retain the legacy first-custom-folder field for downgrade compatibility.
         _settings.MusicFolderPath = _playlist.Folders.FirstOrDefault(
             folder => !PlaylistManager.IsDefaultFolder(folder));
-        _settings.DownloadFolderPath = _userDownloadFolderPath;
         SaveSettings();
         RefreshPlaylist(null);
         MusicStatusText.Text = statusMessage;
@@ -2266,9 +2287,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             !_folderChips.Any(chip => chip.IsActive && string.Equals(chip.Info.Path, path, StringComparison.OrdinalIgnoreCase)));
 
         // Download target — only a visible choice when there is more than one folder.
-        if (_userDownloadFolderPath == null || !_folderInfoByPath.ContainsKey(_userDownloadFolderPath))
+        if (_settings.DownloadFolderPath == null || !_folderInfoByPath.ContainsKey(_settings.DownloadFolderPath))
         {
-            _userDownloadFolderPath = infos[0].Path;
+            _settings.DownloadFolderPath = infos[0].Path;
         }
 
         _isUpdatingMusicUi = true;
@@ -2307,8 +2328,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// Points the download combo at the filtered folder: an active chip becomes
     /// the download target (the most recently activated one when several are on),
     /// and clearing the filter returns to the user's own combo choice. The
-    /// override never touches <see cref="_userDownloadFolderPath"/>, so the
-    /// stored preference survives the filter round trip.
+    /// override never touches <see cref="AppSettings.DownloadFolderPath"/>, so
+    /// the stored preference survives the filter round trip.
     /// </summary>
     private void SyncDownloadFolderToFilter(bool announce)
     {
@@ -2318,7 +2339,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         string? filterPath = _folderChipActivationOrder.Count > 0 ? _folderChipActivationOrder[^1] : null;
-        string targetPath = filterPath ?? _userDownloadFolderPath ?? infos[0].Path;
+        string targetPath = filterPath ?? _settings.DownloadFolderPath ?? infos[0].Path;
 
         var target = infos.FirstOrDefault(info => string.Equals(info.Path, targetPath, StringComparison.OrdinalIgnoreCase))
             ?? infos[0];
@@ -2366,7 +2387,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // through SyncDownloadFolderToFilter and never reach this handler.
         if ((DownloadFolderCombo.SelectedItem as FolderInfo)?.Path is string pickedPath)
         {
-            _userDownloadFolderPath = pickedPath;
             _settings.DownloadFolderPath = pickedPath;
         }
 
@@ -2391,8 +2411,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private const string CaptureIdleHint =
         "Välj appen som spelar musik (t.ex. Spotify) och klicka Fånga ljud. Du styr uppspelningen i appen som vanligt — ljudet mixas in i mic-kanalen.";
-    private const string CaptureActiveHint =
-        "Spela, pausa och byt låt i appen som vanligt. Musikvolymen nedan styr hur högt andra hör ljudet — du hör appen direkt, precis som annars.";
 
     private static System.Windows.Media.Brush CreateFrozenBrush(byte r, byte g, byte b)
     {
@@ -2512,17 +2530,38 @@ public partial class MainWindow : Window, IMicMixerControlHost
         string? preferredName = (ExternalAppCombo.SelectedItem as AudioAppOption)?.ProcessName
             ?? _settings.ExternalAppName;
 
-        ExternalAppCombo.ItemsSource = apps;
-        ExternalAppCombo.SelectedItem =
-            apps.FirstOrDefault(app => string.Equals(app.ProcessName, preferredName, StringComparison.OrdinalIgnoreCase))
-            ?? apps.FirstOrDefault(app => app.ProcessName.Contains("spotify", StringComparison.OrdinalIgnoreCase))
-            ?? apps.FirstOrDefault(app => app.IsPlaying)
-            ?? apps.FirstOrDefault();
+        _isUpdatingMusicUi = true;
+        try
+        {
+            ExternalAppCombo.ItemsSource = apps;
+            ExternalAppCombo.SelectedItem =
+                apps.FirstOrDefault(app => string.Equals(app.ProcessName, preferredName, StringComparison.OrdinalIgnoreCase))
+                ?? apps.FirstOrDefault(app => app.ProcessName.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+                ?? apps.FirstOrDefault(app => app.IsPlaying)
+                ?? apps.FirstOrDefault();
+        }
+        finally
+        {
+            _isUpdatingMusicUi = false;
+        }
 
         if (apps.Count == 0)
         {
-            MusicStatusText.Text = "Inga appar med ljud hittades — starta t.ex. Spotify, spela något kort och uppdatera.";
+            MusicStatusText.Text = "Ingen ljudsession hittades. Spela något i t.ex. Spotify i några sekunder och klicka sedan Uppdatera.";
         }
+    }
+
+    private void OnExternalAppSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingMusicUi
+            || ExternalAppCombo.SelectedItem is not AudioAppOption app
+            || string.Equals(_settings.ExternalAppName, app.ProcessName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _settings.ExternalAppName = app.ProcessName;
+        SaveSettings();
     }
 
     private async void OnCaptureToggleClick(object sender, RoutedEventArgs e)
@@ -2573,6 +2612,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _music.SetExternalSource(capture.SampleProvider!);
             _appCapture = capture;
             _captureTarget = app;
+            _lastExternalCaptureRouteState = null;
             _settings.ExternalAppName = app.ProcessName;
             SaveSettings();
             UpdateExternalCaptureStatusText();
@@ -2592,8 +2632,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     }
 
     /// <summary>
-    /// Keeps the capture status honest when routing starts or stops: "starta
-    /// routningen så att andra hör" must not linger once routing is running.
+    /// Keeps capture status honest about both incoming samples and the complete
+    /// route to the virtual mic. Starting the Windows capture client alone does
+    /// not prove that the selected app is currently producing audio.
     /// </summary>
     private void UpdateExternalCaptureStatusText()
     {
@@ -2602,9 +2643,69 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        MusicStatusText.Text = _router.IsRouting
-            ? $"Fångar ljud från {target.DisplayName}."
-            : $"Fångar ljud från {target.DisplayName} — aktivera routningen så att andra hör.";
+        bool hasAudioSignal = CaptureLevelMeter.Value > 0.005;
+        ExternalCaptureRouteState state = ExternalCaptureRoute.Evaluate(
+            hasAudioSignal,
+            _router.IsRouting,
+            _router.MusicMonitorOnly,
+            _router.MusicRouteOpen);
+
+        CaptureStateText.Text = state switch
+        {
+            ExternalCaptureRouteState.WaitingForAudio => $"Väntar på ljud från {target.DisplayName}",
+            ExternalCaptureRouteState.RoutingStopped => "Ljud hittat — routningen är avstängd",
+            ExternalCaptureRouteState.MonitorOnly => "Ljud hittat — endast medhörning",
+            ExternalCaptureRouteState.BlockedByPushToTalk => "Ljud hittat — blockeras av push-to-talk",
+            _ => $"{target.DisplayName} skickas till virtuell mic"
+        };
+
+        CaptureHintText.Text = state switch
+        {
+            ExternalCaptureRouteState.WaitingForAudio =>
+                "Starta uppspelning i appen. Om mätaren inte rör sig: spela några sekunder, uppdatera applistan och välj appen igen.",
+            ExternalCaptureRouteState.RoutingStopped =>
+                "Aktivera routningen med knappen uppe till höger för att skicka ljudet till mic-kanalen.",
+            ExternalCaptureRouteState.MonitorOnly =>
+                "Stäng av Endast medhörning för att skicka musiken till mic-kanalen.",
+            ExternalCaptureRouteState.BlockedByPushToTalk =>
+                $"Håll {_hotkeyBinding.DisplayName}, eller aktivera Musiken ignorerar push-to-talk, för att låta andra höra musiken.",
+            _ => "Ljud tas emot och skickas genom routningen till den virtuella micen."
+        };
+
+        CaptureStateIcon.Data = (Geometry)FindResource(state == ExternalCaptureRouteState.Sending
+            ? "CheckCircleIcon"
+            : state == ExternalCaptureRouteState.WaitingForAudio
+                ? "CircleOffIcon"
+                : "InfoIcon");
+        CaptureStateIcon.Fill = state == ExternalCaptureRouteState.Sending
+            ? StatusTheme.LiveInkBrush
+            : state == ExternalCaptureRouteState.WaitingForAudio
+                ? CaptureIdleBrush
+                : StatusTheme.MutedBrush;
+
+        if (_lastExternalCaptureRouteState == state)
+        {
+            return;
+        }
+
+        _lastExternalCaptureRouteState = state;
+        Log.Information(
+            "External capture route state changed. App={App} ProcessId={ProcessId} State={State} Routing={Routing} MonitorOnly={MonitorOnly} MusicRouteOpen={MusicRouteOpen}",
+            target.DisplayName,
+            target.ProcessId,
+            state,
+            _router.IsRouting,
+            _router.MusicMonitorOnly,
+            _router.MusicRouteOpen);
+        MusicStatusText.Text = state switch
+        {
+            ExternalCaptureRouteState.WaitingForAudio => $"Väntar på ljud från {target.DisplayName}.",
+            ExternalCaptureRouteState.RoutingStopped => "Appens ljud tas emot — aktivera routningen så att andra hör.",
+            ExternalCaptureRouteState.MonitorOnly => "Appens ljud tas emot men Endast medhörning är aktivt.",
+            ExternalCaptureRouteState.BlockedByPushToTalk =>
+                $"Appens ljud tas emot men blockeras av push-to-talk — håll {_hotkeyBinding.DisplayName} eller låt musiken ignorera push-to-talk.",
+            _ => $"{target.DisplayName} skickas till den virtuella micen."
+        };
     }
 
     private void StopAppCapture()
@@ -2612,6 +2713,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         var capture = _appCapture;
         _appCapture = null;
         _captureTarget = null;
+        _lastExternalCaptureRouteState = null;
 
         if (capture != null)
         {
@@ -2660,10 +2762,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             CaptureToggleBtn.Background = CaptureAccentTintBrush;
             CaptureToggleBtn.BorderBrush = CaptureAccentTintBorderBrush;
             CaptureToggleBtn.Foreground = CaptureAccentBrush;
-            CaptureStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
-            CaptureStateIcon.Fill = StatusTheme.LiveInkBrush;
-            CaptureStateText.Text = $"Fångar ljud från {_captureTarget?.DisplayName}";
-            CaptureHintText.Text = CaptureActiveHint;
+            UpdateExternalCaptureStatusText();
         }
         else
         {
@@ -3054,10 +3153,28 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _settings.LinkVolumes = VolumeLinkToggle.IsChecked == true;
+        SetVolumesLinked(VolumeLinkToggle.IsChecked == true, renderControl: false);
+    }
+
+    private void SetVolumesLinked(bool linked, bool renderControl)
+    {
+        _settings.LinkVolumes = linked;
+
+        if (renderControl)
+        {
+            _isUpdatingMusicUi = true;
+            try
+            {
+                VolumeLinkToggle.IsChecked = linked;
+            }
+            finally
+            {
+                _isUpdatingMusicUi = false;
+            }
+        }
 
         // Lock in whatever gap the sliders have right now as the linked offset.
-        if (_settings.LinkVolumes)
+        if (linked)
         {
             _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         }
@@ -3635,8 +3752,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             overlay.MeterSensitivityDb = (float)e.NewValue;
         }
-        PublishObsOverlayState();
         _settings.MeterSensitivityDb = (float)e.NewValue;
+        PublishObsOverlayState();
 
         UpdateMeterSensitivityText();
         ScheduleSettingsSave();

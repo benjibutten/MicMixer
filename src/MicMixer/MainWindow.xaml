@@ -269,7 +269,10 @@
             </Grid.RowDefinitions>
 
             <!-- Left column: devices, hotkey, status -->
-            <ui:RoutingPanel x:Name="RoutingScroll" Grid.Column="0">
+            <ui:RoutingPanel x:Name="RoutingScroll" Grid.Column="0"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"
+                             Focusable="False">
             <!-- Keep the routing cards content-sized; the ScrollViewer only kicks in
                  when their combined natural height exceeds the available space. -->
             <Grid VerticalAlignment="Top">
@@ -1067,6 +1070,7 @@
                     <Grid x:Name="ExternalPanel" Grid.Row="2" Grid.RowSpan="4" Margin="0,0,0,8" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
@@ -1078,10 +1082,11 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <ComboBox x:Name="ExternalAppCombo" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
-                                      DisplayMemberPath="FriendlyName" ToolTipService.ShowDuration="60000"
-                                      ToolTip="Appar som har en ljudkanal just nu. Saknas din app? Starta den, spela något kort och uppdatera listan."/>
+                                      DisplayMemberPath="FriendlyName" SelectionChanged="OnExternalAppSelectionChanged"
+                                      ToolTipService.ShowDuration="60000"
+                                      ToolTip="Listan visar appar som har skapat en ljudsession i Windows. En nystartad app visas därför först efter att den har spelat ljud."/>
                             <Button Grid.Column="1" Height="28" Width="28" Margin="6,0,0,0" Padding="0"
-                                    Click="OnRefreshAudioAppsClick" ToolTip="Uppdatera applistan"
+                                    Click="OnRefreshAudioAppsClick" ToolTip="Uppdatera efter att appen har spelat ljud"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                             </Button>
@@ -1098,8 +1103,12 @@
                             </Button>
                         </Grid>
 
+                        <TextBlock Grid.Row="1" Margin="2,0,2,8" FontSize="10.5" Foreground="#6B7280"
+                                   TextWrapping="Wrap"
+                                   Text="Listan visar appar med en ljudsession. Saknas Spotify? Spela något i några sekunder och klicka sedan Uppdatera."/>
+
                         <!-- Capture status card -->
-                        <Border Grid.Row="1" Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <Border Grid.Row="2" Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1" CornerRadius="8" Padding="16">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <Path x:Name="CaptureStateIcon" Data="{StaticResource CircleOffIcon}" Fill="#9CA3AF"
                                       Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,8"/>
