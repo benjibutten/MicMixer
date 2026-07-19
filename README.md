@@ -236,7 +236,7 @@ the same overlay as a local web page (`http://127.0.0.1:4573/` by default)
 that can be added as a browser source and layered on top of the game. The
 page mirrors the desktop overlay exactly — states, level rings, equalizer bars,
 and the hidden state while routing is stopped — and reconnects automatically
-when MicMixer restarts. See [docs/obs-overlay.md](docs/obs-overlay.md) for setup
+when MicMixer restarts. See [docs/stream-overlay.md](docs/stream-overlay.md) for setup
 steps, URL parameters, and the wire protocol.
 
 ## Local data

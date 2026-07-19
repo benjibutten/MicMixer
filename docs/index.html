@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MicMixer</title>
+<meta name="description" content="MicMixer is a free, open-source Windows app that routes your microphone and your music into one virtual microphone, with separate push-to-talk gates for voice and music.">
+<meta property="og:title" content="MicMixer">
+<meta property="og:description" content="Your microphone and your music in one virtual mic channel, with separate push-to-talk gates for each.">
+<meta property="og:image" content="https://benjibutten.github.io/MicMixer/assets/micmixer-main.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/icon.png">
+<style>
+  :root {
+    --text: #23292f;
+    --muted: #5b6570;
+    --line: #dde2e8;
+    --bg-soft: #f4f6f8;
+    --accent: #159786;
+    --accent-dark: #0e7466;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    color: var(--text);
+    background: #ffffff;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 1.02rem;
+    line-height: 1.65;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 22px; }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--accent-dark); }
+  h1 { font-size: 1.9rem; line-height: 1.25; letter-spacing: -0.01em; }
+  h2 { font-size: 1.35rem; margin: 0 0 14px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 26px 0 6px; }
+  p { margin-bottom: 14px; }
+  ul { margin: 0 0 14px 24px; }
+  li { margin-bottom: 6px; }
+  section { padding: 34px 0 8px; }
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 6px;
+  }
+
+  header.top { border-bottom: 1px solid var(--line); }
+  .top-inner { display: flex; align-items: center; gap: 10px; min-height: 58px; flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; }
+  .top-inner img { width: 24px; height: 24px; }
+  .top-inner .name { font-weight: 600; }
+  .top-links { margin-left: auto; display: flex; gap: 18px; align-items: center; font-size: 0.93rem; flex-wrap: wrap; }
+  .top-links a { color: var(--muted); text-decoration: none; }
+  .top-links a:hover { color: var(--text); text-decoration: underline; }
+
+  .intro { padding-top: 44px; padding-bottom: 10px; }
+  .intro h1 { margin-bottom: 14px; }
+  .intro .actions { display: flex; align-items: center; gap: 18px; margin: 22px 0 8px; flex-wrap: wrap; }
+  .download {
+    display: inline-block;
+    background: var(--accent-dark);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.97rem;
+    padding: 10px 20px;
+    border-radius: 7px;
+  }
+  .download:hover { filter: brightness(0.88); }
+  .actions .alt { font-size: 0.93rem; }
+  .fineprint { color: var(--muted); font-size: 0.87rem; }
+
+  figure.shot { margin: 30px 0 10px; }
+  figure.shot img { border: 1px solid var(--line); border-radius: 8px; }
+  figure.shot figcaption { color: var(--muted); font-size: 0.87rem; margin-top: 8px; }
+
+  .overlay-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0 10px; }
+  @media (max-width: 640px) { .overlay-row { grid-template-columns: 1fr; } }
+  .overlay-row figure { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 8px; padding: 18px 14px; text-align: center; }
+  .overlay-row img { height: 72px; width: auto; margin: 0 auto 10px; }
+  .overlay-row figcaption { font-size: 0.85rem; color: var(--muted); line-height: 1.45; }
+  .overlay-row figcaption b { color: var(--text); display: block; margin-bottom: 2px; }
+
+  ol.setup { margin: 0 0 14px 24px; }
+  ol.setup li { margin-bottom: 10px; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 40px; color: var(--muted); font-size: 0.9rem; }
+  footer p { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <img src="assets/icon.png" alt="" width="64" height="64">
+    <span class="name">MicMixer</span>
+    <nav class="top-links">
+      <a href="#use">What it's for</a>
+      <a href="#overlay">Overlay</a>
+      <a href="#setup">Setup</a>
+      <a href="https://github.com/benjibutten/MicMixer">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap intro">
+  <h1>Your mic and your music, mixed into one virtual microphone.</h1>
+  <p>
+    MicMixer is a free, open-source Windows app. It takes your microphone and your music,
+    mixes them, and plays the result into a virtual audio cable. Your game, Discord, or any
+    voice chat just sees one ordinary microphone. MicMixer decides what goes into it:
+    your normal mic, a voice-modified mic, music, or silence.
+  </p>
+  <p>
+    The point is that voice and music get <em>separate</em> rules. Your voice can sit behind
+    push-to-talk while the music keeps playing. Or the music stays private until you're ready.
+    Everything can be switched live, mid-session.
+  </p>
+  <div class="actions">
+    <a class="download" href="https://github.com/benjibutten/MicMixer/releases/latest/download/MicMixer-win-x64.zip">Download for Windows</a>
+    <a class="alt" href="https://github.com/benjibutten/MicMixer">Source on GitHub</a>
+  </div>
+  <p class="fineprint">
+    Downloads <code>MicMixer-win-x64.zip</code> from the
+    <a href="https://github.com/benjibutten/MicMixer/releases/latest">latest release</a>.
+    Windows 10/11, x64. Self-contained, no .NET install needed. Apache-2.0.
+  </p>
+
+  <figure class="shot">
+    <img src="assets/micmixer-main.png" alt="The MicMixer main window" width="1540" height="992">
+    <figcaption>
+      The main window: device selection, global hotkey, push-to-talk, secondary output,
+      and the built-in music player.
+    </figcaption>
+  </figure>
+</div>
+
+<section class="wrap" id="use">
+  <h2>What it's for</h2>
+
+  <h3>Playing music without depending on the game's push-to-talk</h3>
+  <p>
+    Normally, in-game voice forces a choice: hold the talk key all night to keep your music
+    audible, or let the music cut out every time you release it. With MicMixer, the game
+    listens to the virtual cable with an open mic, and MicMixer's own push-to-talk decides
+    what reaches it. Enable <em>Music ignores push-to-talk</em> and the music flows
+    continuously while your voice still waits for the hotkey.
+  </p>
+
+  <h3>Talking to your stream while music plays, without both leaking into the game</h3>
+  <p>
+    The <em>secondary output</em> plays the complete mix of mic and music, taken before
+    the push-to-talk gate, on an extra playback device. Add that device as an audio capture
+    source in OBS or Streamlabs. Your stream then hears every word and every track, while
+    the game's mic channel only receives what you let through the gate. You can chat with
+    viewers between scenes without a single word reaching in-game voice.
+  </p>
+
+  <h3>Switching to a voice changer while a key is held</h3>
+  <p>
+    Select your real mic and a modified one (for example Voicemod's virtual device). While
+    the hotkey is held, the modified mic is routed; on release you're back to normal. The
+    hotkey can be any key or mouse button, including side buttons. A configurable release delay stops the
+    modified voice from clipping off mid-sentence.
+  </p>
+
+  <h3>Previewing a track before anyone else hears it</h3>
+  <p>
+    <em>Monitor only</em> keeps music out of the mic channel entirely and plays it in your
+    headphones. Find the right song, set the level against the meters, then flip the toggle
+    to send it. The status panel always states exactly where the music is going.
+  </p>
+
+  <h3>Getting the music from anywhere</h3>
+  <p>
+    Use the built-in MP3 library (multiple folders, search, queue), paste a YouTube link to
+    download a track locally, or capture the audio of a running app such as Spotify and
+    route it into the mic channel. Downloads use local copies of <code>yt-dlp</code> and
+    <code>ffmpeg</code>, fetched once and verified with SHA-256.
+  </p>
+</section>
+
+<section class="wrap" id="overlay">
+  <h2>Knowing what's live</h2>
+  <p>
+    A small click-through overlay sits above borderless games and shows the current state,
+    with the same colors as the tray icon. Optional level rings show the actual outgoing signal,
+    measured after the gates, so the mic ring shows exactly what the cable receives.
+  </p>
+  <div class="overlay-row">
+    <figure>
+      <img src="assets/overlay-live.png" alt="Purple music circle and green mic circle">
+      <figcaption><b>Transmitting</b> Green mic and purple music: both are heard in the mic channel.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/overlay-muted.png" alt="Purple music circle and red crossed-out mic circle">
+      <figcaption><b>Push-to-talk muted</b> Voice gated, music still flowing, and the level ring proves it.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/overlay-monitor.png" alt="Amber headphones circle and green mic circle">
+      <figcaption><b>Monitor only</b> Amber headphones: the track plays only to you.</figcaption>
+    </figure>
+  </div>
+  <p>
+    If your streaming software captures the game as a single process, desktop overlays are
+    not part of the picture. MicMixer therefore also serves the overlay as a local web page
+    (<code>http://127.0.0.1:4573/</code>) for an OBS browser source: same states, same
+    rings, and it reconnects by itself. Details in
+    <a href="https://github.com/benjibutten/MicMixer/blob/main/docs/stream-overlay.md">docs/stream-overlay.md</a>.
+  </p>
+</section>
+
+<section class="wrap" id="setup">
+  <h2>Setup</h2>
+  <p>You need a virtual audio cable driver. The free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> works well.</p>
+  <ol class="setup">
+    <li>Install VB-CABLE and reboot if the installer asks.</li>
+    <li>Download <a href="https://github.com/benjibutten/MicMixer/releases/latest/download/MicMixer-win-x64.zip"><code>MicMixer-win-x64.zip</code></a>, extract it, run <code>MicMixer.exe</code>.</li>
+    <li>Pick your mic (and optionally a modded mic), and select <em>CABLE Input</em> as the virtual cable output.</li>
+    <li>In the game or chat app, select <em>CABLE Output</em> as the microphone. Click <em>Enable</em> in MicMixer.</li>
+  </ol>
+  <p>
+    The <a href="https://github.com/benjibutten/MicMixer#readme">README</a> covers the rest:
+    hotkeys, music routing in detail, local monitoring, troubleshooting, and where settings
+    and logs live.
+  </p>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      Built by <a href="https://github.com/benjibutten">BenjiButten</a>. Use cases, testing,
+      and feedback by <a href="https://www.twitch.tv/pixlexi">Pixlexi</a>. If MicMixer is
+      useful to you, consider gifting her a sub on Twitch.
+    </p>
+    <p>
+      <a href="https://github.com/benjibutten/MicMixer/blob/main/LICENSE">Apache-2.0</a> ·
+      also by the same author: <a href="https://benjibutten.github.io/StreamDecky/">StreamDecky</a>,
+      an overlay command deck that can remote-control MicMixer's music player.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
