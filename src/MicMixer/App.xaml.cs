@@ -67,8 +67,24 @@ public partial class App : System.Windows.Application
         }
     }
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
+        if (UpdateInstaller.IsCleanupMode(e.Args))
+        {
+            base.OnStartup(e);
+            await UpdateInstaller.RunCleanupAsync(e.Args);
+            Shutdown();
+            return;
+        }
+        if (UpdateInstaller.IsUpdateMode(e.Args))
+        {
+            base.OnStartup(e);
+            await UpdateInstaller.RunAsync(e.Args);
+            Shutdown();
+            return;
+        }
+        UpdateInstaller.ScheduleCleanup(e.Args);
+
         try
         {
             AppLogger.Initialize();

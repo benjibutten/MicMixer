@@ -40,4 +40,34 @@ public sealed class GitHubUpdateServiceTests
     {
         Assert.Throws<InvalidDataException>(() => GitHubUpdateService.ParseChecksum(value));
     }
+
+    [Fact]
+    public void InstallFiles_UpdatesReleaseFilesAndPreservesOtherFiles()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"MicMixer-update-test-{Guid.NewGuid():N}");
+        string staging = Path.Combine(root, "staging");
+        string install = Path.Combine(root, "install");
+        string backup = Path.Combine(root, "backup");
+        try
+        {
+            Directory.CreateDirectory(staging);
+            Directory.CreateDirectory(install);
+            File.WriteAllText(Path.Combine(staging, "MicMixer.exe"), "new version");
+            File.WriteAllText(Path.Combine(staging, "NOTICE.txt"), "new notice");
+            File.WriteAllText(Path.Combine(install, "MicMixer.exe"), "old version");
+            File.WriteAllText(Path.Combine(install, "user-file.txt"), "keep me");
+
+            UpdateInstaller.InstallFiles(staging, install, backup);
+
+            Assert.Equal("new version", File.ReadAllText(Path.Combine(install, "MicMixer.exe")));
+            Assert.Equal("new notice", File.ReadAllText(Path.Combine(install, "NOTICE.txt")));
+            Assert.Equal("keep me", File.ReadAllText(Path.Combine(install, "user-file.txt")));
+            Assert.Equal("old version", File.ReadAllText(Path.Combine(backup, "MicMixer.exe")));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
 }

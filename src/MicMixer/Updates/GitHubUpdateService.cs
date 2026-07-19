@@ -13,6 +13,8 @@ internal sealed record UpdateInfo(
     Uri ChecksumUri,
     Uri ReleasePageUri);
 
+internal sealed record UpdateProgress(string Status, double? Percentage = null);
+
 internal sealed class GitHubUpdateService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(12);
@@ -75,16 +77,21 @@ internal sealed class GitHubUpdateService
         return new UpdateInfo(releaseVersion!, tagName, zipUri, checksumUri, new Uri(pageUrl));
     }
 
-    public async Task LaunchInstallerAsync(UpdateInfo update, CancellationToken cancellationToken = default)
+    public async Task LaunchInstallerAsync(
+        UpdateInfo update,
+        IProgress<UpdateProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         string workDirectory = Path.Combine(Path.GetTempPath(), $"MicMixer-update-{Guid.NewGuid():N}");
         Directory.CreateDirectory(workDirectory);
         string zipPath = Path.Combine(workDirectory, "update.zip");
-        string scriptPath = Path.Combine(workDirectory, "install-update.ps1");
+        string updaterPath = Path.Combine(workDirectory, "MicMixer.Update.exe");
 
         try
         {
-            await DownloadFileAsync(update.DownloadUri, zipPath, cancellationToken);
+            progress?.Report(new UpdateProgress("Downloading update…", 0));
+            await DownloadFileAsync(update.DownloadUri, zipPath, progress, cancellationToken);
+            progress?.Report(new UpdateProgress("Verifying download…"));
             string checksumText = await _httpClient.GetStringAsync(update.ChecksumUri, cancellationToken);
             string expectedHash = ParseChecksum(checksumText);
             string actualHash;
@@ -96,44 +103,38 @@ internal sealed class GitHubUpdateService
             if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The downloaded update failed its SHA-256 integrity check.");
 
-            await File.WriteAllTextAsync(scriptPath, UpdaterScript, cancellationToken);
-
             string executablePath = Environment.ProcessPath
                 ?? throw new InvalidOperationException("Could not determine the running executable path.");
             string installDirectory = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-            string installParent = Directory.GetParent(installDirectory)?.FullName
-                ?? throw new InvalidOperationException("Could not determine the installation parent directory.");
-            bool requiresElevation = !CanWriteToDirectory(installDirectory)
-                || !CanWriteToDirectory(installParent);
-            string powershellPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "WindowsPowerShell", "v1.0", "powershell.exe");
+            bool requiresElevation = !CanWriteToDirectory(installDirectory);
 
-            var startInfo = new ProcessStartInfo(powershellPath)
+            progress?.Report(new UpdateProgress("Preparing installer…"));
+            File.Copy(executablePath, updaterPath);
+
+            var startInfo = new ProcessStartInfo(updaterPath)
             {
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
-                WorkingDirectory = Path.GetTempPath()
+                WorkingDirectory = workDirectory
             };
             if (requiresElevation)
                 startInfo.Verb = "runas";
 
-            startInfo.ArgumentList.Add("-NoProfile");
-            startInfo.ArgumentList.Add("-ExecutionPolicy");
-            startInfo.ArgumentList.Add("Bypass");
-            startInfo.ArgumentList.Add("-File");
-            startInfo.ArgumentList.Add(scriptPath);
-            startInfo.ArgumentList.Add("-ProcessId");
+            startInfo.ArgumentList.Add("--apply-update");
+            startInfo.ArgumentList.Add("--process-id");
             startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
-            startInfo.ArgumentList.Add("-ZipPath");
+            startInfo.ArgumentList.Add("--zip-path");
             startInfo.ArgumentList.Add(zipPath);
-            startInfo.ArgumentList.Add("-ExpectedHash");
+            startInfo.ArgumentList.Add("--expected-hash");
             startInfo.ArgumentList.Add(expectedHash);
-            startInfo.ArgumentList.Add("-InstallDirectory");
+            startInfo.ArgumentList.Add("--install-directory");
             startInfo.ArgumentList.Add(installDirectory);
-            startInfo.ArgumentList.Add("-ExecutablePath");
+            startInfo.ArgumentList.Add("--executable-path");
             startInfo.ArgumentList.Add(executablePath);
-            Process.Start(startInfo);
+            progress?.Report(new UpdateProgress(
+                requiresElevation ? "Waiting for Windows approval…" : "Starting installer…"));
+            _ = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Windows could not start the update installer.");
         }
         catch
         {
@@ -157,13 +158,35 @@ internal sealed class GitHubUpdateService
         return hash.ToUpperInvariant();
     }
 
-    private async Task DownloadFileAsync(Uri uri, string path, CancellationToken cancellationToken)
+    private async Task DownloadFileAsync(
+        Uri uri,
+        string path,
+        IProgress<UpdateProgress>? progress,
+        CancellationToken cancellationToken)
     {
         using var response = await _httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var destination = File.Create(path);
-        await source.CopyToAsync(destination, cancellationToken);
+        long? totalBytes = response.Content.Headers.ContentLength;
+        var buffer = new byte[81920];
+        long downloadedBytes = 0;
+        int lastReportedPercentage = -1;
+        int bytesRead;
+        while ((bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) != 0)
+        {
+            await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            downloadedBytes += bytesRead;
+            if (totalBytes > 0)
+            {
+                int percentage = (int)Math.Min(100, downloadedBytes * 100 / totalBytes.Value);
+                if (percentage != lastReportedPercentage)
+                {
+                    lastReportedPercentage = percentage;
+                    progress?.Report(new UpdateProgress("Downloading update…", percentage));
+                }
+            }
+        }
     }
 
     private bool IsCheckDue()
@@ -199,63 +222,4 @@ internal sealed class GitHubUpdateService
         finally { try { File.Delete(probe); } catch { } }
     }
 
-    private const string UpdaterScript = """
-param(
-    [Parameter(Mandatory=$true)][int]$ProcessId,
-    [Parameter(Mandatory=$true)][string]$ZipPath,
-    [Parameter(Mandatory=$true)][string]$ExpectedHash,
-    [Parameter(Mandatory=$true)][string]$InstallDirectory,
-    [Parameter(Mandatory=$true)][string]$ExecutablePath
-)
-$ErrorActionPreference = 'Stop'
-$workDirectory = Split-Path -Parent $ZipPath
-$stagingDirectory = Join-Path $workDirectory 'staging'
-$installParent = Split-Path -Parent $InstallDirectory
-$installLeaf = Split-Path -Leaf $InstallDirectory
-$transactionId = [Guid]::NewGuid().ToString('N')
-$replacementDirectory = Join-Path $installParent "$installLeaf.update-$transactionId"
-$backupDirectory = Join-Path $installParent "$installLeaf.backup-$transactionId"
-$originalMoved = $false
-try {
-    Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
-    $actualHash = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash
-    if ($actualHash -ne $ExpectedHash) { throw 'Update integrity check failed.' }
-    Expand-Archive -LiteralPath $ZipPath -DestinationPath $stagingDirectory -Force
-
-    $executableName = Split-Path -Leaf $ExecutablePath
-    if (-not (Test-Path -LiteralPath (Join-Path $stagingDirectory $executableName) -PathType Leaf)) {
-        throw "The update archive does not contain $executableName."
-    }
-
-    New-Item -ItemType Directory -Path $replacementDirectory | Out-Null
-    Get-ChildItem -LiteralPath $InstallDirectory -Force | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $replacementDirectory -Recurse -Force
-    }
-    Get-ChildItem -LiteralPath $stagingDirectory -Force | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $replacementDirectory -Recurse -Force
-    }
-
-    Rename-Item -LiteralPath $InstallDirectory -NewName (Split-Path -Leaf $backupDirectory)
-    $originalMoved = $true
-    Rename-Item -LiteralPath $replacementDirectory -NewName $installLeaf
-    Start-Process -FilePath $ExecutablePath
-    Remove-Item -LiteralPath $backupDirectory -Recurse -Force -ErrorAction SilentlyContinue
-    $originalMoved = $false
-}
-catch {
-    if ($originalMoved -and (Test-Path -LiteralPath $backupDirectory)) {
-        Remove-Item -LiteralPath $InstallDirectory -Recurse -Force -ErrorAction SilentlyContinue
-        if (-not (Test-Path -LiteralPath $InstallDirectory)) {
-            Rename-Item -LiteralPath $backupDirectory -NewName $installLeaf -ErrorAction SilentlyContinue
-        }
-    }
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("The update could not be installed.`n`n$($_.Exception.Message)", 'MicMixer Update', 'OK', 'Error') | Out-Null
-}
-finally {
-    Start-Sleep -Milliseconds 300
-    Remove-Item -LiteralPath $replacementDirectory -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $workDirectory -Recurse -Force -ErrorAction SilentlyContinue
-}
-""";
 }
