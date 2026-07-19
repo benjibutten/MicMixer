@@ -9,6 +9,7 @@ using MicMixer.Diagnostics;
 using MicMixer.Music;
 using MicMixer.Remote;
 using MicMixer.Settings;
+using MicMixer.Updates;
 using Serilog;
 
 namespace MicMixer;
@@ -151,6 +152,7 @@ public partial class App : System.Windows.Application
         StartupTrace("Control server started");
         if (StartHiddenInTray)
         {
+            CheckForUpdatesWhenShown(mainWindow);
             mainWindow.StartHiddenInTray();
             StartupTrace("MainWindow started hidden in tray");
         }
@@ -158,7 +160,37 @@ public partial class App : System.Windows.Application
         {
             mainWindow.Show();
             StartupTrace("MainWindow shown");
+            _ = CheckForUpdatesAfterStartupAsync(mainWindow);
         }
+    }
+
+    private static async Task CheckForUpdatesAfterStartupAsync(Window owner)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(8));
+        if (owner.Dispatcher.HasShutdownStarted)
+            return;
+
+        if (!owner.IsVisible)
+        {
+            CheckForUpdatesWhenShown(owner);
+            return;
+        }
+
+        await UpdateCoordinator.CheckAsync(owner, manual: false);
+    }
+
+    private static void CheckForUpdatesWhenShown(Window owner)
+    {
+        DependencyPropertyChangedEventHandler? visibilityChanged = null;
+        visibilityChanged = (_, _) =>
+        {
+            if (!owner.IsVisible)
+                return;
+
+            owner.IsVisibleChanged -= visibilityChanged;
+            _ = CheckForUpdatesAfterStartupAsync(owner);
+        };
+        owner.IsVisibleChanged += visibilityChanged;
     }
 
     internal static bool HasStartHiddenInTrayArgument(IEnumerable<string> args) =>

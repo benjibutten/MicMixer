@@ -3629,6 +3629,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         Focus();
     }
 
+    internal void ExitForUpdate()
+    {
+        _isReallyClosing = true;
+        System.Windows.Application.Current.Shutdown();
+    }
+
     private void RestoreFromTray() => ShowAndActivate();
 
     private MicStatus ComputeMicStatus()

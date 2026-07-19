@@ -8,6 +8,7 @@ using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using MicMixer.Updates;
 
 namespace MicMixer.UI;
 
@@ -92,6 +93,7 @@ internal sealed class AboutDialog : Window
         var footer = new Grid { Margin = new Thickness(0, 4, 0, 0) };
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var sourceLink = new TextBlock
         {
@@ -112,6 +114,18 @@ internal sealed class AboutDialog : Window
         sourceLink.Inlines.Add(hyperlink);
         footer.Children.Add(sourceLink);
 
+        var updateButton = new Button
+        {
+            Content = "Check for updates",
+            MinWidth = 120,
+            Margin = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(12, 6, 12, 6),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        updateButton.Click += async (_, _) => await UpdateCoordinator.CheckAsync(this, manual: true);
+        Grid.SetColumn(updateButton, 1);
+        footer.Children.Add(updateButton);
+
         var closeButton = new Button
         {
             Content = "Close",
@@ -126,7 +140,7 @@ internal sealed class AboutDialog : Window
             IsCancel = true
         };
         closeButton.Click += (_, _) => Close();
-        Grid.SetColumn(closeButton, 1);
+        Grid.SetColumn(closeButton, 2);
         footer.Children.Add(closeButton);
         content.Children.Add(footer);
 

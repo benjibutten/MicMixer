@@ -19,6 +19,8 @@ concurrency:
 env:
   PROJECT_PATH: src/MicMixer/MicMixer.csproj
   RUNTIME_ID: win-x64
+  WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
+  WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
 
 jobs:
   release:
@@ -98,6 +100,47 @@ jobs:
             -p:InformationalVersion="${{ steps.meta.outputs.version }}+${{ github.sha }}" `
             -o $publishDir
 
+      - name: Code sign executable when configured
+        id: codesign
+        shell: pwsh
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PFX_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PASSWORD)
+
+          if ($hasCertificate -ne $hasPassword)
+          {
+            throw "Both WINDOWS_CODESIGN_CERT_PFX_BASE64 and WINDOWS_CODESIGN_CERT_PASSWORD must be configured together."
+          }
+
+          if (-not $hasCertificate)
+          {
+            "status=Unsigned (code-signing secrets were not configured)" >> $env:GITHUB_OUTPUT
+            return
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "micmixer-codesign.pfx"
+          try
+          {
+            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_PFX_BASE64))
+            $exePath = Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID/MicMixer.exe"
+            signtool sign `
+              /fd SHA256 `
+              /f $certPath `
+              /p $env:WINDOWS_CODESIGN_CERT_PASSWORD `
+              /tr "http://timestamp.digicert.com" `
+              /td SHA256 `
+              $exePath
+            if ($LASTEXITCODE -ne 0) { throw "signtool sign failed with exit code $LASTEXITCODE." }
+
+            signtool verify /pa /v $exePath
+            if ($LASTEXITCODE -ne 0) { throw "signtool verify failed with exit code $LASTEXITCODE." }
+            "status=Signed and signature-verified" >> $env:GITHUB_OUTPUT
+          }
+          finally
+          {
+            Remove-Item -LiteralPath $certPath -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Create release zip
         shell: pwsh
         run: |
@@ -110,11 +153,16 @@ jobs:
 
           Compress-Archive -Path "artifacts/publish/$env:RUNTIME_ID/*" -DestinationPath $zipPath
 
+          $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ${{ steps.meta.outputs.asset_name }}" | Set-Content -Path "$zipPath.sha256" -NoNewline
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
           name: micmixer-${{ steps.meta.outputs.version }}-win-x64
-          path: artifacts/${{ steps.meta.outputs.asset_name }}
+          path: |
+            artifacts/${{ steps.meta.outputs.asset_name }}
+            artifacts/${{ steps.meta.outputs.asset_name }}.sha256
 
       - name: Write release notes
         shell: pwsh
@@ -126,9 +174,14 @@ jobs:
           Build: ${{ steps.meta.outputs.version }}
           Commit: ${{ github.sha }}
           Runtime: ${{ env.RUNTIME_ID }}
+          Code signing: ${{ steps.codesign.outputs.status }}
 
           Download the zip asset below and extract over your existing MicMixer folder,
           then run MicMixer.exe. Keeping the same install path helps Windows keep tray icon preferences.
+
+          Windows Defender SmartScreen may warn about a newly published or unsigned build.
+          Verify that the archive came from this GitHub release and compare its SHA-256
+          hash with the attached .sha256 file before choosing More info > Run anyway.
           "@ | Set-Content -Path artifacts/release-notes.md
 
       - name: Create GitHub release
@@ -138,7 +191,7 @@ jobs:
           commit: ${{ github.sha }}
           name: ${{ steps.meta.outputs.release_name }}
           bodyFile: artifacts/release-notes.md
-          artifacts: artifacts/${{ steps.meta.outputs.asset_name }}
+          artifacts: artifacts/${{ steps.meta.outputs.asset_name }},artifacts/${{ steps.meta.outputs.asset_name }}.sha256
           allowUpdates: true
           artifactErrorsFailBuild: true
           replacesArtifacts: true
