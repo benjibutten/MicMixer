@@ -25,6 +25,33 @@ Install MicMixer
 When updating, close MicMixer and extract the new release over the same folder.
 Keeping the same path also helps Windows retain its tray icon preferences.
 
+Windows security prompts
+------------------------
+MicMixer is distributed outside Microsoft Store. Windows Defender SmartScreen
+may therefore describe a newly published or unsigned build as an unrecognized
+app, even when it was downloaded from the official project.
+
+- Download releases only from https://github.com/benjibutten/MicMixer/releases
+- Each release includes MicMixer-win-x64.zip.sha256. To verify the download,
+  run this command in PowerShell and compare the result with the first value in
+  that file:
+
+    Get-FileHash .\MicMixer-win-x64.zip -Algorithm SHA256
+
+- If SmartScreen shows "Windows protected your PC", first verify the source and
+  hash. Then choose "More info" followed by "Run anyway" only if you trust the
+  verified download.
+- Windows 11 Smart App Control is separate from SmartScreen and can completely
+  block unknown unsigned apps without a "Run anyway" choice. Do not turn off a
+  security feature only to run a file whose source or hash you cannot verify.
+- A UAC prompt during an automatic update means that the installation folder
+  requires administrator permission. Check that the prompt refers to the app
+  you intended to update before approving it.
+
+Automatic updates are downloaded from the official GitHub release and checked
+against its SHA-256 file before installation. A valid checksum detects a damaged
+or mismatched download; it is not a replacement for Windows code signing.
+
 Set up VB-CABLE
 ---------------
 Skip this section if you already have a suitable virtual audio driver.

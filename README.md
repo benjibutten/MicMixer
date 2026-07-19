@@ -55,6 +55,21 @@ Download the latest `MicMixer-win-x64.zip` archive from
 [GitHub Releases](https://github.com/benjibutten/MicMixer/releases/latest), extract
 it, and run `MicMixer.exe`.
 
+MicMixer is distributed outside Microsoft Store. Windows Defender SmartScreen
+may show **Windows protected your PC** for an unsigned or newly published build.
+Verify that the archive came from the official GitHub release and compare its
+SHA-256 hash with the attached `.sha256` file before selecting **More info → Run
+anyway**. Windows 11 Smart App Control is a separate feature and may block unknown
+unsigned apps without offering that override. See [INSTALLATION.txt](INSTALLATION.txt)
+for verification commands and details.
+
+Release builds check GitHub for updates at most once every 12 hours while the
+main window is open. When a newer version is available, MicMixer can download,
+verify, install, and restart itself. You can also run a manual check from
+**About → Check for updates**. Installs in protected folders may trigger a UAC
+prompt, and Windows may show a security warning when a new build restarts.
+Development builds do not perform update checks.
+
 ## Basic setup
 
 1. Install [VB-CABLE](https://vb-audio.com/Cable/).
@@ -302,7 +317,9 @@ dependencies and builds the application in Release configuration on Windows.
 
 Pushes to `main` that change application source or project files run
 `.github/workflows/release.yml`. The workflow publishes a self-contained `win-x64`
-build, creates a zip archive, and creates or updates the latest GitHub Release.
+build, optionally signs and verifies the executable when the code-signing secrets
+are configured, creates a zip archive plus SHA-256 file, and creates or updates
+the latest GitHub Release. The release notes state whether that build was signed.
 
 Documentation- and workflow-only pushes do not trigger an application release. A
 release can also be started manually through `workflow_dispatch`.
