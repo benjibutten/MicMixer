@@ -912,7 +912,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Grid>
-                            <TextBox x:Name="YoutubeUrlBox" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
+                            <TextBox x:Name="YoutubeUrlBox" Height="28" Padding="5,0,3,0" VerticalContentAlignment="Center" FontSize="11.5"
                                      KeyDown="OnYoutubeUrlKeyDown" TextChanged="OnYoutubeUrlChanged"/>
                             <TextBlock x:Name="YoutubeUrlHintText" Text="Paste a YouTube link here..." FontSize="11.5"
                                        Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
@@ -966,7 +966,7 @@
                         </Grid.ColumnDefinitions>
                         <Path Data="{StaticResource SearchIcon}" Fill="#9CA3AF" Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,6,0"/>
                         <Grid Grid.Column="1">
-                            <TextBox x:Name="PlaylistFilterBox" Height="26" VerticalContentAlignment="Center" FontSize="11.5"
+                            <TextBox x:Name="PlaylistFilterBox" Height="26" Padding="5,0,3,0" VerticalContentAlignment="Center" FontSize="11.5"
                                      TextChanged="OnPlaylistFilterChanged"/>
                             <TextBlock x:Name="PlaylistFilterHintText" Text="Search the playlist..." FontSize="11.5"
                                        Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
