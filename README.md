@@ -317,9 +317,15 @@ If you enjoy MicMixer and would like to give something back, please consider
 gifting a sub to [Pixlexi](https://www.twitch.tv/pixlexi) on Twitch.
 
 Third-party components and their license information are listed in
-[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). Both that file and the
-project license are included in published distributions.
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). That file, the project
+license, and the attribution [NOTICE](NOTICE) are included in published distributions.
 
 ## License
 
-See [LICENSE](LICENSE).
+MicMixer is licensed under the [Apache License 2.0](LICENSE). Redistributions
+must also preserve the applicable attribution information from [NOTICE](NOTICE)
+as required by the license.
+
+Published releases up to and including `v2026.7.3` remain available under the
+MIT terms under which they were originally released. Source from the Apache-2.0
+relicensing commit onward is licensed under Apache-2.0.

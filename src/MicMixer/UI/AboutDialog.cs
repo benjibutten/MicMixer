@@ -73,7 +73,7 @@ internal sealed class AboutDialog : Window
 
         content.Children.Add(CreateCard(
             "Free and open-source software",
-            $"{appName} is provided as open-source software under the MIT License. " +
+            $"{appName} is provided as open-source software under the Apache License 2.0. " +
             "You may use, study, modify, and share the code under the license terms.",
             "#F8FAFC",
             "#D7DEE7"));

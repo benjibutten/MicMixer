@@ -7,6 +7,7 @@
     <Product>MicMixer</Product>
     <Company>BenjiButten</Company>
     <Authors>BenjiButten</Authors>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -31,6 +32,11 @@
   <ItemGroup>
     <None Include="..\..\LICENSE"
           Link="LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true" />
+    <None Include="..\..\NOTICE"
+          Link="NOTICE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest"
           ExcludeFromSingleFile="true" />
