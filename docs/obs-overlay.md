@@ -1,10 +1,11 @@
-# MicMixer OBS overlay
+# MicMixer stream overlay
 
-When OBS captures a game as an individual process (Game Capture), desktop
+When streaming software captures a game as an individual process, desktop
 overlays such as MicMixer's status indicator are not part of the captured
-image, so viewers never see them. The OBS overlay solves this: MicMixer serves
-the same overlay as a local web page that is added to OBS as a **Browser
-source** and layered on top of the game.
+image, so viewers never see them. The stream overlay solves this: MicMixer serves
+the same overlay as a local web page that can be added as a **browser source**
+and layered on top of the game. This works with software that supports browser
+sources, including OBS Studio and Streamlabs Desktop.
 
 The page mirrors the desktop overlay exactly — the mic status dot, the music
 circle with its equalizer bars, and the optional level rings, with the same
@@ -14,18 +15,19 @@ behaves like the desktop.
 
 ## Enabling
 
-Check **OBS-overlay** in MicMixer's routing settings. MicMixer then starts a
+Check **Stream overlay** in MicMixer's routing settings. MicMixer then starts a
 small web server bound to `127.0.0.1` (default port 4573, configurable next to
 the checkbox). The settings UI shows the overlay address, and the link can be
 opened in a normal browser to test it.
 
-The OBS overlay works independently of the on-screen overlay indicator: either
+The stream overlay works independently of the on-screen overlay indicator: either
 one, both, or neither can be enabled. The **Volume meter** and
 **Sensitivity** settings apply to both overlays.
 
-## OBS setup
+## Streaming software setup
 
-1. In OBS, add a source to the scene: **Sources → + → Browser**.
+1. Add a browser source to the scene. In OBS Studio and Streamlabs Desktop,
+   choose **Sources → + → Browser Source**.
 2. Paste the overlay address, e.g. `http://127.0.0.1:4573/`.
 3. Set the source size to the overlay's 2:1 aspect. The overlay is vector
    graphics, so any size stays sharp; multiples of the native 116×58 keep the
@@ -44,16 +46,16 @@ one, both, or neither can be enabled. The **Volume meter** and
 4. Place the source where the overlay should appear, typically a top corner,
    above the Game Capture source.
 
-The page background is transparent; OBS composites only the drawn indicators.
+The page background is transparent, so the streaming software composites only the drawn indicators.
 When MicMixer is closed or restarting, the page hides itself and reconnects
-automatically with backoff — no OBS interaction needed.
+automatically with backoff — no interaction with the streaming software is needed.
 
 ### URL parameters
 
 | Parameter | Effect |
 | --- | --- |
 | `?opacity=1` | Fully opaque indicators (default mirrors the desktop overlay's `0.72`). Any value from `0.05` to `1` works. |
-| `?debug=1` | Dark page background and a connection status line, for testing outside OBS. |
+| `?debug=1` | Dark page background and a connection status line, for testing outside streaming software. |
 | `?demo=1` | Shows a representative state with moving meters without connecting to MicMixer — useful for sizing and placing the Browser source while routing is stopped, since the live page shows nothing then. Optional `&mic=live\|modded\|muted`, `&music=sending\|monitorOnly\|blocked\|hidden`, and `&meter=0` pick the shown state. Remove the parameter afterwards. |
 
 ## Protocol
@@ -93,7 +95,7 @@ as the desktop overlay, so both meters move identically.
 - Without connected pages the server is idle: no level messages are produced,
   and the audio-thread level metering stays disabled unless the desktop
   overlay needs it.
-- Level frames are coalesced per client — a stalled OBS instance simply skips
+- Level frames are coalesced per client — a stalled browser source simply skips
   frames and can never build a queue or block MicMixer.
 - The server listens only on the loopback interface and carries only the
   status strings and level numbers shown above — no audio, no video, and no

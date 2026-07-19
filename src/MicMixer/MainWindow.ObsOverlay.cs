@@ -8,9 +8,9 @@ using Serilog;
 namespace MicMixer;
 
 /// <summary>
-/// OBS overlay integration: a loopback-only web server that mirrors the
-/// on-screen overlay into an OBS Browser source, so viewers see the mic and
-/// music status even when OBS captures only the game process. The page shows
+/// Stream overlay integration: a loopback-only web server that mirrors the
+/// on-screen overlay into a browser source, so viewers see the mic and
+/// music status even when streaming software captures only the game process. The page shows
 /// exactly what <see cref="OverlayIndicatorWindow"/> would show — including
 /// showing nothing while routing is stopped — but runs independently of the
 /// desktop indicator, so a streamer can have either, both, or neither.
@@ -71,17 +71,17 @@ public partial class MainWindow
                     }
                     catch (Exception disposeException)
                     {
-                        Log.Warning(disposeException, "Failed to clean up the OBS overlay server after startup failed.");
+                        Log.Warning(disposeException, "Failed to clean up the stream overlay server after startup failed.");
                     }
                 }
 
                 // Typically the port is taken by another app; keep the app
                 // running and tell the user which port failed.
-                Log.Error(ex, "Failed to start the OBS overlay server on port {Port}.", _settings.ObsOverlayPort);
+                Log.Error(ex, "Failed to start the stream overlay server on port {Port}.", _settings.ObsOverlayPort);
                 _obsOverlayServer = null;
                 _obsOverlayError =
                     $"Could not start on port {_settings.ObsOverlayPort} — the port may be in use. Change the port and press Enter.";
-                StatusText.Text = $"Could not start the OBS overlay on port {_settings.ObsOverlayPort}: {ex.Message}";
+                StatusText.Text = $"Could not start the stream overlay on port {_settings.ObsOverlayPort}: {ex.Message}";
             }
         }
         else
@@ -109,7 +109,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Publishes the current overlay state to connected OBS pages. Safe to call
+    /// Publishes the current overlay state to connected browser-source pages. Safe to call
     /// on every UI refresh: the server dedupes identical snapshots.
     /// </summary>
     private void PublishObsOverlayState()
@@ -161,7 +161,7 @@ public partial class MainWindow
             int clients = server.ClientCount;
             ObsOverlayClientsText.Text = clients switch
             {
-                0 => " — waiting for OBS",
+                0 => " — waiting for streaming software",
                 1 => " — 1 connected",
                 _ => $" — {clients} connected"
             };
@@ -196,7 +196,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to open the OBS overlay page in a browser.");
+            Log.Warning(ex, "Failed to open the stream overlay page in a browser.");
         }
     }
 
@@ -211,7 +211,7 @@ public partial class MainWindow
         catch (Exception ex)
         {
             // The clipboard can be locked by another process; not fatal.
-            Log.Warning(ex, "Failed to copy the OBS overlay URL to the clipboard.");
+            Log.Warning(ex, "Failed to copy the stream overlay URL to the clipboard.");
         }
     }
 

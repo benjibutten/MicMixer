@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>MicMixer Overlay</title>
 <style>
-  /* Transparent everywhere so OBS composites only the drawn shapes. */
+  /* Transparent everywhere so streaming software composites only the drawn shapes. */
   html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
   body.debug { background: #2b2f36; }
   svg { width: 100%; height: 100%; display: block; }
@@ -126,7 +126,7 @@ const opacity = params.has('opacity')
   : 0.72;
 const debug = params.get('debug') === '1';
 // Demo mode renders a representative state with synthetic levels and never
-// connects, so the Browser source can be sized and placed in OBS while
+// connects, so the browser source can be sized and placed in streaming software while
 // routing is stopped (the live page would show nothing then). Optional
 // &mic= / &music= / &meter=0 pick the shown state.
 const demo = params.get('demo') === '1';

@@ -30,7 +30,7 @@ public enum MicStatus
 /// round badge rendering, so the tray icon, the overlay dot, the window icon and
 /// the in-window status elements always agree.
 ///
-/// The color semantics follow voice apps (Discord/Teams) rather than recording
+/// The color semantics follow voice communication apps rather than recording
 /// apps: green = you are heard, blue = the modded voice is heard, red with a
 /// crossed-out mic = muted, gray = stopped. Every state also has its own glyph,
 /// so states stay distinguishable without color (16 px tray, color blindness).

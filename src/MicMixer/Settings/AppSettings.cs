@@ -26,7 +26,7 @@ public sealed class AppSettings
 
     public string? MusicMonitorDeviceId { get; set; }
 
-    /// <summary>Plays the finished pre-gate mix (mic + music) on an extra render device, e.g. for OBS capture.</summary>
+    /// <summary>Plays the finished pre-gate mix (mic + music) on an extra render device, e.g. for recording or streaming.</summary>
     public bool SecondaryOutputEnabled { get; set; }
 
     public string? SecondaryOutputDeviceId { get; set; }
@@ -72,10 +72,10 @@ public sealed class AppSettings
     /// </summary>
     public float MeterSensitivityDb { get; set; }
 
-    /// <summary>Serves the overlay as a local web page for an OBS Browser source.</summary>
+    /// <summary>Serves the overlay as a local web page for a browser source.</summary>
     public bool ObsOverlayEnabled { get; set; }
 
-    /// <summary>Loopback port for the OBS overlay server.</summary>
+    /// <summary>Loopback port for the stream overlay server.</summary>
     public int ObsOverlayPort { get; set; } = Overlay.ObsOverlayServer.DefaultPort;
 
     public string? ExternalAppName { get; set; }

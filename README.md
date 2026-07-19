@@ -22,15 +22,15 @@ routing.
 - Displays input levels for the normal and modified microphones.
 - Plays MP3 files and mixes them into the virtual microphone channel.
 - Captures audio directly from an external application such as Spotify.
-- Downloads audio from supported video URLs and converts it to MP3.
+- Downloads audio from YouTube links and converts it to MP3.
 - Provides optional local monitoring with independent output and volume controls.
 - Provides an optional secondary output that plays the complete mix (mic + music)
-  on an extra device — before the push-to-talk gate — for example for OBS capture.
+  on an extra device — before the push-to-talk gate — for recording or streaming.
 - Includes playlist search, multiple music folders, a queue, and transport controls.
 - Provides a click-through status overlay with mic state, music animation, and an
   optional outgoing level meter.
-- Serves the same overlay as a local web page for an OBS Browser source, so
-  viewers see the mic and music status even when OBS captures only the game.
+- Serves the same overlay as a local web page for streaming software with browser
+  source support, so viewers see the mic and music status even when only the game is captured.
 - Uses a responsive, resizable window layout and remembers its size and state.
 - Runs in the system tray and redirects additional launches to the existing instance.
 - Can start automatically with Windows, hidden in the system tray.
@@ -64,7 +64,7 @@ it, and run `MicMixer.exe`.
 5. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
    choose **No modded mic**.
 6. Select **CABLE Input (VB-Audio Virtual Cable)** under **Virtual cable output**.
-7. In Discord, OBS, FiveM, or your game, select **CABLE Output** as the microphone.
+7. In your voice chat, game, or streaming app, select **CABLE Output** as the microphone.
 8. Click **Enable**.
 
 If the selected output does not look like a virtual cable, MicMixer displays a
@@ -104,7 +104,7 @@ voice.
 
 Add music by either:
 
-- Pasting a supported video URL and clicking **Download MP3**.
+- Pasting a YouTube link and clicking **Download MP3**.
 - Opening a configured music folder and adding your own `.mp3` files.
 
 The first download installs local copies of `yt-dlp` and `ffmpeg`. The ffmpeg
@@ -154,7 +154,7 @@ in external capture mode as well.
 - **Monitor only**: preview mode. The music is never sent to the virtual
   cable; you hear it through local monitoring and can check a track or set its
   volume before anyone else hears it. The secondary output still receives the
-  music, so a stream capturing that device (e.g. OBS) hears what you hear. An
+  music, so streaming or recording software capturing that device hears what you hear. An
   amber hint below the toggle states exactly where the music goes while the mode
   is active. Monitor-only overrides the ignore-push-to-talk toggle.
 
@@ -174,12 +174,13 @@ flows whenever you can hear it — while it is sent to the cable or previewed in
 monitor-only mode — so a stream capturing the secondary device always hears the
 music you hear.
 
-Typical use with OBS:
+Typical use with streaming or recording software:
 
 1. Enable **Secondary output** and select a playback device that you are not
    otherwise using (for example an unused HDMI output or a virtual device).
-2. In OBS, add an **Audio Output Capture** source and select the same device.
-3. Start routing in MicMixer. OBS now records/streams the full mix, including
+2. In your streaming software (for example, OBS Studio or Streamlabs Desktop),
+   add an audio output capture source and select the same device.
+3. Start routing in MicMixer. The software now records or streams the full mix, including
    everything you say while push-to-talk is released.
 
 Warnings:
@@ -187,7 +188,7 @@ Warnings:
 - **The secondary device plays your own microphone.** If you pick your normal
   speakers, everyone in the room hears your mic and you risk feedback into the
   microphone. Prefer a device you cannot hear, or headphones.
-- **OBS captures everything on that device.** Any other application playing
+- **The capture source includes everything on that device.** Any other application playing
   audio to the same device ends up in the recording.
 - The secondary output can never use the same device as **Virtual cable output**;
   MicMixer blocks that combination because the mix would play twice on the cable.
@@ -226,17 +227,17 @@ ring shows the music branch alone after the music volume — also during a
 monitor-only preview, so the level can be set before anyone else hears it.
 Exclusive fullscreen applications may prevent desktop overlays from being visible.
 
-## OBS overlay
+## Stream overlay
 
-When OBS captures a game as an individual process (Game Capture), desktop
-overlays are not part of the captured image, so viewers never see the overlay
-indicator. Enable **OBS-overlay** in the routing settings and MicMixer serves
+When streaming software captures a game as an individual process, desktop
+overlays may not be part of the captured image, so viewers never see the overlay
+indicator. Enable **Stream overlay** in the routing settings and MicMixer serves
 the same overlay as a local web page (`http://127.0.0.1:4573/` by default)
-that is added to OBS as a Browser source and layered on top of the game. The
+that can be added as a browser source and layered on top of the game. The
 page mirrors the desktop overlay exactly — states, level rings, equalizer bars,
 and the hidden state while routing is stopped — and reconnects automatically
-when MicMixer restarts. See [docs/obs-overlay.md](docs/obs-overlay.md) for OBS
-setup steps, URL parameters, and the wire protocol.
+when MicMixer restarts. See [docs/obs-overlay.md](docs/obs-overlay.md) for setup
+steps, URL parameters, and the wire protocol.
 
 ## Local data
 

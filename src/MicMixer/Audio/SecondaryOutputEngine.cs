@@ -6,7 +6,7 @@ namespace MicMixer.Audio;
 
 /// <summary>
 /// Optional second render output that plays the mic + music mix on an extra
-/// device, so e.g. OBS can capture it while the virtual cable stays gated. The
+/// device, so recording or streaming software can capture it while the virtual cable stays gated. The
 /// router builds this branch's mix with its own per-source gates (see
 /// <see cref="MixFanoutSampleProvider"/>): the mic follows push-to-talk unless
 /// <see cref="IgnorePushToTalk"/> is set, and the music also flows whenever it is

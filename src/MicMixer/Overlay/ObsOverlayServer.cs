@@ -9,7 +9,7 @@ using Serilog;
 namespace MicMixer.Overlay;
 
 /// <summary>
-/// Everything the OBS overlay page needs to draw, except the live audio levels.
+/// Everything the stream overlay page needs to draw, except the live audio levels.
 /// The string fields use the wire vocabulary of the page: mic is one of
 /// "hidden" / "live" / "modded" / "muted" and music is one of "hidden" /
 /// "sending" / "monitorOnly" / "blocked". Record equality is the dedupe key,
@@ -18,10 +18,10 @@ namespace MicMixer.Overlay;
 internal sealed record ObsOverlayState(string Mic, string Music, bool MeterEnabled, float SensitivityDb);
 
 /// <summary>
-/// Tiny loopback-only web server that mirrors the on-screen overlay into OBS.
-/// Serves one embedded HTML page (added in OBS as a Browser source) and pushes
+/// Tiny loopback-only web server that mirrors the on-screen overlay into a browser source.
+/// Serves one embedded HTML page (added to streaming software as a browser source) and pushes
 /// state changes plus throttled level frames over a WebSocket, so viewers see
-/// the same status cluster even when OBS captures only the game process.
+/// the same status cluster even when streaming software captures only the game process.
 ///
 /// Bound strictly to 127.0.0.1 and carries only status strings and level
 /// numbers — no audio, no video, no control surface. Slow or stalled clients
@@ -73,7 +73,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
     {
         _listener.Start();
         _acceptTask = Task.Run(() => AcceptLoopAsync(_shutdown.Token));
-        Log.Information("OBS overlay server listening on {OverlayUrl}.", OverlayUrl);
+        Log.Information("Stream overlay server listening on {OverlayUrl}.", OverlayUrl);
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "OBS overlay server failed to accept a request.");
+                Log.Warning(ex, "Stream overlay server failed to accept a request.");
                 continue;
             }
 
@@ -186,7 +186,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
                 if (origin != null && !string.Equals(
                         origin.TrimEnd('/'), $"http://127.0.0.1:{Port}", StringComparison.OrdinalIgnoreCase))
                 {
-                    Log.Warning("OBS overlay rejected a cross-origin WebSocket from {Origin}.", origin);
+                    Log.Warning("Stream overlay rejected a cross-origin WebSocket from {Origin}.", origin);
                     context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
                     context.Response.Close();
                     return;
@@ -204,7 +204,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
                 byte[] page = LoadPage();
                 context.Response.StatusCode = (int)HttpStatusCode.OK;
                 context.Response.ContentType = "text/html; charset=utf-8";
-                // The page is versioned with the app itself; never let OBS cache a stale copy.
+                // The page is versioned with the app itself; never let the browser source cache a stale copy.
                 context.Response.Headers["Cache-Control"] = "no-store";
                 context.Response.ContentLength64 = page.Length;
                 await context.Response.OutputStream.WriteAsync(page, cancellationToken).ConfigureAwait(false);
@@ -220,7 +220,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "OBS overlay request handling ended.");
+            Log.Debug(ex, "Stream overlay request handling ended.");
             try
             {
                 context.Response.Abort();
@@ -243,14 +243,14 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
             snapshot = _stateSnapshot;
             // Published under the same lock that changes the list: written
             // outside, an older count could overwrite a newer one when
-            // connects and disconnects overlap (e.g. an OBS reload), leaving
+            // connects and disconnects overlap (e.g. a browser-source reload), leaving
             // HasClients permanently wrong and the metering stuck off.
             count = _clients.Count;
             Volatile.Write(ref _clientCount, count);
         }
 
         ClientCountChanged?.Invoke(count);
-        Log.Information("OBS overlay page connected ({ClientCount} total).", count);
+        Log.Information("Stream overlay page connected ({ClientCount} total).", count);
 
         try
         {
@@ -273,7 +273,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
 
             ClientCountChanged?.Invoke(count);
             socket.Dispose();
-            Log.Information("OBS overlay page disconnected ({ClientCount} total).", count);
+            Log.Information("Stream overlay page disconnected ({ClientCount} total).", count);
         }
     }
 
@@ -286,7 +286,7 @@ internal sealed class ObsOverlayServer : IAsyncDisposable
     {
         Assembly assembly = typeof(ObsOverlayServer).Assembly;
         using Stream stream = assembly.GetManifestResourceStream("MicMixer.Overlay.ObsOverlay.html")
-            ?? throw new InvalidOperationException("Embedded OBS overlay page is missing from the build.");
+            ?? throw new InvalidOperationException("Embedded stream overlay page is missing from the build.");
         using var buffer = new MemoryStream();
         stream.CopyTo(buffer);
         return buffer.ToArray();

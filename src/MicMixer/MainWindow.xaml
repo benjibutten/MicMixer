@@ -355,7 +355,7 @@
                                             <StackPanel>
                                                 <TextBlock Style="{StaticResource TipTitle}" Text="The finished mix is sent here"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Select CABLE Input (VB-Audio Virtual Cable). Everything being routed — mic and music — is played here; then select CABLE Output as the microphone in your game or Discord."/>
+                                                           Text="Select CABLE Input (VB-Audio Virtual Cable). Everything being routed — mic and music — is played here; then select CABLE Output as the microphone in the receiving app."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="Don't have VB-CABLE installed? Follow the guide at the bottom of the window."/>
                                             </StackPanel>
@@ -366,7 +366,7 @@
                             <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
                             <TextBlock x:Name="OutputCableWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
                                        Foreground="#B45309" Visibility="Collapsed"
-                                       Text="⚠ This does not appear to be a virtual cable. The game or Discord can hear the mix only if it is sent to a device such as CABLE Input (VB-CABLE)."/>
+                                       Text="⚠ This does not appear to be a virtual cable. A receiving app can hear the mix only if it is sent to a device such as CABLE Input (VB-CABLE)."/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -388,11 +388,11 @@
                                     <Border.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Additional output for the full mix — e.g. OBS"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Additional output for recording or streaming"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Plays the exact same mix sent to the cable (mic + music) on an additional audio device. The cable to FiveM or Discord is not affected."/>
+                                                           Text="Plays the exact same mix sent to the cable (mic + music) on an additional audio device. The cable output used by your voice chat or game is not affected."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Typical use case: recording or streaming the mix in OBS. Select a device here and add the same device in OBS as an 'Audio Output Capture'."/>
+                                                           Text="Typical use case: recording or streaming the mix. Select a device here and add the same device as an audio output capture source in your streaming software."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="With 'Ignore push-to-talk', the mic and music are always heard here — even when PTT is released and the cable receives silence. Unlike Monitoring, which plays only the music, the secondary output plays the entire mix including your voice."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
@@ -425,7 +425,7 @@
                             <ComboBox x:Name="SecondaryOutputCombo" DisplayMemberPath="FriendlyName" FontSize="11.5"
                                       SelectionChanged="OnSecondaryOutputDeviceChanged"
                                       ToolTipService.ShowDuration="60000"
-                                      ToolTip="The device that also plays the mix — e.g. the device OBS captures with 'Audio Output Capture'. Do not select the same device as the virtual cable output."/>
+                                      ToolTip="The device that also plays the mix — for example, one captured by an audio output source in your streaming software. Do not select the same device as the virtual cable output."/>
                             <TextBlock x:Name="SecondaryOutputWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
                                        Foreground="#B91C1C" Visibility="Collapsed"
                                        Text="⚠ Same device as the virtual cable output — the mix would play twice. Select a different device."/>
@@ -440,7 +440,7 @@
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource TipTitle}" Text="Play even when push-to-talk is released"/>
                                             <TextBlock Style="{StaticResource TipBody}"
-                                                       Text="On (default): the secondary output always receives mic and music, even when push-to-talk keeps the cable silent — for example, so OBS records everything you say. Off: the mic on the secondary output follows push-to-talk and becomes silent with the cable."/>
+                                                       Text="On (default): the secondary output always receives mic and music, even when push-to-talk keeps the cable silent — for example, so a recording includes everything you say. Off: the mic on the secondary output follows push-to-talk and becomes silent with the cable."/>
                                             <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                        Text="Music always follows what you can hear: it remains on the secondary output while it is sent to the cable or previewed in monitor-only mode."/>
                                         </StackPanel>
@@ -580,7 +580,7 @@
                                 <CheckBox x:Name="OverlayVolumeMeterCheck" Margin="22,6,0,0" FontSize="11.5" Foreground="#10233A"
                                           Checked="OnOverlayVolumeMeterChanged" Unchecked="OnOverlayVolumeMeterChanged"
                                           ToolTipService.ShowDuration="60000">
-                                    <!-- The meter applies to both the desktop overlay and the OBS
+                                    <!-- The meter applies to both the desktop overlay and the stream
                                          overlay, so either of them enables the checkbox. -->
                                     <CheckBox.Style>
                                         <Style TargetType="CheckBox">
@@ -666,23 +666,23 @@
                                 <CheckBox x:Name="ObsOverlayCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A"
                                           Checked="OnObsOverlayChanged" Unchecked="OnObsOverlayChanged"
                                           ToolTipService.ShowDuration="60000">
-                                    <TextBlock Text="OBS overlay — show the same overlay on stream (Browser Source)"
+                                    <TextBlock Text="Stream overlay — show the same overlay via a browser source"
                                                VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="OBS overlay for viewers"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Stream overlay for viewers"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="If OBS captures only the game (Game Capture), the on-screen overlay is not visible on stream. This starts a small local web page that displays the same overlay — circles, level rings, and equalizer — so it can be added as a separate layer over the game in OBS."/>
+                                                           Text="If your streaming software captures only the game, the on-screen overlay may not be visible on stream. This starts a small local web page that displays the same overlay — circles, level rings, and equalizer — so it can be added as a separate layer over the game."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="In OBS: add a Browser Source, paste the address below, set a size such as 232 × 116, and place it where you want. The page is transparent and shows nothing while routing is stopped — just like the on-screen overlay. Append ?opacity=1 to the address for fully opaque circles."/>
+                                                           Text="In your streaming software (for example, OBS Studio or Streamlabs Desktop): add a browser source, paste the address below, set a size such as 232 × 116, and place it where you want. The page is transparent and shows nothing while routing is stopped — just like the on-screen overlay. Append ?opacity=1 to the address for fully opaque circles."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="The server is accessible only from this computer (127.0.0.1) and sends only status and audio levels — no audio or video. It works independently of the on-screen overlay above, so you can use either, both, or neither."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
                                 </CheckBox>
-                                <!-- Server address and port. Visible only while the OBS overlay is on;
+                                <!-- Server address and port. Visible only while the stream overlay is on;
                                      the port rarely needs changing (only on a conflict). -->
                                 <StackPanel Margin="22,4,0,0"
                                             Visibility="{Binding IsChecked, ElementName=ObsOverlayCheck, Converter={StaticResource BoolToVisibility}}">
@@ -694,7 +694,7 @@
                                                  ToolTip="Local port for the overlay page. Change it only if another application is using the port."/>
                                         <Button Content="Copy address" Margin="10,0,0,0" Padding="8,2" FontSize="10.5"
                                                 VerticalAlignment="Center" Click="OnObsOverlayCopyClick"
-                                                ToolTip="Copies the overlay address so you can paste it into an OBS Browser Source."/>
+                                                ToolTip="Copies the overlay address so you can paste it into a browser source in your streaming software."/>
                                     </StackPanel>
                                     <TextBlock Margin="0,4,0,0" FontSize="10.5" Foreground="#6B7280" TextWrapping="Wrap">
                                         <Hyperlink Click="OnObsOverlayLinkClick" ToolTip="Open the overlay page in your browser to test it.">
@@ -864,7 +864,7 @@
                                             <TextBlock Style="{StaticResource TipBody}"
                                                        Text="Music is mixed into the mic channel with your voice so others can hear it whenever a track is playing and routing is active."/>
                                             <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                       Text="In MP3 / YouTube mode, download tracks from a YouTube link or add your own MP3 files to the music folder (folder icon on the right; the gear lets you add multiple music folders). In Spotify / other app mode, audio from a music app is captured and mixed in directly."/>
+                                                       Text="In MP3 / YouTube mode, download tracks from a YouTube link or add your own MP3 files to the music folder (folder icon on the right; the gear lets you add multiple music folders). In External app mode, audio from a music app is captured and mixed in directly."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </Border.ToolTip>
@@ -892,8 +892,8 @@
                                          IsChecked="True" Checked="OnMusicModeChanged" Content="MP3 / YouTube"
                                          ToolTip="Play downloaded MP3 files from the music folder."/>
                             <RadioButton x:Name="ExternalModeRadio" Style="{StaticResource ModeSegment}" GroupName="MusicMode"
-                                         Checked="OnMusicModeChanged" Content="Spotify / other app"
-                                         ToolTip="Capture audio from an app playing music (e.g. Spotify) and mix it into the mic channel. Control playback in the app."/>
+                                         Checked="OnMusicModeChanged" Content="External app"
+                                         ToolTip="Capture audio from an app playing music and mix it into the mic channel. Control playback in the app."/>
                         </UniformGrid>
                     </Border>
 
@@ -1106,7 +1106,7 @@
 
                         <TextBlock Grid.Row="1" Margin="2,0,2,8" FontSize="10.5" Foreground="#6B7280"
                                    TextWrapping="Wrap"
-                                   Text="The list shows apps with an audio session. Is Spotify missing? Play something for a few seconds, then click Refresh."/>
+                                   Text="The list shows apps with an audio session. If an app is missing, play something in it for a few seconds, then click Refresh."/>
 
                         <!-- Capture status card -->
                         <Border Grid.Row="2" Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1" CornerRadius="8" Padding="16">
@@ -1120,7 +1120,7 @@
                                              Margin="0,10,0,0" Foreground="#7C3AED" Background="#E5E7EB"/>
                                 <TextBlock x:Name="CaptureHintText" Margin="0,10,0,0" FontSize="10.5" Foreground="#9CA3AF"
                                            TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
-                                           Text="Select the app playing music (e.g. Spotify) and click Capture audio. Control playback in the app as usual — its audio is mixed into the mic channel."/>
+                                           Text="Select the app playing music and click Capture audio. Control playback in the app as usual — its audio is mixed into the mic channel."/>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -1365,7 +1365,7 @@
                                         <TextBlock Style="{StaticResource TipBody}"
                                                    Text="When this is on, music is never sent to the mic channel — only you hear it through monitoring, so you can preview a track or set the volume before others hear it. The mic is not affected."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="If the secondary output is active, it still receives the music — so a stream such as OBS hears the same thing you do. The overlay's music circle shows amber headphones while this mode is on."/>
+                                                   Text="If the secondary output is active, it still receives the music — so your stream hears the same thing you do. The overlay's music circle shows amber headphones while this mode is on."/>
                                     </StackPanel>
                                 </ToolTip>
                             </CheckBox.ToolTip>
@@ -1509,9 +1509,9 @@
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
                                Text="3. Select CABLE Input as the virtual cable output in MicMixer."/>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
-                               Text="4. In Discord or OBS, select CABLE Output as the microphone."/>
+                               Text="4. In your voice chat, game, or streaming app, select CABLE Output as the microphone."/>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
-                               Text="5. Music: if the receiving app (e.g. Discord or FiveM) has noise suppression enabled, it may reduce the music — disable noise suppression there for the best sound."/>
+                               Text="5. Music: if the receiving app has noise suppression enabled, it may reduce the music — disable noise suppression there for the best sound."/>
                 </StackPanel>
             </Border>
         </Expander>

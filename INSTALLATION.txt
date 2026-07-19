@@ -34,7 +34,7 @@ Skip this section if you already have a suitable virtual audio driver.
 3. Restart Windows if the installer requests it.
 4. In MicMixer, select "CABLE Input (VB-Audio Virtual Cable)" as the
    "Virtual cable output".
-5. In Discord, OBS, FiveM, your game, or another receiving app, select
+5. In your voice chat, game, streaming software, or another receiving app, select
    "CABLE Output (VB-Audio Virtual Cable)" as its microphone/input device.
 
 Basic MicMixer setup
@@ -48,7 +48,7 @@ Basic MicMixer setup
 6. Play music from MicMixer's library or capture a running application when you
    want music mixed into the same virtual microphone channel.
 
-If music is heavily reduced in Discord, FiveM, or another receiving app, try
+If music is heavily reduced in the receiving app, try
 disabling that app's noise suppression or automatic audio processing.
 
 Using MicMixer with StreamDecky

@@ -623,7 +623,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         // Feeds the overlay volume meters; the Set*Level calls no-op while their
         // rings are hidden, and the reads reset the levels so stale values never
-        // linger. The reads are shared between the desktop overlay and the OBS
+        // linger. The reads are shared between the desktop overlay and the stream
         // overlay pages, because reading also resets the accumulators.
         bool obsWantsLevels = _obsOverlayServer is { HasClients: true };
         if (_overlayIndicator != null || obsWantsLevels)
@@ -702,7 +702,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         UpdateStatusText();
     }
 
-    // --- Secondary output (pre-gate fanout, e.g. for OBS capture) ---
+    // --- Secondary output (pre-gate fanout, e.g. for recording or streaming) ---
 
     /// <summary>
     /// Pushes the current UI state into the engine. The device takes effect at the
@@ -2409,7 +2409,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
     }
 
-    // --- External app capture (Spotify m.fl.) ---
+    // --- External app capture ---
 
     private static readonly System.Windows.Media.Brush CaptureIdleBrush = CreateFrozenBrush(0x9C, 0xA3, 0xAF);
 
@@ -2421,7 +2421,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private static readonly System.Windows.Media.Brush CaptureAccentTintBorderBrush = CreateFrozenBrush(0xDD, 0xD6, 0xFE);
 
     private const string CaptureIdleHint =
-        "Select the app playing music (e.g. Spotify) and click Capture audio. Control playback in the app as usual — its audio is mixed into the mic channel.";
+        "Select the app playing music and click Capture audio. Control playback in the app as usual — its audio is mixed into the mic channel.";
 
     private static System.Windows.Media.Brush CreateFrozenBrush(byte r, byte g, byte b)
     {
@@ -2558,7 +2558,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (apps.Count == 0)
         {
-            MusicStatusText.Text = "No audio session was found. Play something in an app such as Spotify for a few seconds, then click Refresh.";
+            MusicStatusText.Text = "No audio session was found. Play something in the app for a few seconds, then click Refresh.";
         }
     }
 
@@ -3648,7 +3648,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         var newStatus = ComputeMicStatus();
 
         // The overlay mirrors the tray state; SetState no-ops when unchanged,
-        // and the OBS overlay server dedupes identical snapshots the same way.
+        // and the stream overlay server dedupes identical snapshots the same way.
         _overlayIndicator?.SetState(ToOverlayIndicatorState(newStatus));
         _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
         PublishObsOverlayState();
@@ -3798,7 +3798,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// </summary>
     private void UpdateOutputMeteringEnabled()
     {
-        // The OBS overlay only needs levels while a page is actually connected,
+        // The stream overlay only needs levels while a page is actually connected,
         // so an idle server keeps the audio thread as cheap as no overlay at all.
         bool metering = (_overlayIndicator != null || _obsOverlayServer is { HasClients: true })
             && _settings.OverlayVolumeMeterEnabled;
