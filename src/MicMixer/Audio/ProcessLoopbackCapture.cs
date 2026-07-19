@@ -68,7 +68,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
 
         if (!IsSupported)
         {
-            throw new NotSupportedException("Ljudinfångning per app kräver Windows 10 version 2004 eller senare.");
+            throw new NotSupportedException("Per-app audio capture requires Windows 10 version 2004 or later.");
         }
 
         AudioClient? audioClient = null;
@@ -240,7 +240,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
             Log.Error(ex, "Process loopback capture loop failed for PID {ProcessId}.", _processId);
             if (!_stopRequested.IsSet)
             {
-                Error?.Invoke(this, $"Ljudinfångningen stoppades: {ex.Message}");
+                Error?.Invoke(this, $"Audio capture stopped: {ex.Message}");
             }
         }
     }
@@ -422,12 +422,12 @@ public sealed class ProcessLoopbackCapture : IDisposable
         {
             if (!_completed.Wait(timeout))
             {
-                throw new TimeoutException("Aktiveringen av ljudinfångningen svarade inte.");
+                throw new TimeoutException("Audio capture activation did not respond.");
             }
 
             Marshal.ThrowExceptionForHR(_activateResult);
             return _activatedInterface
-                ?? throw new InvalidOperationException("Ljudinfångningen aktiverades utan gränssnitt.");
+                ?? throw new InvalidOperationException("Audio capture was activated without an interface.");
         }
     }
 }

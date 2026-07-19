@@ -80,8 +80,8 @@ public partial class MainWindow
                 Log.Error(ex, "Failed to start the OBS overlay server on port {Port}.", _settings.ObsOverlayPort);
                 _obsOverlayServer = null;
                 _obsOverlayError =
-                    $"Kunde inte starta på port {_settings.ObsOverlayPort} — porten kan vara upptagen. Byt port och tryck Enter.";
-                StatusText.Text = $"Kunde inte starta OBS-overlayn på port {_settings.ObsOverlayPort}: {ex.Message}";
+                    $"Could not start on port {_settings.ObsOverlayPort} — the port may be in use. Change the port and press Enter.";
+                StatusText.Text = $"Could not start the OBS overlay on port {_settings.ObsOverlayPort}: {ex.Message}";
             }
         }
         else
@@ -161,9 +161,9 @@ public partial class MainWindow
             int clients = server.ClientCount;
             ObsOverlayClientsText.Text = clients switch
             {
-                0 => " — väntar på OBS",
-                1 => " — 1 ansluten",
-                _ => $" — {clients} anslutna"
+                0 => " — waiting for OBS",
+                1 => " — 1 connected",
+                _ => $" — {clients} connected"
             };
             ObsOverlayClientsText.Foreground = ObsOverlayStatusIdleBrush;
         }
@@ -172,7 +172,7 @@ public partial class MainWindow
             ObsOverlayLinkText.Text = string.Empty;
             ObsOverlayClientsText.Text = ObsOverlayCheck.IsChecked == true
                 ? _obsOverlayError ?? string.Empty
-                : "Av — overlayn serveras inte.";
+                : "Off — the overlay is not being served.";
             ObsOverlayClientsText.Foreground = _obsOverlayError != null && ObsOverlayCheck.IsChecked == true
                 ? ObsOverlayStatusErrorBrush
                 : ObsOverlayStatusIdleBrush;

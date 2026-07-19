@@ -238,7 +238,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         // Deliberate Stop() unhooks this handler before stopping, so any event
         // that still arrives is an unexpected stop. Tear down even without an
         // exception — otherwise IsRunning stays true, the UI keeps showing
-        // "Aktiv", and the primary thread keeps filling a buffer nobody drains.
+        // "Active", and the primary thread keeps filling a buffer nobody drains.
         if (sender is not WasapiOut stoppedOutput)
         {
             return;
@@ -272,7 +272,7 @@ public sealed class SecondaryOutputEngine : IDisposable
             }
             else
             {
-                const string message = "Ljudenheten stoppades oväntat.";
+                const string message = "The audio device stopped unexpectedly.";
                 Log.Warning("Secondary output stopped unexpectedly without an exception.");
                 RaiseError(message);
             }

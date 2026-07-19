@@ -19,7 +19,7 @@ internal sealed class AboutDialog : Window
 
     public AboutDialog(string appName, string sourceUrl)
     {
-        Title = $"Om {appName}";
+        Title = $"About {appName}";
         Width = 500;
         MinWidth = 460;
         SizeToContent = SizeToContent.Height;
@@ -55,14 +55,14 @@ internal sealed class AboutDialog : Window
         var titlePanel = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
         titlePanel.Children.Add(new TextBlock
         {
-            Text = $"Om {appName}",
+            Text = $"About {appName}",
             FontSize = 20,
             FontWeight = FontWeights.SemiBold,
             Foreground = Ink
         });
         titlePanel.Children.Add(new TextBlock
         {
-            Text = "Öppen källkod, utvecklad för verkliga behov",
+            Text = "Open source, built for real-world needs",
             Margin = new Thickness(0, 2, 0, 0),
             FontSize = 11.5,
             Foreground = MutedInk
@@ -72,20 +72,20 @@ internal sealed class AboutDialog : Window
         content.Children.Add(heading);
 
         content.Children.Add(CreateCard(
-            "Fri och öppen programvara",
-            $"{appName} tillhandahålls som öppen källkod under MIT-licensen. " +
-            "Du får använda, studera, ändra och dela koden enligt licensvillkoren.",
+            "Free and open-source software",
+            $"{appName} is provided as open-source software under the MIT License. " +
+            "You may use, study, modify, and share the code under the license terms.",
             "#F8FAFC",
             "#D7DEE7"));
 
         content.Children.Add(CreateSupportCard());
 
         content.Children.Add(CreateCard(
-            "Tredjepartsprogramvara",
-            "MicMixer använder NAudio och CliWrap (MIT), Serilog (Apache-2.0) och " +
-            "Material Design Icons (Apache-2.0). yt-dlp och en GPL-byggd version av FFmpeg " +
-            "hämtas separat när nedladdningsfunktionen används och omfattas av egna licenser. " +
-            "Fullständig redovisning följer med distributionen.",
+            "Third-party software",
+            "MicMixer uses NAudio and CliWrap (MIT), Serilog (Apache-2.0), and " +
+            "Material Design Icons (Apache-2.0). yt-dlp and a GPL build of FFmpeg " +
+            "are downloaded separately when the download feature is used and are covered by their own licenses. " +
+            "Complete notices are included with the distribution.",
             "#F8FAFC",
             "#D7DEE7"));
 
@@ -98,7 +98,7 @@ internal sealed class AboutDialog : Window
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 11.5
         };
-        var hyperlink = new Hyperlink(new Run("Visa källkoden på GitHub"))
+        var hyperlink = new Hyperlink(new Run("View the source code on GitHub"))
         {
             NavigateUri = new Uri(sourceUrl),
             Foreground = Accent,
@@ -114,7 +114,7 @@ internal sealed class AboutDialog : Window
 
         var closeButton = new Button
         {
-            Content = "Stäng",
+            Content = "Close",
             MinWidth = 86,
             Padding = new Thickness(14, 6, 14, 6),
             Background = Ink,
@@ -179,7 +179,7 @@ internal sealed class AboutDialog : Window
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock
         {
-            Text = "Utveckling och ett särskilt tack",
+            Text = "Development and special thanks",
             FontSize = 12.5,
             FontWeight = FontWeights.SemiBold,
             Foreground = Ink,
@@ -187,9 +187,9 @@ internal sealed class AboutDialog : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "MicMixer utvecklas och underhålls av BenjiButten och är resultatet av många timmars " +
-                   "utveckling. Appen tillhandahålls kostnadsfritt som öppen källkod. Pixlexi har bidragit " +
-                   "med användningsfall, praktisk testning och värdefull återkoppling under utvecklingen.",
+            Text = "MicMixer is developed and maintained by BenjiButten and is the result of many hours of " +
+                   "development. The app is provided free of charge as open-source software. Pixlexi contributed " +
+                   "use cases, hands-on testing, and valuable feedback during development.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 11.5,
             LineHeight = 18,
@@ -204,7 +204,7 @@ internal sealed class AboutDialog : Window
             LineHeight = 18,
             Foreground = MutedInk
         };
-        supportText.Inlines.Add(new Run("Om du uppskattar appen och vill ge något tillbaka, stöd gärna "));
+        supportText.Inlines.Add(new Run("If you appreciate the app and would like to give something back, please support "));
         var pixlexiLink = new Hyperlink(new Run("Pixlexi"))
         {
             NavigateUri = new Uri("https://www.twitch.tv/pixlexi"),
@@ -217,7 +217,7 @@ internal sealed class AboutDialog : Window
             e.Handled = true;
         };
         supportText.Inlines.Add(pixlexiLink);
-        supportText.Inlines.Add(new Run(" genom att ge bort en sub på Twitch."));
+        supportText.Inlines.Add(new Run(" by gifting a subscription on Twitch."));
         panel.Children.Add(supportText);
 
         return new Border

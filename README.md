@@ -60,37 +60,37 @@ it, and run `MicMixer.exe`.
 1. Install [VB-CABLE](https://vb-audio.com/Cable/).
 2. Restart Windows if requested by the VB-CABLE installer.
 3. Start `MicMixer.exe`.
-4. Select your physical microphone under **Vanlig mic**.
+4. Select your physical microphone under **Normal mic**.
 5. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
-   choose **Ingen moddad mic**.
-6. Select **CABLE Input (VB-Audio Virtual Cable)** under **Virtuell kabel ut**.
+   choose **No modded mic**.
+6. Select **CABLE Input (VB-Audio Virtual Cable)** under **Virtual cable output**.
 7. In Discord, OBS, FiveM, or your game, select **CABLE Output** as the microphone.
-8. Click **Aktivera**.
+8. Click **Enable**.
 
 If the selected output does not look like a virtual cable, MicMixer displays a
-warning. Click **Aktivera** again to continue with another cable driver or an
+warning. Click **Enable** again to continue with another cable driver or an
 intentional non-cable output.
 
 ## Hotkey and push-to-talk
 
-Click **Ändra** under **Global hotkey**, then press the keyboard key or mouse
+Click **Change** under **Global hotkey**, then press the keyboard key or mouse
 button that should select the modified mic while routing is active:
 
 - Hotkey held: the modified mic is routed.
 - Hotkey released: the normal mic is routed.
 - Release delay above `0 ms`: the modified mic remains active until the delay ends.
-- **Ingen moddad mic**: the hotkey is disabled unless push-to-talk is enabled.
+- **No modded mic**: the hotkey is disabled unless push-to-talk is enabled.
 
 Push-to-talk reverses the idle behavior: while the hotkey is not held, the virtual
 cable receives silence. Neither microphone audio nor music is sent.
 
-- It also works with **Ingen moddad mic**, in which case the hotkey gates the normal mic.
+- It also works with **No modded mic**, in which case the hotkey gates the normal mic.
 - With a modified mic selected, holding the hotkey both opens the gate and selects it.
 - The release delay applies to push-to-talk as well.
 - Local music monitoring is not muted by push-to-talk.
 - The tray icon and overlay turn red with a crossed-out mic while the outgoing mix
   is muted.
-- With **Musik ignorerar push-to-talk** enabled (music card), push-to-talk gates
+- With **Music ignores push-to-talk** enabled (music card), push-to-talk gates
   only the microphone: the music keeps flowing into the virtual cable as long as
   it plays. See [Music routing](#music-routing).
 
@@ -104,7 +104,7 @@ voice.
 
 Add music by either:
 
-- Pasting a supported video URL and clicking **Hämta MP3**.
+- Pasting a supported video URL and clicking **Download MP3**.
 - Opening a configured music folder and adding your own `.mp3` files.
 
 The first download installs local copies of `yt-dlp` and `ffmpeg`. The ffmpeg
@@ -146,12 +146,12 @@ Two toggles in the music card control how the music relates to push-to-talk and
 the virtual cable. Both apply immediately, also while routing runs, and both work
 in external capture mode as well.
 
-- **Musik ignorerar push-to-talk**: the music keeps flowing into the virtual
+- **Music ignores push-to-talk**: the music keeps flowing into the virtual
   cable as long as it plays, while push-to-talk still gates the microphone.
   Typical use: the game should hear the music continuously, but your voice only
   while you hold the hotkey. The toggle is only active while push-to-talk is
   enabled — without push-to-talk, playing music is always sent.
-- **Endast medhörning**: preview mode. The music is never sent to the virtual
+- **Monitor only**: preview mode. The music is never sent to the virtual
   cable; you hear it through local monitoring and can check a track or set its
   volume before anyone else hears it. The secondary output still receives the
   music, so a stream capturing that device (e.g. OBS) hears what you hear. An
@@ -159,14 +159,14 @@ in external capture mode as well.
   is active. Monitor-only overrides the ignore-push-to-talk toggle.
 
 The status panel and the overlay always reflect the outcome: when push-to-talk
-mutes the mic while music still flows, the status reads "Mic tyst (push-to-talk)
-— musiken sänds", and the overlay's music circle shows the current destination.
+mutes the mic while music still flows, the status reads "Mic muted (push-to-talk)
+— music transmitting", and the overlay's music circle shows the current destination.
 
 ## Secondary output
 
-The **Sekundär ut** section routes the complete finished mix — microphone and
+The **Secondary output** section routes the complete finished mix — microphone and
 music — to one extra playback device while routing is active. The branch has its
-own gates, independent of the cable's: with **Ignorera push-to-talk** enabled
+own gates, independent of the cable's: with **Ignore push-to-talk** enabled
 (default) the secondary device keeps receiving mic + music even while the
 virtual cable receives silence. Disable that option to make the secondary
 microphone follow the same push-to-talk gate as the cable; the music then still
@@ -176,7 +176,7 @@ music you hear.
 
 Typical use with OBS:
 
-1. Enable **Sekundär ut** and select a playback device that you are not
+1. Enable **Secondary output** and select a playback device that you are not
    otherwise using (for example an unused HDMI output or a virtual device).
 2. In OBS, add an **Audio Output Capture** source and select the same device.
 3. Start routing in MicMixer. OBS now records/streams the full mix, including
@@ -189,7 +189,7 @@ Warnings:
   microphone. Prefer a device you cannot hear, or headphones.
 - **OBS captures everything on that device.** Any other application playing
   audio to the same device ends up in the recording.
-- The secondary output can never use the same device as **Virtuell kabel ut**;
+- The secondary output can never use the same device as **Virtual cable output**;
   MicMixer blocks that combination because the mix would play twice on the cable.
 - If the saved secondary device is missing at startup, MicMixer leaves the
   selection empty and refuses to start the secondary output until you explicitly
@@ -269,7 +269,7 @@ Runtime logs roll at 5 MB, rotate daily, and are retained for 14 days.
 - If a download fails, check the internet connection and inspect the logs under
   `%LocalAppData%\MicMixer\logs`.
 - If an audio device was disconnected, refresh the device list and select it again.
-- If the secondary output shows "enheten hittades inte", reconnect the device or
+- If the secondary output shows "device was not found", reconnect the device or
   select a new one explicitly; MicMixer intentionally never auto-picks a
   replacement secondary device.
 

@@ -386,7 +386,7 @@ public sealed class AudioRouter : IDisposable
         Volatile.Write(ref _musicPeak, 0f);
         Volatile.Write(ref _musicRms, 0f);
 
-        string message = e.Exception?.Message ?? "Ljudutgången stoppades oväntat.";
+        string message = e.Exception?.Message ?? "The audio output stopped unexpectedly.";
         ThreadPool.QueueUserWorkItem(_ =>
         {
             try

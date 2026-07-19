@@ -394,7 +394,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             _devicesLoaded = false;
-            _deviceLoadError = $"Kunde inte läsa ljudenheter: {ex.Message}";
+            _deviceLoadError = $"Could not read audio devices: {ex.Message}";
             Log.Error(ex, "Device refresh failed.");
             App.StartupTrace($"Device refresh failed: {ex.GetType().Name}: {ex.Message}");
         }
@@ -446,15 +446,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (_isDevicesLoading)
         {
-            StatusText.Text = "Vänta, laddar ljudenheter...";
+            StatusText.Text = "Please wait, loading audio devices...";
             return;
         }
 
         if (!_devicesLoaded)
         {
             StatusText.Text = _isDevicesLoading
-                ? "Vänta, laddar ljudenheter..."
-                : _deviceLoadError ?? "Kunde inte läsa ljudenheter. Klicka uppdatera och försök igen.";
+                ? "Please wait, loading audio devices..."
+                : _deviceLoadError ?? "Could not read audio devices. Click Refresh and try again.";
             return;
         }
 
@@ -466,8 +466,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             (!skipModded && moddedInput == null))
         {
             StatusText.Text = skipModded
-                ? "Välj vanlig mic och virtuell kabel."
-                : "Välj vanlig mic, moddad mic och virtuell kabel.";
+                ? "Select a normal mic and virtual cable."
+                : "Select a normal mic, modded mic, and virtual cable.";
             return;
         }
 
@@ -477,7 +477,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (!skipModded && dryInput.Id == moddedInput!.Id && _acknowledgedSameMicId != dryInput.Id)
         {
             _acknowledgedSameMicId = dryInput.Id;
-            StatusText.Text = "Vanlig och moddad mic är samma enhet — hotkeyn gör då ingen hörbar skillnad. Menade du 'Ingen moddad mic'? Klicka Aktivera igen för att starta ändå.";
+            StatusText.Text = "The normal and modded mic are the same device — the hotkey will make no audible difference. Did you mean 'No modded mic'? Click Enable again to start anyway.";
             return;
         }
 
@@ -486,7 +486,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (!LooksLikeVirtualCable(output) && _acknowledgedNonCableOutputId != output.Id)
         {
             _acknowledgedNonCableOutputId = output.Id;
-            StatusText.Text = $"\"{output.FriendlyName}\" ser inte ut som en virtuell kabel — spelet hör mixen bara via t.ex. CABLE Input. Klicka Aktivera igen för att starta ändå.";
+            StatusText.Text = $"\"{output.FriendlyName}\" does not appear to be a virtual cable — the game can hear the mix only through a device such as CABLE Input. Click Enable again to start anyway.";
             return;
         }
 
@@ -494,7 +494,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             if (SecondaryOutputCombo.SelectedItem is not AudioDeviceOption secondaryDevice)
             {
-                StatusText.Text = "Sekundär ut är aktiverad men ingen enhet är vald — välj en enhet eller stäng av Sekundär ut.";
+                StatusText.Text = "Secondary output is enabled but no device is selected — select a device or disable secondary output.";
                 return;
             }
 
@@ -502,7 +502,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // sum both copies of the mix on the cable.
             if (secondaryDevice.Id == output.Id)
             {
-                StatusText.Text = "Sekundär ut och Virtuell kabel ut är samma enhet — mixen skulle spelas dubbelt. Välj en annan enhet för Sekundär ut.";
+                StatusText.Text = "The secondary output and virtual cable output are the same device — the mix would play twice. Select a different device for the secondary output.";
                 return;
             }
         }
@@ -511,7 +511,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _isStartingRouting = true;
         ToggleBtn.IsEnabled = false;
-        StatusText.Text = "Startar routning...";
+        StatusText.Text = "Starting routing...";
 
         bool pushToTalk = IsPushToTalk;
 
@@ -522,7 +522,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Error(ex, "Routing start failed.");
-            StatusText.Text = $"Fel vid start: {ex.Message}";
+            StatusText.Text = $"Startup error: {ex.Message}";
             return;
         }
         finally
@@ -539,7 +539,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
-            ToggleBtnText.Text = "Stoppa routning";
+            ToggleBtnText.Text = "Stop routing";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
@@ -584,7 +584,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         CancelPendingReleaseDelay();
         _router.Stop();
         PauseMusicIfClockLost();
-        ToggleBtnText.Text = "Aktivera";
+        ToggleBtnText.Text = "Enable";
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
         DryLevelMeter.Value = 0;
         ModdedLevelMeter.Value = 0;
@@ -610,7 +610,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         Dispatcher.BeginInvoke(() =>
         {
             StopRouting();
-            StatusText.Text = $"Fel: {message}";
+            StatusText.Text = $"Error: {message}";
         });
     }
 
@@ -787,7 +787,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // saved device when an id was actually persisted earlier.
             bool savedDeviceMissing = !string.IsNullOrWhiteSpace(_settings.SecondaryOutputDeviceId);
             SecondaryOutputWarningText.Text =
-                "⚠ Den sparade sekundära enheten hittades inte — anslut den igen eller välj en ny enhet. Ingen enhet väljs automatiskt åt dig.";
+                "⚠ The saved secondary device was not found — reconnect it or select a new device. No device will be selected automatically.";
             SecondaryOutputWarningText.Visibility = _devicesLoaded && savedDeviceMissing
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -797,7 +797,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if ((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id == secondary.Id)
         {
             SecondaryOutputWarningText.Text =
-                "⚠ Samma enhet som Virtuell kabel ut — mixen skulle spelas dubbelt. Välj en annan enhet.";
+                "⚠ Same device as the virtual cable output — the mix would play twice. Select a different device.";
             SecondaryOutputWarningText.Visibility = Visibility.Visible;
             return;
         }
@@ -814,7 +814,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x15, 0x80, 0x3D));
             SecondaryOutputStatusText.Text =
-                $"Aktiv — mixen spelas även på {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "vald enhet")}.";
+                $"Active — the mix is also playing on {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "the selected device")}.";
             SecondaryOutputStatusText.Visibility = Visibility.Visible;
         }
         else
@@ -837,7 +837,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C));
-            SecondaryOutputStatusText.Text = $"Sekundär ut stoppades: {message} — routningen till kabeln fortsätter.";
+            SecondaryOutputStatusText.Text = $"Secondary output stopped: {message} — routing to the cable continues.";
             SecondaryOutputStatusText.Visibility = Visibility.Visible;
             UpdateMusicRouteHint();
             UpdateStatusText();
@@ -845,7 +845,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     }
 
     /// <summary>List entry in the modded-mic combo that disables the modded route entirely.</summary>
-    private static readonly AudioDeviceOption NoModdedMicOption = new("__no_modded_mic__", "Ingen moddad mic");
+    private static readonly AudioDeviceOption NoModdedMicOption = new("__no_modded_mic__", "No modded mic");
 
     private bool IsModdedMicSkipped =>
         (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == NoModdedMicOption.Id;
@@ -964,19 +964,19 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        string text = "Endast medhörning: musiken sänds inte till mic-kanalen.";
+        string text = "Monitor only: music is not transmitted to the mic channel.";
         if (_secondaryOutput.IsRunning)
         {
-            text += " Sekundär ut får den fortfarande.";
+            text += " The secondary output still receives it.";
         }
 
         if (_isExternalMode)
         {
-            text += " I app-läget hör du appen direkt.";
+            text += " In app mode, you hear the app directly.";
         }
         else if (!_settings.MonitorEnabled)
         {
-            text += " Obs: medhörningen är avstängd — du hör ingen musik just nu.";
+            text += " Note: monitoring is off — you cannot hear any music right now.";
         }
 
         if (MusicRouteHintText.Text != text)
@@ -1090,8 +1090,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             if (!_trayBalloonShown)
             {
                 _trayBalloonShown = true;
-                _trayIcon.ShowBalloonTip(3000, "MicMixer körs kvar",
-                    "Appen ligger i systemfältet. Dubbelklicka på ikonen för att öppna igen, eller högerklicka och välj Avsluta.",
+                _trayIcon.ShowBalloonTip(3000, "MicMixer is still running",
+                    "The app is in the system tray. Double-click the icon to reopen it, or right-click and select Exit.",
                     System.Windows.Forms.ToolTipIcon.Info);
             }
 
@@ -1121,7 +1121,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to save settings.");
-            StatusText.Text = $"Kunde inte spara inställningar: {ex.Message}";
+            StatusText.Text = $"Could not save settings: {ex.Message}";
         }
     }
 
@@ -1148,7 +1148,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to save the Start with Windows setting.");
-            StatusText.Text = $"Kunde inte spara inställningen: {ex.Message}";
+            StatusText.Text = $"Could not save the setting: {ex.Message}";
         }
 
         SyncStartWithWindows();
@@ -1173,7 +1173,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         if (_isCapturingHotkey)
         {
-            HotkeyStateText.Text = "Tryck nu på den tangent eller musknapp som ska växla till moddad mic.";
+            HotkeyStateText.Text = "Press the keyboard key or mouse button that should switch to the modded mic.";
         }
 
         if (_router.IsRouting)
@@ -1181,19 +1181,19 @@ public partial class MainWindow : Window, IMicMixerControlHost
             bool pushToTalk = IsPushToTalk;
             var status = ComputeMicStatus();
 
-            RoutingStateText.Text = "Routning aktiv";
+            RoutingStateText.Text = "Routing active";
             RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
             RoutingStateIcon.Fill = StatusTheme.BrushFor(status);
 
-            // Muted with the music branch still open must say so: "tyst" would be
+            // Muted with the music branch still open must say so: "muted" would be
             // a lie while music keeps playing into the cable past push-to-talk.
             ActiveSourceText.Text = status switch
             {
                 MicStatus.Muted when _router.MusicRouteOpen && HasActiveMusicSignal()
-                    => "Aktiv källa: Mic tyst (push-to-talk) — musiken sänds",
-                MicStatus.Muted => "Aktiv källa: Tyst (push-to-talk)",
-                MicStatus.Modded => "Aktiv källa: Moddad mic",
-                _ => "Aktiv källa: Vanlig mic"
+                    => "Active source: Mic muted (push-to-talk) — music transmitting",
+                MicStatus.Muted => "Active source: Muted (push-to-talk)",
+                MicStatus.Modded => "Active source: Modded mic",
+                _ => "Active source: Normal mic"
             };
             ActiveSourceText.Foreground = StatusTheme.InkFor(status);
 
@@ -1203,28 +1203,28 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 {
                     HotkeyStateText.Text = _hotkeyListener.IsPressed
                         ? IsModdedMicSkipped
-                            ? $"{_hotkeyBinding.DisplayName} hålls nere — ljudet sänds"
-                            : $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic sänds"
+                            ? $"{_hotkeyBinding.DisplayName} held — audio transmitting"
+                            : $"{_hotkeyBinding.DisplayName} held — modded mic transmitting"
                         : _isReleaseDelayPending
-                            ? $"{_hotkeyBinding.DisplayName} släppt — mutar om {_releaseDelayMilliseconds} ms"
-                            : $"Push-to-talk: håll {_hotkeyBinding.DisplayName} för att höras";
+                            ? $"{_hotkeyBinding.DisplayName} released — muting in {_releaseDelayMilliseconds} ms"
+                            : $"Push-to-talk: hold {_hotkeyBinding.DisplayName} to be heard";
                 }
                 else
                 {
                     HotkeyStateText.Text = IsModdedMicSkipped
-                        ? "Moddad mic används ej — musiken mixas in så länge den spelar"
+                        ? "Modded mic not in use — music is mixed in while playing"
                         : _hotkeyListener.IsPressed
-                            ? $"{_hotkeyBinding.DisplayName} hålls nere — moddad mic"
+                            ? $"{_hotkeyBinding.DisplayName} held — modded mic"
                             : _isReleaseDelayPending
-                                ? $"{_hotkeyBinding.DisplayName} släppt — återgår om {_releaseDelayMilliseconds} ms"
-                                : $"{_hotkeyBinding.DisplayName} — vanlig mic";
+                                ? $"{_hotkeyBinding.DisplayName} released — switching back in {_releaseDelayMilliseconds} ms"
+                                : $"{_hotkeyBinding.DisplayName} — normal mic";
                 }
             }
 
-            string outputLine = $"Utgång: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
+            string outputLine = $"Output: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
             if (_secondaryOutput.IsRunning)
             {
-                outputLine += $" · Sekundär ut: {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "aktiv")}";
+                outputLine += $" · Secondary output: {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "active")}";
             }
 
             StatusText.Text = outputLine;
@@ -1234,25 +1234,25 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        RoutingStateText.Text = "Routning stoppad";
+        RoutingStateText.Text = "Routing stopped";
         RoutingStateIcon.Data = (Geometry)FindResource("CircleOffIcon");
         RoutingStateIcon.Fill = StatusTheme.StoppedBrush;
-        ActiveSourceText.Text = "Aktiv källa: Ingen";
+        ActiveSourceText.Text = "Active source: None";
         ActiveSourceText.Foreground = StatusTheme.StoppedInkBrush;
         if (!_isCapturingHotkey)
         {
             HotkeyStateText.Text = IsPushToTalk
-                ? $"Push-to-talk aktivt — håll {_hotkeyBinding.DisplayName} för att höras när routningen är igång"
+                ? $"Push-to-talk active — hold {_hotkeyBinding.DisplayName} to be heard while routing is active"
                 : IsModdedMicSkipped
-                    ? "Moddad mic används ej — endast vanlig mic + musik"
-                    : $"Håll {_hotkeyBinding.DisplayName} för moddad mic";
+                    ? "Modded mic not in use — normal mic + music only"
+                    : $"Hold {_hotkeyBinding.DisplayName} for the modded mic";
         }
 
         StatusText.Text = _devicesLoaded
             ? ""
             : _isDevicesLoading
-                ? "Laddar ljudenheter..."
-                : _deviceLoadError ?? "Laddar ljudenheter...";
+                ? "Loading audio devices..."
+                : _deviceLoadError ?? "Loading audio devices...";
 
         UpdateCompactStatus();
         UpdateTrayIcon();
@@ -1274,10 +1274,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void UpdateHotkeyUi()
     {
         HotkeyValueText.Text = _hotkeyBinding.DisplayName;
-        CaptureHotkeyButton.Content = _isCapturingHotkey ? "Tryck nu..." : "Ändra";
+        CaptureHotkeyButton.Content = _isCapturingHotkey ? "Press now..." : "Change";
         HotkeyCaptureHintText.Text = _isCapturingHotkey
-            ? "Tryck valfri tangent eller musknapp nu."
-            : "Klicka Ändra och tryck valfri tangent/musknapp.";
+            ? "Press any keyboard key or mouse button now."
+            : "Click Change, then press any keyboard key or mouse button.";
     }
 
     private void ApplyHotkeyPressedState(bool isPressed)
@@ -1454,7 +1454,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (_music.CurrentTrackPath is string pausedPath)
         {
-            MusicStatusText.Text = $"Pausad: {Path.GetFileNameWithoutExtension(pausedPath)} — spelar vidare när routningen är igång.";
+            MusicStatusText.Text = $"Paused: {Path.GetFileNameWithoutExtension(pausedPath)} — playback resumes when routing is active.";
         }
 
         UpdateMusicUi();
@@ -1478,7 +1478,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (_music.CurrentTrackPath is string resumedPath)
         {
-            MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(resumedPath)}";
+            MusicStatusText.Text = $"Playing: {Path.GetFileNameWithoutExtension(resumedPath)}";
         }
 
         UpdateMusicUi();
@@ -1591,7 +1591,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to load playlist.");
-            MusicStatusText.Text = $"Kunde inte läsa musikmappen: {ex.Message}";
+            MusicStatusText.Text = $"Could not read the music folder: {ex.Message}";
         }
     }
 
@@ -1640,7 +1640,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // A pasted link belongs in the download field — move it there and start.
             PlaylistFilterBox.Text = "";
             YoutubeUrlBox.Text = text;
-            MusicStatusText.Text = "Det där såg ut som en länk — startar nedladdning.";
+            MusicStatusText.Text = "That looks like a link — starting the download.";
             _ = StartDownloadAsync();
             return;
         }
@@ -1679,13 +1679,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to play track {TrackPath}.", path);
-            MusicStatusText.Text = $"Kunde inte spela låten: {ex.Message}";
+            MusicStatusText.Text = $"Could not play the track: {ex.Message}";
             return false;
         }
 
         _session.LastPlayedTrackPath = path;
         _musicWasAutoPaused = false;
-        MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(path)}";
+        MusicStatusText.Text = $"Playing: {Path.GetFileNameWithoutExtension(path)}";
 
         if (PlaylistListBox.ItemsSource is List<TrackItem> tracks)
         {
@@ -1724,7 +1724,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         else
         {
             _music.Stop();
-            MusicStatusText.Text = "Spellistan är slut.";
+            MusicStatusText.Text = "The playlist has ended.";
             UpdateMusicUi();
         }
     }
@@ -1733,7 +1733,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         if (_session.Queue.Count > 0 && !_isExternalMode)
         {
-            QueueChipBtn.Content = $"Kö: {_session.Queue.Count}";
+            QueueChipBtn.Content = $"Queue: {_session.Queue.Count}";
             QueueChipBtn.Visibility = Visibility.Visible;
             ClearQueueBtn.Visibility = Visibility.Visible;
         }
@@ -1758,7 +1758,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         _session.ClearQueue();
         UpdateQueueUi();
-        MusicStatusText.Text = "Kön rensad.";
+        MusicStatusText.Text = "Queue cleared.";
     }
 
     // --- Queue popup: reorder via drag & drop ---
@@ -1896,7 +1896,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
         else
         {
-            MusicStatusText.Text = "Filen finns inte längre.";
+            MusicStatusText.Text = "The file no longer exists.";
         }
     }
 
@@ -2019,16 +2019,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // untouched; the next/play buttons resume it on explicit request.
             if (action == TrackEndAction.StopSingleTrack)
             {
-                string finished = $"Klar: {Path.GetFileNameWithoutExtension(endedPath)}";
+                string finished = $"Finished: {Path.GetFileNameWithoutExtension(endedPath)}";
 
                 if (modeWhenTrackEnded == SingleTrackPlayMode.Once)
                 {
                     SetSingleTrackMode(SingleTrackPlayMode.Off, announce: false);
-                    MusicStatusText.Text = $"{finished} — stannade. Enkellåtsläget stängdes av igen.";
+                    MusicStatusText.Text = $"{finished} — stopped. Single-track mode was turned off.";
                 }
                 else
                 {
-                    MusicStatusText.Text = $"{finished} — stannade (enkellåtsläge).";
+                    MusicStatusText.Text = $"{finished} — stopped (single-track mode).";
                 }
 
                 UpdateMusicUi();
@@ -2063,13 +2063,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         if (PlaylistListBox.SelectedItem is not TrackItem track)
         {
-            MusicStatusText.Text = "Markera en låt i listan att lägga i kön.";
+            MusicStatusText.Text = "Select a track in the list to add to the queue.";
             return;
         }
 
         _session.Enqueue(track.Path);
         UpdateQueueUi();
-        MusicStatusText.Text = $"Lade i kö: {track.Name}";
+        MusicStatusText.Text = $"Added to queue: {track.Name}";
     }
 
     private void OnPlaylistRefreshClick(object sender, RoutedEventArgs e)
@@ -2121,7 +2121,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to open music folder {Folder}.", folder);
-            MusicStatusText.Text = $"Kunde inte öppna mappen: {ex.Message}";
+            MusicStatusText.Text = $"Could not open the folder: {ex.Message}";
         }
     }
 
@@ -2139,8 +2139,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             Header = new TextBlock
             {
                 Text = _playlist.Folders.Count == 1
-                    ? "Musikmapp — lägg till fler för att blanda mappar"
-                    : $"Musikmappar ({_playlist.Folders.Count}) — låtar från alla visas i listan"
+                    ? "Music folder — add more to combine folders"
+                    : $"Music folders ({_playlist.Folders.Count}) — tracks from all folders appear in the list"
             },
             IsEnabled = false
         });
@@ -2158,7 +2158,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 IsCheckable = true,
                 IsChecked = true,
                 IsEnabled = canRemove,
-                ToolTip = canRemove ? "Avmarkera för att ta bort mappen från listan" : "Minst en musikmapp måste finnas kvar"
+                ToolTip = canRemove ? "Clear the check box to remove the folder from the list" : "At least one music folder must remain"
             };
             item.Click += (_, _) => RemoveMusicFolder(captured);
             menu.Items.Add(item);
@@ -2166,17 +2166,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         menu.Items.Add(new Separator());
 
-        var addItem = new System.Windows.Controls.MenuItem { Header = "Lägg till mapp…" };
+        var addItem = new System.Windows.Controls.MenuItem { Header = "Add folder…" };
         addItem.Click += (_, _) => AddMusicFolderViaDialog();
         menu.Items.Add(addItem);
 
         if (!_playlist.UsesOnlyDefaultFolder)
         {
-            var resetItem = new System.Windows.Controls.MenuItem { Header = "Använd bara standardmappen" };
+            var resetItem = new System.Windows.Controls.MenuItem { Header = "Use only the default folder" };
             resetItem.Click += (_, _) =>
             {
                 _playlist.SetFolders(null);
-                OnMusicFoldersChanged("Använder standardmusikmappen igen.");
+                OnMusicFoldersChanged("Using the default music folder again.");
             };
             menu.Items.Add(resetItem);
         }
@@ -2188,7 +2188,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "Välj mapp med MP3-filer"
+            Title = "Select a folder containing MP3 files"
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -2198,11 +2198,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (_playlist.AddFolder(dialog.FolderName))
         {
-            OnMusicFoldersChanged($"Lade till musikmapp: {dialog.FolderName}");
+            OnMusicFoldersChanged($"Added music folder: {dialog.FolderName}");
         }
         else
         {
-            MusicStatusText.Text = "Mappen finns redan i listan.";
+            MusicStatusText.Text = "The folder is already in the list.";
         }
     }
 
@@ -2214,7 +2214,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
         else
         {
-            MusicStatusText.Text = "Minst en musikmapp måste finnas kvar.";
+            MusicStatusText.Text = "At least one music folder must remain.";
         }
     }
 
@@ -2373,8 +2373,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (announce)
         {
             MusicStatusText.Text = filterPath != null
-                ? $"Nya låtar laddas ner till {target.DisplayName} så länge mappfiltret är på."
-                : $"Nya låtar laddas ner till {target.DisplayName} igen.";
+                ? $"New tracks are downloaded to {target.DisplayName} while the folder filter is active."
+                : $"New tracks are downloaded to {target.DisplayName} again.";
         }
     }
 
@@ -2405,7 +2405,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (DownloadFolderCombo.SelectedItem is FolderInfo info)
         {
-            MusicStatusText.Text = $"Nya låtar laddas ner till: {info.Path}";
+            MusicStatusText.Text = $"New tracks are downloaded to: {info.Path}";
         }
     }
 
@@ -2414,14 +2414,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private static readonly System.Windows.Media.Brush CaptureIdleBrush = CreateFrozenBrush(0x9C, 0xA3, 0xAF);
 
     // The capture toggle deliberately uses the music panel's purple accent (never the
-    // routing button's dark navy) so "sluta fånga appens ljud" can't be mistaken for
-    // "stoppa routningen" — field testers mixed the two up when both were dark "Stoppa".
+    // routing button's dark navy) so "stop capturing app audio" can't be mistaken for
+    // "stop routing" — field testers mixed the two up when both were dark "Stop".
     private static readonly System.Windows.Media.Brush CaptureAccentBrush = CreateFrozenBrush(0x7C, 0x3A, 0xED);
     private static readonly System.Windows.Media.Brush CaptureAccentTintBrush = CreateFrozenBrush(0xED, 0xE9, 0xFE);
     private static readonly System.Windows.Media.Brush CaptureAccentTintBorderBrush = CreateFrozenBrush(0xDD, 0xD6, 0xFE);
 
     private const string CaptureIdleHint =
-        "Välj appen som spelar musik (t.ex. Spotify) och klicka Fånga ljud. Du styr uppspelningen i appen som vanligt — ljudet mixas in i mic-kanalen.";
+        "Select the app playing music (e.g. Spotify) and click Capture audio. Control playback in the app as usual — its audio is mixed into the mic channel.";
 
     private static System.Windows.Media.Brush CreateFrozenBrush(byte r, byte g, byte b)
     {
@@ -2454,13 +2454,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // Local playback cannot follow into app mode; stop it cleanly.
             _music.Stop();
             _musicWasAutoPaused = false;
-            MusicStatusText.Text = "Välj appen som spelar musik och starta ljudinfångningen.";
+            MusicStatusText.Text = "Select the app playing music and start audio capture.";
             _ = RefreshAudioAppsAsync();
         }
         else
         {
             StopAppCapture();
-            MusicStatusText.Text = "Dubbelklicka på en låt för att spela. Musiken mixas med micen när routning är aktiv.";
+            MusicStatusText.Text = "Double-click a track to play it. Music is mixed with the mic while routing is active.";
         }
 
         ApplyMusicModeUi();
@@ -2534,7 +2534,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         catch (Exception ex)
         {
             Log.Error(ex, "Failed to enumerate audio apps.");
-            MusicStatusText.Text = $"Kunde inte lista appar med ljud: {ex.Message}";
+            MusicStatusText.Text = $"Could not list apps with audio: {ex.Message}";
             return;
         }
 
@@ -2558,7 +2558,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (apps.Count == 0)
         {
-            MusicStatusText.Text = "Ingen ljudsession hittades. Spela något i t.ex. Spotify i några sekunder och klicka sedan Uppdatera.";
+            MusicStatusText.Text = "No audio session was found. Play something in an app such as Spotify for a few seconds, then click Refresh.";
         }
     }
 
@@ -2585,19 +2585,19 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (_appCapture != null)
         {
             StopAppCapture();
-            MusicStatusText.Text = "Ljudinfångning stoppad.";
+            MusicStatusText.Text = "Audio capture stopped.";
             return;
         }
 
         if (!ProcessLoopbackCapture.IsSupported)
         {
-            MusicStatusText.Text = "Ljudinfångning per app kräver Windows 10 version 2004 eller senare.";
+            MusicStatusText.Text = "Per-app audio capture requires Windows 10 version 2004 or later.";
             return;
         }
 
         if (ExternalAppCombo.SelectedItem is not AudioAppOption app)
         {
-            MusicStatusText.Text = "Välj först appen som spelar musik.";
+            MusicStatusText.Text = "First select the app playing music.";
             return;
         }
 
@@ -2633,7 +2633,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             Log.Error(ex, "Failed to start process loopback capture for {App} (PID {ProcessId}).", app.DisplayName, app.ProcessId);
             capture.Error -= OnCaptureError;
             capture.Dispose();
-            MusicStatusText.Text = $"Kunde inte fånga ljudet från {app.DisplayName}: {ex.Message}";
+            MusicStatusText.Text = $"Could not capture audio from {app.DisplayName}: {ex.Message}";
         }
         finally
         {
@@ -2663,24 +2663,24 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         CaptureStateText.Text = state switch
         {
-            ExternalCaptureRouteState.WaitingForAudio => $"Väntar på ljud från {target.DisplayName}",
-            ExternalCaptureRouteState.RoutingStopped => "Ljud hittat — routningen är avstängd",
-            ExternalCaptureRouteState.MonitorOnly => "Ljud hittat — endast medhörning",
-            ExternalCaptureRouteState.BlockedByPushToTalk => "Ljud hittat — blockeras av push-to-talk",
-            _ => $"{target.DisplayName} skickas till virtuell mic"
+            ExternalCaptureRouteState.WaitingForAudio => $"Waiting for audio from {target.DisplayName}",
+            ExternalCaptureRouteState.RoutingStopped => "Audio detected — routing is off",
+            ExternalCaptureRouteState.MonitorOnly => "Audio detected — monitor only",
+            ExternalCaptureRouteState.BlockedByPushToTalk => "Audio detected — blocked by push-to-talk",
+            _ => $"{target.DisplayName} is being sent to the virtual mic"
         };
 
         CaptureHintText.Text = state switch
         {
             ExternalCaptureRouteState.WaitingForAudio =>
-                "Starta uppspelning i appen. Om mätaren inte rör sig: spela några sekunder, uppdatera applistan och välj appen igen.",
+                "Start playback in the app. If the meter does not move, play for a few seconds, refresh the app list, and select the app again.",
             ExternalCaptureRouteState.RoutingStopped =>
-                "Aktivera routningen med knappen uppe till höger för att skicka ljudet till mic-kanalen.",
+                "Enable routing with the button in the top right to send audio to the mic channel.",
             ExternalCaptureRouteState.MonitorOnly =>
-                "Stäng av Endast medhörning för att skicka musiken till mic-kanalen.",
+                "Turn off Monitor only to send music to the mic channel.",
             ExternalCaptureRouteState.BlockedByPushToTalk =>
-                $"Håll {_hotkeyBinding.DisplayName}, eller aktivera Musiken ignorerar push-to-talk, för att låta andra höra musiken.",
-            _ => "Ljud tas emot och skickas genom routningen till den virtuella micen."
+                $"Hold {_hotkeyBinding.DisplayName}, or enable Music ignores push-to-talk, to let others hear the music.",
+            _ => "Audio is being received and routed to the virtual mic."
         };
 
         CaptureStateIcon.Data = (Geometry)FindResource(state == ExternalCaptureRouteState.Sending
@@ -2710,12 +2710,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _router.MusicRouteOpen);
         MusicStatusText.Text = state switch
         {
-            ExternalCaptureRouteState.WaitingForAudio => $"Väntar på ljud från {target.DisplayName}.",
-            ExternalCaptureRouteState.RoutingStopped => "Appens ljud tas emot — aktivera routningen så att andra hör.",
-            ExternalCaptureRouteState.MonitorOnly => "Appens ljud tas emot men Endast medhörning är aktivt.",
+            ExternalCaptureRouteState.WaitingForAudio => $"Waiting for audio from {target.DisplayName}.",
+            ExternalCaptureRouteState.RoutingStopped => "App audio is being received — enable routing so others can hear it.",
+            ExternalCaptureRouteState.MonitorOnly => "App audio is being received, but Monitor only is active.",
             ExternalCaptureRouteState.BlockedByPushToTalk =>
-                $"Appens ljud tas emot men blockeras av push-to-talk — håll {_hotkeyBinding.DisplayName} eller låt musiken ignorera push-to-talk.",
-            _ => $"{target.DisplayName} skickas till den virtuella micen."
+                $"App audio is being received but blocked by push-to-talk — hold {_hotkeyBinding.DisplayName} or let music ignore push-to-talk.",
+            _ => $"{target.DisplayName} is being sent to the virtual mic."
         };
     }
 
@@ -2759,15 +2759,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (_isCaptureStarting)
         {
-            CaptureToggleText.Text = "Startar…";
-            CaptureStateText.Text = "Startar ljudinfångning…";
+            CaptureToggleText.Text = "Starting…";
+            CaptureStateText.Text = "Starting audio capture…";
             return;
         }
 
         if (capturing)
         {
             // Light purple "quiet" state while active: clearly not the dark routing button.
-            CaptureToggleText.Text = "Sluta fånga";
+            CaptureToggleText.Text = "Stop capture";
             CaptureToggleIcon.Data = (Geometry)FindResource("StopIcon");
             CaptureToggleIcon.Fill = CaptureAccentBrush;
             CaptureToggleBtn.Background = CaptureAccentTintBrush;
@@ -2777,7 +2777,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
         else
         {
-            CaptureToggleText.Text = "Fånga ljud";
+            CaptureToggleText.Text = "Capture audio";
             CaptureToggleIcon.Data = (Geometry)FindResource("PlayIcon");
             CaptureToggleIcon.Fill = System.Windows.Media.Brushes.White;
             CaptureToggleBtn.Background = CaptureAccentBrush;
@@ -2785,7 +2785,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             CaptureToggleBtn.Foreground = System.Windows.Media.Brushes.White;
             CaptureStateIcon.Data = (Geometry)FindResource("CircleOffIcon");
             CaptureStateIcon.Fill = CaptureIdleBrush;
-            CaptureStateText.Text = "Ingen ljudinfångning";
+            CaptureStateText.Text = "No audio capture";
             CaptureHintText.Text = CaptureIdleHint;
             CaptureLevelMeter.Value = 0;
         }
@@ -2809,7 +2809,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             CancelDelayedStart(null);
             MediaKeySender.SendStop();
-            MusicStatusText.Text = "Skickade stopp till appen som spelar.";
+            MusicStatusText.Text = "Sent Stop to the app that is playing.";
             return;
         }
 
@@ -2836,7 +2836,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _musicWasAutoPaused = false;
             if (_music.CurrentTrackPath is string resumedPath)
             {
-                MusicStatusText.Text = $"Spelar: {Path.GetFileNameWithoutExtension(resumedPath)}";
+                MusicStatusText.Text = $"Playing: {Path.GetFileNameWithoutExtension(resumedPath)}";
             }
 
             UpdateMusicUi();
@@ -2892,13 +2892,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         if (IsDelayedStartCountingDown)
         {
-            CancelDelayedStart("Fördröjd start avbruten.");
+            CancelDelayedStart("Delayed start canceled.");
             return;
         }
 
         if (!_isExternalMode && _music.IsPlaying)
         {
-            MusicStatusText.Text = "Musiken spelar redan.";
+            MusicStatusText.Text = "Music is already playing.";
             return;
         }
 
@@ -2929,7 +2929,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (_isExternalMode)
         {
             MediaKeySender.SendPlayPause();
-            MusicStatusText.Text = "Skickade play till appen som spelar.";
+            MusicStatusText.Text = "Sent Play to the app that is playing.";
             return;
         }
 
@@ -2966,7 +2966,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         DelayedPlayIcon.Fill = System.Windows.Media.Brushes.White;
         DelayedPlayText.Foreground = System.Windows.Media.Brushes.White;
         DelayedPlayText.Text = _session.DelayedStart.RemainingSeconds.ToString(CultureInfo.InvariantCulture);
-        MusicStatusText.Text = $"Startar om {_session.DelayedStart.RemainingSeconds} s — klicka på knappen igen för att avbryta.";
+        MusicStatusText.Text = $"Starting in {_session.DelayedStart.RemainingSeconds} s — click the button again to cancel.";
     }
 
     private void UpdateDelayedPlayIdleUi()
@@ -2987,10 +2987,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private static string PlaybackBlockedStatus(string? blockedReason) => blockedReason switch
     {
-        PlaybackBlockedReasons.ExternalModeActive => "Byt till musikbiblioteket för att spela MicMixer-musik.",
-        PlaybackBlockedReasons.NoPlaybackClock => "Starta routning eller aktivera medhörning för att spela musik.",
-        PlaybackBlockedReasons.EmptyLibrary => "Ingen musik ännu — klistra in en YouTube-länk ovan.",
-        _ => "Musiken kunde inte startas."
+        PlaybackBlockedReasons.ExternalModeActive => "Switch to the music library to play MicMixer music.",
+        PlaybackBlockedReasons.NoPlaybackClock => "Start routing or enable monitoring to play music.",
+        PlaybackBlockedReasons.EmptyLibrary => "No music yet — paste a YouTube link above.",
+        _ => "Music could not be started."
     };
 
     private void OnDelayedStartMenuOpened(object sender, RoutedEventArgs e)
@@ -3028,7 +3028,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         UpdateDelayedPlayIdleUi();
-        MusicStatusText.Text = $"Fördröjd start: {_settings.DelayedStartSeconds} s.";
+        MusicStatusText.Text = $"Delayed start: {_settings.DelayedStartSeconds} s.";
     }
 
     private readonly DispatcherTimer _singleTrackAnnounceTimer;
@@ -3074,10 +3074,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _pendingSingleTrackStatus = mode switch
             {
                 SingleTrackPlayMode.Once =>
-                    "Enkellåtsläge: stannar när låten är klar, sedan stängs läget av igen. Dubbelklicka för att låta det ligga kvar.",
+                    "Single-track mode: stops when the track ends, then turns off. Double-click to keep it enabled.",
                 SingleTrackPlayMode.Always =>
-                    "Enkellåtsläge på tills du stänger av det — musiken stannar efter varje låt.",
-                _ => "Enkellåtsläge av — spellistan fortsätter som vanligt."
+                    "Single-track mode remains on until you disable it — music stops after every track.",
+                _ => "Single-track mode off — the playlist continues as usual."
             };
             _singleTrackAnnounceTimer.Start();
         }
@@ -3250,7 +3250,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             Log.Error(ex, "Failed to configure music monitor.");
             PauseMusicIfClockLost();
-            MusicStatusText.Text = $"Kunde inte starta medhörning: {ex.Message}";
+            MusicStatusText.Text = $"Could not start monitoring: {ex.Message}";
             UpdateMusicUi();
         }
     }
@@ -3282,7 +3282,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            MusicStatusText.Text = "Klistra in en giltig länk (https://...).";
+            MusicStatusText.Text = "Paste a valid link (https://...).";
             return;
         }
 
@@ -3291,7 +3291,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         DownloadStatusRow.Visibility = Visibility.Visible;
         DownloadProgressBar.IsIndeterminate = true;
         DownloadProgressBar.Value = 0;
-        DownloadStatusText.Text = "Förbereder...";
+        DownloadStatusText.Text = "Preparing...";
 
         try
         {
@@ -3322,15 +3322,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
             DownloadProgressBar.IsIndeterminate = false;
             DownloadProgressBar.Value = 100;
             DownloadStatusText.Text = newFile != null
-                ? $"Klar: {Path.GetFileNameWithoutExtension(newFile)}"
-                : "Klar.";
+                ? $"Finished: {Path.GetFileNameWithoutExtension(newFile)}"
+                : "Finished.";
         }
         catch (Exception ex)
         {
             Log.Error(ex, "YouTube download failed.");
             DownloadProgressBar.IsIndeterminate = false;
-            DownloadStatusText.Text = "Nedladdning misslyckades.";
-            MusicStatusText.Text = $"Fel vid nedladdning: {ex.Message}";
+            DownloadStatusText.Text = "Download failed.";
+            MusicStatusText.Text = $"Download error: {ex.Message}";
         }
         finally
         {
@@ -3443,8 +3443,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         public string Letter => Info.Letter;
 
         public string ToolTipText => IsActive
-            ? $"{Info.Path}\nVisar bara låtar från den här mappen — klicka för att visa alla."
-            : $"{Info.Path}\nKlicka för att bara visa låtar från den här mappen.";
+            ? $"{Info.Path}\nShowing tracks from this folder only — click to show all tracks."
+            : $"{Info.Path}\nClick to show only tracks from this folder.";
 
         public bool IsActive
         {
@@ -3577,7 +3577,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     // --- System tray support ---
     // The tray icon is always visible: minimize keeps the app in the taskbar as
     // usual, while the close button (X) hides the window to the tray instead of
-    // exiting. "Avsluta" in the tray menu quits for real.
+    // exiting. "Exit" in the tray menu quits for real.
 
     private System.Windows.Forms.NotifyIcon CreateTrayIcon()
     {
@@ -3591,9 +3591,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         trayIcon.DoubleClick += OnTrayIconDoubleClick;
 
         var menu = new System.Windows.Forms.ContextMenuStrip();
-        menu.Items.Add("Visa MicMixer", null, OnTrayShowClick);
+        menu.Items.Add("Show MicMixer", null, OnTrayShowClick);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add("Avsluta", null, OnTrayExitClick);
+        menu.Items.Add("Exit", null, OnTrayExitClick);
         trayIcon.ContextMenuStrip = menu;
 
         return trayIcon;
@@ -3664,10 +3664,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
             _trayIcon.Text = newStatus switch
             {
-                MicStatus.Live => "MicMixer — Vanlig mic hörs",
-                MicStatus.Modded => "MicMixer — Moddad mic hörs",
-                MicStatus.Muted => "MicMixer — Tyst (push-to-talk)",
-                _ => "MicMixer — Routning stoppad"
+                MicStatus.Live => "MicMixer — Normal mic is live",
+                MicStatus.Modded => "MicMixer — Modded mic is live",
+                MicStatus.Muted => "MicMixer — Muted (push-to-talk)",
+                _ => "MicMixer — Routing stopped"
             };
 
             _lastTrayStatus = newStatus;
@@ -3822,7 +3822,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             {
                 Log.Error(ex, "Failed to create overlay indicator window.");
                 _overlayIndicator = null;
-                StatusText.Text = $"Kunde inte visa overlay-indikatorn: {ex.Message}";
+                StatusText.Text = $"Could not display the overlay indicator: {ex.Message}";
             }
         }
         else if (_overlayIndicator is { } overlay)
@@ -3939,7 +3939,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         bool expanded = CompactStatusToggle.IsChecked == true;
         RoutingScroll.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        CompactStatusHint.Text = expanded ? "Dölj inställningar" : "Visa inställningar";
+        CompactStatusHint.Text = expanded ? "Hide settings" : "Show settings";
         CompactChevronRotate.Angle = expanded ? 0 : 180;
     }
 
@@ -3954,10 +3954,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void UpdateCompactStatus()
     {
         CompactStatusDot.Fill = RoutingStateIcon.Fill;
-        var source = ActiveSourceText.Text.Replace("Aktiv källa: ", string.Empty);
+        var source = ActiveSourceText.Text.Replace("Active source: ", string.Empty);
         CompactStatusText.Text = _router.IsRouting
-            ? $"Routning aktiv · {source}"
-            : "Routning stoppad";
+            ? $"Routing active · {source}"
+            : "Routing stopped";
     }
 
     /// <summary>Stacks the three device pickers vertically when the card is too

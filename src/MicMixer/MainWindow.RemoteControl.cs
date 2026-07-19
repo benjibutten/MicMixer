@@ -169,7 +169,7 @@ public partial class MainWindow
         _musicWasAutoPaused = false;
         _session.LastPlayedTrackPath = null;
         PlaylistListBox.SelectedItem = null;
-        MusicStatusText.Text = "Musiken stoppad — ingen låt är aktiv.";
+        MusicStatusText.Text = "Music stopped — no track is active.";
         UpdateMusicUi();
         return ControlResult.Ok();
     }
@@ -261,7 +261,7 @@ public partial class MainWindow
 
         _session.Enqueue(track.Path);
         UpdateQueueUi();
-        MusicStatusText.Text = $"Lade i kö: {track.Name}";
+        MusicStatusText.Text = $"Added to queue: {track.Name}";
         return ControlResult.Ok();
     }
 
@@ -302,7 +302,7 @@ public partial class MainWindow
     {
         _session.ClearQueue();
         UpdateQueueUi();
-        MusicStatusText.Text = "Kön rensad.";
+        MusicStatusText.Text = "Queue cleared.";
         return ControlResult.Ok();
     }
 
@@ -377,7 +377,7 @@ public partial class MainWindow
 
     private ControlResult RemoteCancelDelayedPlay()
     {
-        CancelDelayedStart("Fördröjd start avbruten.");
+        CancelDelayedStart("Delayed start canceled.");
         return ControlResult.Ok();
     }
 
@@ -476,7 +476,7 @@ public partial class MainWindow
             return ControlResult.Fail("folder_already_configured", "The music folder is already configured.");
         }
 
-        OnMusicFoldersChanged($"Lade till musikmapp: {fullPath}");
+        OnMusicFoldersChanged($"Added music folder: {fullPath}");
         return ControlResult.Ok();
     }
 
@@ -505,7 +505,7 @@ public partial class MainWindow
     private ControlResult RemoteResetMusicFolders()
     {
         _playlist.SetFolders(null);
-        OnMusicFoldersChanged("Använder standardmusikmappen igen.");
+        OnMusicFoldersChanged("Using the default music folder again.");
         return ControlResult.Ok();
     }
 
@@ -525,7 +525,7 @@ public partial class MainWindow
         _settings.DownloadFolderPath = folder;
         SyncDownloadFolderToFilter(announce: false);
         SaveSettings();
-        MusicStatusText.Text = $"Nya låtar laddas ner till: {folder}";
+        MusicStatusText.Text = $"New tracks are downloaded to: {folder}";
         return ControlResult.Ok();
     }
 

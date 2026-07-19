@@ -235,7 +235,7 @@
                                VerticalAlignment="Bottom"/>
                 </StackPanel>
                 <TextBlock Foreground="#6B7280" FontSize="11.5" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
-                           Text="Virtuell mic-switch — håll hotkey för moddad mic"/>
+                           Text="Virtual mic switch — hold the hotkey for the modded mic"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="ToggleBtn" Click="OnToggleClick" Height="32" Padding="14,0" FontWeight="SemiBold"
@@ -243,12 +243,12 @@
                     <StackPanel Orientation="Horizontal">
                         <Path x:Name="ToggleBtnIcon" Data="{StaticResource PlayIcon}" Fill="White"
                               Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,7,0"/>
-                        <TextBlock x:Name="ToggleBtnText" Text="Aktivera" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ToggleBtnText" Text="Enable" VerticalAlignment="Center" FontWeight="SemiBold"/>
                     </StackPanel>
                 </Button>
                 <Button Click="OnRefreshClick" Height="32" Width="32" Margin="8,0,0,0" Padding="0"
                         Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"
-                        ToolTip="Uppdatera enheter">
+                        ToolTip="Refresh devices">
                     <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="14" Height="14"/>
                 </Button>
             </StackPanel>
@@ -303,15 +303,15 @@
                         <StackPanel x:Name="DryDevicePanel" Grid.Column="0" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource MicIcon}" Fill="{x:Static ui:StatusTheme.LiveBrush}" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                                <TextBlock Text="Vanlig mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <TextBlock Text="Normal mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
                                 <Border Style="{StaticResource InfoTipHost}">
                                     <Path Style="{StaticResource InfoTipIcon}"/>
                                     <Border.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Din riktiga mikrofon"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Your physical microphone"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Mikrofonen du faktiskt pratar i — samma som du brukar välja i andra program. Det är den som hörs som standard när routningen är igång."/>
+                                                           Text="The microphone you actually speak into — the same one you normally select in other apps. This is the default source while routing is active."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </Border.ToolTip>
@@ -324,17 +324,17 @@
                         <StackPanel x:Name="ModdedDevicePanel" Grid.Column="1" Margin="8,0,8,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource ModdedMicIcon}" Fill="{x:Static ui:StatusTheme.ModdedBrush}" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                                <TextBlock Text="Moddad mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <TextBlock Text="Modded mic" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
                                 <Border Style="{StaticResource InfoTipHost}">
                                     <Path Style="{StaticResource InfoTipIcon}"/>
                                     <Border.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Röstmoddad mikrofon (t.ex. Voicemod)"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Voice-modified microphone (e.g. Voicemod)"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Utgången från ett röstmodd-program — för Voicemod heter den oftast 'Voicemod Virtual Audio Device'. Så länge du håller in hotkeyn hörs den här i stället för din vanliga mic."/>
+                                                           Text="The output from a voice changer — for Voicemod, it is usually called 'Voicemod Virtual Audio Device'. While you hold the hotkey, this source is heard instead of your normal mic."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Använder du inget röstmodd-program? Välj 'Ingen moddad mic' — då skickas bara vanlig mic + musik till kabeln, och hotkeyn behövs inte."/>
+                                                           Text="Not using a voice changer? Select 'No modded mic' — only the normal mic and music will be sent to the cable, and no hotkey is needed."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </Border.ToolTip>
@@ -347,17 +347,17 @@
                         <StackPanel x:Name="OutputDevicePanel" Grid.Column="2" Margin="8,0,0,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource CableIcon}" Fill="#4338CA" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                                <TextBlock Text="Virtuell kabel ut" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <TextBlock Text="Virtual cable output" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
                                 <Border Style="{StaticResource InfoTipHost}">
                                     <Path Style="{StaticResource InfoTipIcon}"/>
                                     <Border.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Hit skickas den färdiga mixen"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="The finished mix is sent here"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Välj CABLE Input (VB-Audio Virtual Cable). Allt som routas — mic och musik — spelas upp här, och i spelet/Discord väljer du sedan CABLE Output som mikrofon."/>
+                                                           Text="Select CABLE Input (VB-Audio Virtual Cable). Everything being routed — mic and music — is played here; then select CABLE Output as the microphone in your game or Discord."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Har du inte VB-CABLE installerat? Följ guiden längst ner i fönstret."/>
+                                                           Text="Don't have VB-CABLE installed? Follow the guide at the bottom of the window."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </Border.ToolTip>
@@ -366,7 +366,7 @@
                             <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
                             <TextBlock x:Name="OutputCableWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
                                        Foreground="#B45309" Visibility="Collapsed"
-                                       Text="⚠ Det här ser inte ut som en virtuell kabel. Spelet/Discord hör mixen bara om den skickas till t.ex. CABLE Input (VB-CABLE)."/>
+                                       Text="⚠ This does not appear to be a virtual cable. The game or Discord can hear the mix only if it is sent to a device such as CABLE Input (VB-CABLE)."/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -382,21 +382,21 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Path Data="{StaticResource SpeakerIcon}" Fill="#0E7490" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                                <TextBlock Text="Sekundär ut" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
+                                <TextBlock Text="Secondary output" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
                                 <Border Style="{StaticResource InfoTipHost}">
                                     <Path Style="{StaticResource InfoTipIcon}"/>
                                     <Border.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Extra utgång för hela mixen — t.ex. till OBS"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Additional output for the full mix — e.g. OBS"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Spelar upp exakt samma mix som kabeln får (mic + musik) på en extra ljudenhet. Kabeln till FiveM/Discord påverkas inte alls."/>
+                                                           Text="Plays the exact same mix sent to the cable (mic + music) on an additional audio device. The cable to FiveM or Discord is not affected."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Typiskt användningsfall: OBS ska spela in eller streama mixen. Välj en enhet här och lägg till samma enhet i OBS som 'Audio Output Capture'."/>
+                                                           Text="Typical use case: recording or streaming the mix in OBS. Select a device here and add the same device in OBS as an 'Audio Output Capture'."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Med 'Ignorera push-to-talk' hörs mic + musik här hela tiden — även när PTT är släppt och kabeln får tystnad. Skillnad mot Medhörning: medhörningen spelar bara musiken, sekundär ut spelar hela mixen inklusive din röst."/>
+                                                           Text="With 'Ignore push-to-talk', the mic and music are always heard here — even when PTT is released and the cable receives silence. Unlike Monitoring, which plays only the music, the secondary output plays the entire mix including your voice."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Behöver du inte spela in eller lyssna på hela mixen separat? Låt det vara avstängt — allt fungerar precis som vanligt."/>
+                                                           Text="Don't need to record or listen to the entire mix separately? Leave this disabled — everything else will work as usual."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </Border.ToolTip>
@@ -405,8 +405,8 @@
                             <CheckBox x:Name="SecondaryOutputEnabledCheck" Grid.Column="1" VerticalAlignment="Center" FontSize="11.5" Foreground="#10233A"
                                       Checked="OnSecondaryOutputConfigChanged" Unchecked="OnSecondaryOutputConfigChanged"
                                       ToolTipService.ShowDuration="60000"
-                                      ToolTip="Spela mixen även på enheten nedan. Aktiveras vid nästa routningsstart.">
-                                <TextBlock Text="Aktivera" VerticalAlignment="Center"/>
+                                      ToolTip="Also play the mix on the device below. Takes effect the next time routing starts.">
+                                <TextBlock Text="Enable" VerticalAlignment="Center"/>
                             </CheckBox>
                         </Grid>
 
@@ -425,24 +425,24 @@
                             <ComboBox x:Name="SecondaryOutputCombo" DisplayMemberPath="FriendlyName" FontSize="11.5"
                                       SelectionChanged="OnSecondaryOutputDeviceChanged"
                                       ToolTipService.ShowDuration="60000"
-                                      ToolTip="Enheten som mixen också spelas på — t.ex. den enhet OBS fångar med 'Audio Output Capture'. Välj inte samma enhet som Virtuell kabel ut."/>
+                                      ToolTip="The device that also plays the mix — e.g. the device OBS captures with 'Audio Output Capture'. Do not select the same device as the virtual cable output."/>
                             <TextBlock x:Name="SecondaryOutputWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
                                        Foreground="#B91C1C" Visibility="Collapsed"
-                                       Text="⚠ Samma enhet som Virtuell kabel ut — mixen skulle spelas dubbelt. Välj en annan enhet."/>
+                                       Text="⚠ Same device as the virtual cable output — the mix would play twice. Select a different device."/>
 
                             <CheckBox x:Name="SecondaryIgnorePttCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A" IsChecked="True"
                                       Checked="OnSecondaryOutputConfigChanged" Unchecked="OnSecondaryOutputConfigChanged"
                                       ToolTipService.ShowDuration="60000">
-                                <TextBlock Text="Ignorera push-to-talk — mic + musik hörs här även när kabeln är tyst"
+                                <TextBlock Text="Ignore push-to-talk — mic and music are heard here even when the cable is silent"
                                            VerticalAlignment="Center" TextWrapping="Wrap"/>
                                 <CheckBox.ToolTip>
                                     <ToolTip>
                                         <StackPanel>
-                                            <TextBlock Style="{StaticResource TipTitle}" Text="Spela även när push-to-talk är släppt"/>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="Play even when push-to-talk is released"/>
                                             <TextBlock Style="{StaticResource TipBody}"
-                                                       Text="På (standard): sekundär ut får alltid mic + musik, även när push-to-talk håller kabeln tyst — t.ex. så att OBS spelar in allt du säger. Av: micen på sekundär ut följer push-to-talk och tystnar exakt när kabeln tystnar."/>
+                                                       Text="On (default): the secondary output always receives mic and music, even when push-to-talk keeps the cable silent — for example, so OBS records everything you say. Off: the mic on the secondary output follows push-to-talk and becomes silent with the cable."/>
                                             <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                       Text="Musiken följer alltid det du kan höra: den ligger kvar på sekundär ut så länge den sänds till kabeln eller förhandsgranskas i endast medhörning-läget."/>
+                                                       Text="Music always follows what you can hear: it remains on the secondary output while it is sent to the cable or previewed in monitor-only mode."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </CheckBox.ToolTip>
@@ -454,11 +454,11 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Volym" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Volume" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <Slider x:Name="SecondaryVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="1"
                                         VerticalAlignment="Center" LargeChange="0" SmallChange="0.05"
                                         ValueChanged="OnSecondaryVolumeChanged"
-                                        ToolTip="Volym endast för sekundär ut — påverkar inte vad kabeln får"/>
+                                        ToolTip="Volume for the secondary output only — does not affect the cable"/>
                                 <TextBlock x:Name="SecondaryVolumePercentText" Grid.Column="2" Text="100 %" FontSize="11" Foreground="#10233A"
                                            FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
                             </Grid>
@@ -499,18 +499,18 @@
                                     <TextBlock x:Name="HotkeyValueText" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
                                 </Border>
                                 <Button x:Name="CaptureHotkeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
-                                        Click="OnCaptureHotkeyClick" Content="Ändra" FontSize="11.5"
+                                        Click="OnCaptureHotkeyClick" Content="Change" FontSize="11.5"
                                         Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
                             </StackPanel>
                             <TextBlock x:Name="HotkeyCaptureHintText" Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
-                                       Text="Klicka Ändra och tryck valfri tangent/musknapp."/>
+                                       Text="Click Change, then press any keyboard key or mouse button."/>
                         </StackPanel>
 
                         <!-- Delay -->
                         <StackPanel x:Name="DelayPanel" Grid.Column="1" VerticalAlignment="Center" MinWidth="140">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Path Data="{StaticResource ClockIcon}" Fill="#6B7280" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                                <TextBlock Text="Återgångsdelay" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
+                                <TextBlock Text="Release delay" FontWeight="SemiBold" FontSize="12" Foreground="#10233A"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <TextBox x:Name="ReleaseDelayTextBox" Width="64" MaxLength="5" Height="28"
@@ -518,13 +518,13 @@
                                          LostFocus="OnReleaseDelayTextBoxLostFocus" KeyDown="OnReleaseDelayTextBoxKeyDown"/>
                                 <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#6B7280" FontSize="12" Text="ms"/>
                             </StackPanel>
-                            <TextBlock Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" Text="0 = direkt återgång"/>
+                            <TextBlock Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" Text="0 = immediate release"/>
                         </StackPanel>
                         </Grid>
 
                         <!-- Push-to-talk: gate for the whole outgoing mix. Lives outside
                              HotkeyConfigPanel so it stays clickable when the hotkey config
-                             is dimmed for "Ingen moddad mic". -->
+                             is dimmed for "No modded mic". -->
                         <Border Grid.Row="1" Margin="0,10,0,0" Padding="0,10,0,0" BorderBrush="#E9EEF3" BorderThickness="0,1,0,0">
                             <StackPanel>
                                 <CheckBox x:Name="PushToTalkCheck" FontSize="11.5" Foreground="#10233A"
@@ -536,18 +536,18 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Path Data="{StaticResource MicOffIcon}" Fill="{x:Static ui:StatusTheme.MutedBrush}" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
-                                        <TextBlock Grid.Column="1" Text="Push-to-talk — allt är tyst tills hotkeyn hålls in" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                        <TextBlock Grid.Column="1" Text="Push-to-talk — everything is silent until the hotkey is held" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     </Grid>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Push-to-talk för hela mixen"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Push-to-talk for the entire mix"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="När det här är på skickas bara tystnad till den virtuella kabeln — varken mic eller musik hörs — tills du håller in hotkeyn. Fungerar även med 'Ingen moddad mic': då hörs din vanliga mic bara medan hotkeyn hålls."/>
+                                                           Text="When this is on, only silence is sent to the virtual cable — neither mic nor music is heard — until you hold the hotkey. This also works with 'No modded mic': your normal mic is heard only while the hotkey is held."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Vill du att musiken ska fortsätta höras medan din röst är tyst? Slå på 'Musik ignorerar push-to-talk' i musikkortet — då gäller push-to-talk bara micen."/>
+                                                           Text="Want the music to remain audible while your voice is muted? Enable 'Music ignores push-to-talk' in the music card — push-to-talk will then affect only the mic."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Återgångsdelayn gäller även här: ljudet ligger kvar en stund efter att du släppt. Medhörningen i dina egna hörlurar påverkas inte, så du hör musiken själv hela tiden."/>
+                                                           Text="The release delay applies here too: audio remains active briefly after you let go. Monitoring through your own headphones is unaffected, so you continue to hear the music."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
@@ -561,18 +561,18 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Path Data="{StaticResource MicIcon}" Fill="{x:Static ui:StatusTheme.LiveBrush}" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
-                                        <TextBlock Grid.Column="1" Text="Overlay-indikator — statusprick uppe till höger, även över spel" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                        <TextBlock Grid.Column="1" Text="Overlay indicator — status dot in the top right, including over games" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     </Grid>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Statusindikator på skärmen"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="On-screen status indicator"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Visar en liten halvtransparent prick uppe i högra hörnet medan routningen är igång — samma färger som ikonen i systemfältet: grön = vanlig mic hörs, blå = moddad mic hörs (hotkeyn hålls), röd överkryssad mic = tyst (push-to-talk)."/>
+                                                           Text="Shows a small translucent dot in the top-right corner while routing is active — using the same colors as the system tray icon: green = normal mic is live, blue = modded mic is live (hotkey held), red crossed-out mic = muted (push-to-talk)."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="När musik är igång visas dessutom en egen musikcirkel till vänster om pricken, med dansande equalizer-staplar: lila not = musiken sänds till mic-kanalen, bärnstensfärgade hörlurar = endast medhörning (bara du och ev. sekundär ut hör den), grå överkryssad not = musiken spelar men blockeras av push-to-talk."/>
+                                                           Text="When music is playing, a separate music circle appears to the left of the dot with animated equalizer bars: purple note = music is sent to the mic channel, amber headphones = monitor only (only you and any secondary output can hear it), gray crossed-out note = music is playing but blocked by push-to-talk."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Indikatorerna går inte att klicka på — musklick går rakt igenom — och de syns även ovanpå spel i fönster/borderless-läge. Spel i exklusivt helskärmsläge kan dock inte visa overlays."/>
+                                                           Text="The indicators are click-through and remain visible over games in windowed or borderless mode. Games in exclusive fullscreen cannot display overlays."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
@@ -595,15 +595,15 @@
                                             </Style.Triggers>
                                         </Style>
                                     </CheckBox.Style>
-                                    <TextBlock Text="Volymindikator — nivåringar runt indikatorerna som visar om ljudnivån är bra" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Volume meter — level rings around the indicators show whether the audio level is good" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Volymindikator för utgående ljud"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Output audio volume meter"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Visar en nivåring runt varje indikator medan routningen är igång — ringen fylls medurs med ljudnivån och ett litet vitt streck hänger kvar en stund vid den senaste toppen. Mic-prickens ring mäter allt som skickas till mic-kanalen — röst och musik tillsammans, exakt det de andra hör. Musikcirkelns ring mäter bara musiken (efter musikvolymen), så du kan ställa in nivån även i endast medhörning-läget innan andra får höra den."/>
+                                                           Text="Shows a level ring around each indicator while routing is active — the ring fills clockwise with the audio level, and a small white marker briefly holds the latest peak. The mic dot's ring measures everything sent to the mic channel — voice and music together, exactly what others hear. The music circle's ring measures only the music (after music volume), so you can set the level in monitor-only mode before others hear it."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Färgen säger om nivån är bra: grön = bra nivå, gul = för lågt eller för högt, röd = alldeles för högt eller klipper (sänk volymen). Mätarna går på upplevd ljudstyrka, inte bara topparna — hårt komprimerad musik som låter högt visar högt även när den inte klipper. Vid push-to-talk-tyst är mic-ringen tom, eftersom inget skickas ut då."/>
+                                                           Text="The color indicates the level: green = good, yellow = too low or too high, red = far too high or clipping (lower the volume). The meters reflect perceived loudness, not just peaks — heavily compressed music that sounds loud reads high even without clipping. When push-to-talk is muted, the mic ring is empty because nothing is being sent."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
@@ -641,7 +641,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="MeterSensitivityLabel" Text="Känslighet" FontSize="10.5" Foreground="#6B7280"
+                                    <TextBlock x:Name="MeterSensitivityLabel" Text="Sensitivity" FontSize="10.5" Foreground="#6B7280"
                                                VerticalAlignment="Center" Margin="0,0,8,0" Cursor="Hand"
                                                MouseLeftButtonDown="OnMeterSensitivityLabelMouseDown"/>
                                     <Slider x:Name="MeterSensitivitySlider" Grid.Column="1" Width="130" VerticalAlignment="Center"
@@ -654,11 +654,11 @@
                                     <Grid.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Kalibrera volymindikatorn"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Calibrate the volume meter"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Om andra tycker att du låter högre än mätaren visar — öka känsligheten, så slår mätaren om till gult/rött tidigare. Tycker de att du låter lägre — sänk den. Standard (±0 dB) passar de flesta."/>
+                                                           Text="If others say you sound louder than the meter indicates, increase the sensitivity so it turns yellow or red sooner. If they say you sound quieter, decrease it. The default (±0 dB) suits most users."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Ändringen syns direkt i mätaren medan du drar. Dubbelklicka på ordet Känslighet för att återställa. Den röda klipp-blinken påverkas inte — klippning är alltid klippning."/>
+                                                           Text="Changes appear in the meter as you drag. Double-click the word Sensitivity to reset it. The red clipping flash is unaffected — clipping is always clipping."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </Grid.ToolTip>
@@ -666,18 +666,18 @@
                                 <CheckBox x:Name="ObsOverlayCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A"
                                           Checked="OnObsOverlayChanged" Unchecked="OnObsOverlayChanged"
                                           ToolTipService.ShowDuration="60000">
-                                    <TextBlock Text="OBS-overlay — visa samma overlay i streamen (Browser-källa)"
+                                    <TextBlock Text="OBS overlay — show the same overlay on stream (Browser Source)"
                                                VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <CheckBox.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Overlay i OBS för tittarna"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="OBS overlay for viewers"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="Fångar OBS bara spelet (Game Capture) syns inte skärm-overlayen i streamen. Det här startar en liten lokal webbsida som visar exakt samma overlay — cirklar, nivåringar och equalizer — så att den kan läggas som ett eget lager i OBS ovanpå spelet."/>
+                                                           Text="If OBS captures only the game (Game Capture), the on-screen overlay is not visible on stream. This starts a small local web page that displays the same overlay — circles, level rings, and equalizer — so it can be added as a separate layer over the game in OBS."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Gör så här i OBS: Lägg till källa → Webbläsare, klistra in adressen nedan, sätt t.ex. bredd 232 och höjd 116 och placera den där du vill. Sidan är genomskinlig och visar ingenting när routningen är stoppad — precis som skärm-overlayen. Lägg till ?opacity=1 sist i adressen för helt ogenomskinliga cirklar."/>
+                                                           Text="In OBS: add a Browser Source, paste the address below, set a size such as 232 × 116, and place it where you want. The page is transparent and shows nothing while routing is stopped — just like the on-screen overlay. Append ?opacity=1 to the address for fully opaque circles."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Servern går bara att nå från den här datorn (127.0.0.1) och skickar bara status och ljudnivåer — inget ljud, ingen bild. Den fungerar oberoende av skärm-overlayen ovan, så du kan ha den ena, båda eller ingen."/>
+                                                           Text="The server is accessible only from this computer (127.0.0.1) and sends only status and audio levels — no audio or video. It works independently of the on-screen overlay above, so you can use either, both, or neither."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </CheckBox.ToolTip>
@@ -691,13 +691,13 @@
                                         <TextBox x:Name="ObsOverlayPortBox" Width="56" MaxLength="5" Height="24" FontSize="11"
                                                  VerticalContentAlignment="Center"
                                                  LostFocus="OnObsOverlayPortBoxLostFocus" KeyDown="OnObsOverlayPortBoxKeyDown"
-                                                 ToolTip="Lokal port för overlay-sidan. Ändra bara om porten krockar med något annat program."/>
-                                        <Button Content="Kopiera adress" Margin="10,0,0,0" Padding="8,2" FontSize="10.5"
+                                                 ToolTip="Local port for the overlay page. Change it only if another application is using the port."/>
+                                        <Button Content="Copy address" Margin="10,0,0,0" Padding="8,2" FontSize="10.5"
                                                 VerticalAlignment="Center" Click="OnObsOverlayCopyClick"
-                                                ToolTip="Kopierar overlay-adressen så att den kan klistras in i OBS webbläsar-källa."/>
+                                                ToolTip="Copies the overlay address so you can paste it into an OBS Browser Source."/>
                                     </StackPanel>
                                     <TextBlock Margin="0,4,0,0" FontSize="10.5" Foreground="#6B7280" TextWrapping="Wrap">
-                                        <Hyperlink Click="OnObsOverlayLinkClick" ToolTip="Öppna overlay-sidan i webbläsaren för att testa den.">
+                                        <Hyperlink Click="OnObsOverlayLinkClick" ToolTip="Open the overlay page in your browser to test it.">
                                             <Run x:Name="ObsOverlayLinkText"/>
                                         </Hyperlink><Run x:Name="ObsOverlayClientsText"/>
                                     </TextBlock>
@@ -710,14 +710,14 @@
                             <CheckBox x:Name="StartWithWindowsCheck" FontSize="11.5" Foreground="#10233A"
                                       Checked="OnStartWithWindowsChanged" Unchecked="OnStartWithWindowsChanged"
                                       ToolTipService.ShowDuration="60000">
-                                <TextBlock Text="Starta med Windows — öppnas minimerad i systemfältet"
+                                <TextBlock Text="Start with Windows — opens minimized in the system tray"
                                            VerticalAlignment="Center" TextWrapping="Wrap"/>
                                 <CheckBox.ToolTip>
                                     <ToolTip>
                                         <StackPanel>
-                                            <TextBlock Style="{StaticResource TipTitle}" Text="Starta MicMixer automatiskt"/>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="Start MicMixer automatically"/>
                                             <TextBlock Style="{StaticResource TipBody}"
-                                                       Text="Lägger till MicMixer i Windows autostart. Vid inloggning startar appen dold i systemfältet utan att öppna huvudfönstret."/>
+                                                       Text="Adds MicMixer to Windows startup. When you sign in, the app starts hidden in the system tray without opening the main window."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </CheckBox.ToolTip>
@@ -740,12 +740,12 @@
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
                             <Path x:Name="RoutingStateIcon" Data="{StaticResource CircleOffIcon}" Fill="#9CA3AF"
                                   Style="{StaticResource SectionIcon}" Width="16" Height="16" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="RoutingStateText" Text="Routning stoppad" FontSize="14" FontWeight="SemiBold" Foreground="#10233A" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="RoutingStateText" Text="Routing stopped" FontSize="14" FontWeight="SemiBold" Foreground="#10233A" VerticalAlignment="Center"/>
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Margin="0,0,0,10">
-                            <TextBlock x:Name="ActiveSourceText" Text="Aktiv källa: Ingen" Foreground="{x:Static ui:StatusTheme.StoppedInkBrush}" FontWeight="SemiBold" FontSize="12"/>
-                            <TextBlock x:Name="HotkeyStateText" Margin="0,2,0,0" Text="Hotkey ej vald" Foreground="#6B7280" FontSize="11.5"/>
+                            <TextBlock x:Name="ActiveSourceText" Text="Active source: None" Foreground="{x:Static ui:StatusTheme.StoppedInkBrush}" FontWeight="SemiBold" FontSize="12"/>
+                            <TextBlock x:Name="HotkeyStateText" Margin="0,2,0,0" Text="No hotkey selected" Foreground="#6B7280" FontSize="11.5"/>
                         </StackPanel>
 
                         <!-- Level meters -->
@@ -760,14 +760,14 @@
                                 <StackPanel x:Name="DryMeterPanel" Grid.Column="0">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                         <Path Data="{StaticResource MicIcon}" Fill="{x:Static ui:StatusTheme.LiveBrush}" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
-                                        <TextBlock Text="Vanlig" FontSize="11" Foreground="#6B7280"/>
+                                        <TextBlock Text="Normal" FontSize="11" Foreground="#6B7280"/>
                                     </StackPanel>
                                     <ProgressBar x:Name="DryLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="{x:Static ui:StatusTheme.LiveBrush}" Background="#E5E7EB"/>
                                 </StackPanel>
                                 <StackPanel x:Name="ModdedMeterPanel" Grid.Column="2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                         <Path Data="{StaticResource ModdedMicIcon}" Fill="{x:Static ui:StatusTheme.ModdedBrush}" Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,5,0"/>
-                                        <TextBlock Text="Moddad" FontSize="11" Foreground="#6B7280"/>
+                                        <TextBlock Text="Modded" FontSize="11" Foreground="#6B7280"/>
                                     </StackPanel>
                                     <ProgressBar x:Name="ModdedLevelMeter" Height="8" Minimum="0" Maximum="1" Foreground="{x:Static ui:StatusTheme.ModdedBrush}" Background="#E5E7EB"/>
                                 </StackPanel>
@@ -787,7 +787,7 @@
             <ToggleButton x:Name="CompactStatusToggle" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
                           Margin="0,10,0,0" Visibility="Collapsed" Cursor="Hand"
                           Checked="OnCompactStatusToggled" Unchecked="OnCompactStatusToggled"
-                          ToolTip="Visa eller dölj mic-routning och inställningar" ToolTipService.ShowDuration="30000">
+                          ToolTip="Show or hide mic routing and settings" ToolTipService.ShowDuration="30000">
                 <ToggleButton.Template>
                     <ControlTemplate TargetType="ToggleButton">
                         <Border x:Name="BarBg" Background="White" CornerRadius="12" BorderBrush="#D7DEE7" BorderThickness="1" Padding="14,9">
@@ -809,9 +809,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Ellipse x:Name="CompactStatusDot" Width="9" Height="9" Fill="#9CA3AF" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock x:Name="CompactStatusText" Grid.Column="1" Text="Routning stoppad" FontSize="12" FontWeight="SemiBold"
+                    <TextBlock x:Name="CompactStatusText" Grid.Column="1" Text="Routing stopped" FontSize="12" FontWeight="SemiBold"
                                Foreground="#10233A" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="CompactStatusHint" Grid.Column="2" Text="Visa inställningar" FontSize="11" Foreground="#6B7280"
+                    <TextBlock x:Name="CompactStatusHint" Grid.Column="2" Text="Show settings" FontSize="11" Foreground="#6B7280"
                                VerticalAlignment="Center" Margin="8,0,6,0"/>
                     <Path x:Name="CompactStatusChevron" Grid.Column="3" Data="{StaticResource ChevronUpIcon}" Fill="#6B7280"
                           Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
@@ -854,17 +854,17 @@
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                             <Path Data="{StaticResource MusicIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                            <TextBlock Text="Musik in i mic-kanalen" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
+                            <TextBlock Text="Music into the mic channel" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
                             <Border Style="{StaticResource InfoTipHost}">
                                 <Path Style="{StaticResource InfoTipIcon}"/>
                                 <Border.ToolTip>
                                     <ToolTip>
                                         <StackPanel>
-                                            <TextBlock Style="{StaticResource TipTitle}" Text="Så funkar musiken"/>
+                                            <TextBlock Style="{StaticResource TipTitle}" Text="How music works"/>
                                             <TextBlock Style="{StaticResource TipBody}"
-                                                       Text="Musiken mixas in i mic-kanalen tillsammans med din röst, så att andra hör den — så länge en låt spelas och routningen är aktiv."/>
+                                                       Text="Music is mixed into the mic channel with your voice so others can hear it whenever a track is playing and routing is active."/>
                                             <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                       Text="I läget MP3 / YouTube hämtar du låtar via YouTube-länk eller lägger egna MP3-filer i musikmappen (mappikonen till höger; kugghjulet låter dig lägga till flera musikmappar). I läget Spotify / annan app fångas ljudet från en app som spelar musik och mixas in direkt."/>
+                                                       Text="In MP3 / YouTube mode, download tracks from a YouTube link or add your own MP3 files to the music folder (folder icon on the right; the gear lets you add multiple music folders). In Spotify / other app mode, audio from a music app is captured and mixed in directly."/>
                                         </StackPanel>
                                     </ToolTip>
                                 </Border.ToolTip>
@@ -873,16 +873,16 @@
                         <CheckBox x:Name="MonitorEnabledCheck" Grid.Column="1" VerticalAlignment="Center" FontSize="11.5" Foreground="#10233A"
                                   Checked="OnMonitorConfigChanged" Unchecked="OnMonitorConfigChanged"
                                   ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True"
-                                  ToolTip="Spela musiken även i dina egna hörlurar/högtalare, så att du själv hör vad som spelas. Påverkar inte vad andra hör. I app-läget behövs ingen medhörning — du hör appen direkt.">
+                                  ToolTip="Also play the music through your own headphones or speakers so you can hear it. This does not affect what others hear. Monitoring is not needed in app mode because you hear the app directly.">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource HeadphonesIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,4,0"/>
-                                <TextBlock Text="Medhörning" VerticalAlignment="Center"/>
+                                <TextBlock Text="Monitoring" VerticalAlignment="Center"/>
                             </StackPanel>
                         </CheckBox>
                         <ComboBox x:Name="MonitorDeviceCombo" Grid.Column="2" Width="170" Margin="10,0,0,0" FontSize="11"
                                   DisplayMemberPath="FriendlyName" SelectionChanged="OnMonitorDeviceSelectionChanged"
                                   ToolTipService.ShowDuration="60000"
-                                  ToolTip="Utgången där du själv vill höra musiken — välj dina hörlurar eller högtalare, inte den virtuella kabeln. Andra hör musiken via mic-kanalen oavsett."/>
+                                  ToolTip="The output where you want to hear the music — select your headphones or speakers, not the virtual cable. Others hear the music through the mic channel regardless."/>
                     </Grid>
 
                     <!-- Source mode switch: local library vs external app capture -->
@@ -890,10 +890,10 @@
                         <UniformGrid Rows="1" Columns="2">
                             <RadioButton x:Name="LibraryModeRadio" Style="{StaticResource ModeSegment}" GroupName="MusicMode"
                                          IsChecked="True" Checked="OnMusicModeChanged" Content="MP3 / YouTube"
-                                         ToolTip="Spela nedladdade MP3-filer från musikmappen."/>
+                                         ToolTip="Play downloaded MP3 files from the music folder."/>
                             <RadioButton x:Name="ExternalModeRadio" Style="{StaticResource ModeSegment}" GroupName="MusicMode"
-                                         Checked="OnMusicModeChanged" Content="Spotify / annan app"
-                                         ToolTip="Fånga ljudet från en app som spelar musik (t.ex. Spotify) och mixa in det i mic-kanalen. Du styr uppspelningen i appen."/>
+                                         Checked="OnMusicModeChanged" Content="Spotify / other app"
+                                         ToolTip="Capture audio from an app playing music (e.g. Spotify) and mix it into the mic channel. Control playback in the app."/>
                         </UniformGrid>
                     </Border>
 
@@ -914,7 +914,7 @@
                         <Grid>
                             <TextBox x:Name="YoutubeUrlBox" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
                                      KeyDown="OnYoutubeUrlKeyDown" TextChanged="OnYoutubeUrlChanged"/>
-                            <TextBlock x:Name="YoutubeUrlHintText" Text="Klistra in YouTube-länk här..." FontSize="11.5"
+                            <TextBlock x:Name="YoutubeUrlHintText" Text="Paste a YouTube link here..." FontSize="11.5"
                                        Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Grid>
                         <!-- Download target folder — only shown when more than one music folder is active -->
@@ -922,7 +922,7 @@
                                   Visibility="Collapsed" FontSize="11" VerticalContentAlignment="Center"
                                   SelectionChanged="OnDownloadFolderChanged"
                                   ToolTipService.ShowDuration="60000"
-                                  ToolTip="Mapp som nya nedladdningar hamnar i">
+                                  ToolTip="Folder for new downloads">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}" ToolTipService.ShowDuration="60000">
@@ -939,7 +939,7 @@
                                 Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
                                 <Path Data="{StaticResource DownloadIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
-                                <TextBlock Text="Hämta MP3" VerticalAlignment="Center"/>
+                                <TextBlock Text="Download MP3" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -968,7 +968,7 @@
                         <Grid Grid.Column="1">
                             <TextBox x:Name="PlaylistFilterBox" Height="26" VerticalContentAlignment="Center" FontSize="11.5"
                                      TextChanged="OnPlaylistFilterChanged"/>
-                            <TextBlock x:Name="PlaylistFilterHintText" Text="Sök i spellistan..." FontSize="11.5"
+                            <TextBlock x:Name="PlaylistFilterHintText" Text="Search the playlist..." FontSize="11.5"
                                        Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Grid>
                         <!-- Folder filter chips — one per music folder, shown when several folders are active.
@@ -1038,7 +1038,7 @@
                                         <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                         <Border Grid.Column="3" Background="#EDE9FE" CornerRadius="8" Padding="6,1" Margin="8,0,0,0"
                                                 VerticalAlignment="Center" Visibility="{Binding QueueVisibility}"
-                                                ToolTip="Plats i kön">
+                                                ToolTip="Queue position">
                                             <TextBlock Text="{Binding QueueText}" FontSize="10" FontWeight="SemiBold" Foreground="#7C3AED"/>
                                         </Border>
                                     </Grid>
@@ -1046,21 +1046,21 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                         <StackPanel x:Name="PlaylistButtonsPanel" Grid.Column="1" Margin="8,0,0,0">
-                            <Button Height="28" Width="28" Padding="0" Click="OnQueueClick" ToolTip="Lägg vald låt i kö"
+                            <Button Height="28" Width="28" Padding="0" Click="OnQueueClick" ToolTip="Add the selected track to the queue"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource QueueIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                             </Button>
-                            <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnPlaylistRefreshClick" ToolTip="Uppdatera spellistan"
+                            <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnPlaylistRefreshClick" ToolTip="Refresh the playlist"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                             </Button>
-                            <Button x:Name="OpenMusicFolderBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Öppna musikmappen"
+                            <Button x:Name="OpenMusicFolderBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Open the music folder"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource FolderIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                             </Button>
                             <Button x:Name="MusicFolderOptionsBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0"
                                     Click="OnMusicFolderOptionsClick" ToolTipService.ShowDuration="30000"
-                                    ToolTip="Musikmappar — lägg till eller ta bort mappar som låtar läses från"
+                                    ToolTip="Music folders — add or remove folders containing tracks"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource CogIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                             </Button>
@@ -1085,9 +1085,9 @@
                             <ComboBox x:Name="ExternalAppCombo" Height="28" VerticalContentAlignment="Center" FontSize="11.5"
                                       DisplayMemberPath="FriendlyName" SelectionChanged="OnExternalAppSelectionChanged"
                                       ToolTipService.ShowDuration="60000"
-                                      ToolTip="Listan visar appar som har skapat en ljudsession i Windows. En nystartad app visas därför först efter att den har spelat ljud."/>
+                                      ToolTip="The list shows apps that have created an audio session in Windows. A newly started app therefore appears only after it has played audio."/>
                             <Button Grid.Column="1" Height="28" Width="28" Margin="6,0,0,0" Padding="0"
-                                    Click="OnRefreshAudioAppsClick" ToolTip="Uppdatera efter att appen har spelat ljud"
+                                    Click="OnRefreshAudioAppsClick" ToolTip="Refresh after the app has played audio"
                                     Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                                 <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                             </Button>
@@ -1095,32 +1095,32 @@
                                     Click="OnCaptureToggleClick" FontSize="11.5" FontWeight="SemiBold"
                                     Background="#7C3AED" Foreground="White" BorderBrush="#7C3AED" BorderThickness="1"
                                     ToolTipService.ShowDuration="60000"
-                                    ToolTip="Startar eller stoppar bara ljudinfångningen från appen. Routningen (knappen uppe till höger) påverkas inte.">
+                                    ToolTip="Starts or stops only audio capture from the app. Routing (the button in the top right) is not affected.">
                                 <StackPanel Orientation="Horizontal">
                                     <Path x:Name="CaptureToggleIcon" Data="{StaticResource PlayIcon}" Fill="White"
                                           Style="{StaticResource SectionIcon}" Width="11" Height="11" Margin="0,0,6,0"/>
-                                    <TextBlock x:Name="CaptureToggleText" Text="Fånga ljud" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="CaptureToggleText" Text="Capture audio" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>
 
                         <TextBlock Grid.Row="1" Margin="2,0,2,8" FontSize="10.5" Foreground="#6B7280"
                                    TextWrapping="Wrap"
-                                   Text="Listan visar appar med en ljudsession. Saknas Spotify? Spela något i några sekunder och klicka sedan Uppdatera."/>
+                                   Text="The list shows apps with an audio session. Is Spotify missing? Play something for a few seconds, then click Refresh."/>
 
                         <!-- Capture status card -->
                         <Border Grid.Row="2" Background="#F8FAFC" BorderBrush="#E9EEF3" BorderThickness="1" CornerRadius="8" Padding="16">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <Path x:Name="CaptureStateIcon" Data="{StaticResource CircleOffIcon}" Fill="#9CA3AF"
                                       Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                <TextBlock x:Name="CaptureStateText" Text="Ingen ljudinfångning" FontWeight="SemiBold" FontSize="12.5"
+                                <TextBlock x:Name="CaptureStateText" Text="No audio capture" FontWeight="SemiBold" FontSize="12.5"
                                            Foreground="#10233A" HorizontalAlignment="Center" TextAlignment="Center"
                                            TextWrapping="Wrap" MaxWidth="340"/>
                                 <ProgressBar x:Name="CaptureLevelMeter" Width="220" Height="8" Minimum="0" Maximum="1"
                                              Margin="0,10,0,0" Foreground="#7C3AED" Background="#E5E7EB"/>
                                 <TextBlock x:Name="CaptureHintText" Margin="0,10,0,0" FontSize="10.5" Foreground="#9CA3AF"
                                            TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
-                                           Text="Välj appen som spelar musik (t.ex. Spotify) och klicka Fånga ljud. Du styr uppspelningen i appen som vanligt — ljudet mixas in i mic-kanalen."/>
+                                           Text="Select the app playing music (e.g. Spotify) and click Capture audio. Control playback in the app as usual — its audio is mixed into the mic channel."/>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -1140,7 +1140,7 @@
                                        FontSize="11" FontWeight="Bold" Foreground="#9A3412"
                                        Background="#FFEDD5"/>
                             <TextBlock Grid.Column="1" FontSize="11" Foreground="#9A3412" TextWrapping="Wrap"
-                                       Text="Routningen är avstängd. Musiken hörs bara lokalt och skickas inte till mic-kanalen — aktivera routningen för att låta andra höra den."/>
+                                       Text="Routing is off. Music is heard only locally and is not sent to the mic channel — enable routing to let others hear it."/>
                         </Grid>
                     </Border>
 
@@ -1156,20 +1156,20 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Button Height="30" Width="30" Padding="0" Click="OnPrevTrackClick" ToolTip="Föregående / börja om"
+                        <Button Height="30" Width="30" Padding="0" Click="OnPrevTrackClick" ToolTip="Previous / restart"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource SkipPrevIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
-                        <Button Grid.Column="1" Height="30" Width="38" Padding="0" Margin="6,0,0,0" Click="OnPlayPauseClick" ToolTip="Spela / pausa"
+                        <Button Grid.Column="1" Height="30" Width="38" Padding="0" Margin="6,0,0,0" Click="OnPlayPauseClick" ToolTip="Play / pause"
                                 Background="#10233A" BorderThickness="0">
                             <Path x:Name="PlayPauseIcon" Data="{StaticResource PlayIcon}" Fill="White" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
                         <Button Grid.Column="2" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnStopPlaybackClick"
-                                ToolTip="Stoppa och avmarkera aktiv låt"
+                                ToolTip="Stop and deselect the active track"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource StopIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                         </Button>
-                        <Button Grid.Column="3" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Nästa låt"
+                        <Button Grid.Column="3" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Next track"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource SkipNextIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
@@ -1187,23 +1187,23 @@
                             <Button.ToolTip>
                                 <ToolTip>
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource TipTitle}" Text="Spela med fördröjning"/>
+                                        <TextBlock Style="{StaticResource TipTitle}" Text="Delayed playback"/>
                                         <TextBlock Style="{StaticResource TipBody}"
-                                                   Text="En play-knapp med nedräkning: klicka så startar musiken efter några sekunder — du hinner alt-tabba tillbaka till spelet innan låten drar igång. Klicka igen under nedräkningen för att avbryta."/>
+                                                   Text="A play button with a countdown: click it to start the music after a few seconds, giving you time to switch back to the game before the track begins. Click again during the countdown to cancel."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="Högerklicka på knappen för att välja hur lång fördröjningen ska vara."/>
+                                                   Text="Right-click the button to select the delay duration."/>
                                     </StackPanel>
                                 </ToolTip>
                             </Button.ToolTip>
                             <Button.ContextMenu>
                                 <ContextMenu x:Name="DelayedStartMenu" Opened="OnDelayedStartMenuOpened">
-                                    <MenuItem Header="Fördröjning innan start" IsEnabled="False" FontWeight="SemiBold"/>
+                                    <MenuItem Header="Delay before playback" IsEnabled="False" FontWeight="SemiBold"/>
                                     <Separator/>
-                                    <MenuItem Header="1 sekund" Tag="1" Click="OnDelayedStartOptionClick"/>
-                                    <MenuItem Header="2 sekunder" Tag="2" Click="OnDelayedStartOptionClick"/>
-                                    <MenuItem Header="3 sekunder" Tag="3" Click="OnDelayedStartOptionClick"/>
-                                    <MenuItem Header="5 sekunder" Tag="5" Click="OnDelayedStartOptionClick"/>
-                                    <MenuItem Header="10 sekunder" Tag="10" Click="OnDelayedStartOptionClick"/>
+                                    <MenuItem Header="1 second" Tag="1" Click="OnDelayedStartOptionClick"/>
+                                    <MenuItem Header="2 seconds" Tag="2" Click="OnDelayedStartOptionClick"/>
+                                    <MenuItem Header="3 seconds" Tag="3" Click="OnDelayedStartOptionClick"/>
+                                    <MenuItem Header="5 seconds" Tag="5" Click="OnDelayedStartOptionClick"/>
+                                    <MenuItem Header="10 seconds" Tag="10" Click="OnDelayedStartOptionClick"/>
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>
@@ -1243,13 +1243,13 @@
                             <Button.ToolTip>
                                 <ToolTip>
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource TipTitle}" Text="Spela bara en låt"/>
+                                        <TextBlock Style="{StaticResource TipTitle}" Text="Play one track only"/>
                                         <TextBlock Style="{StaticResource TipBody}"
-                                                   Text="Ett klick: musiken stannar när låten som spelas är klar — sedan stängs läget av sig självt. Perfekt när du bara vill dra en enda låt."/>
+                                                   Text="Single click: music stops when the current track ends, then the mode turns itself off. Ideal when you want to play just one track."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="Dubbelklick: läget ligger kvar (knappen blir helt lila) och musiken stannar efter varje låt tills du klickar av det."/>
+                                                   Text="Double-click: the mode stays on (the button becomes solid purple), and music stops after every track until you turn it off."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="Kön ligger kvar och nästa-knappen fungerar som vanligt — det är bara den automatiska övergången som stoppas."/>
+                                                   Text="The queue remains and the Next button works as usual — only automatic advancement is stopped."/>
                                     </StackPanel>
                                 </ToolTip>
                             </Button.ToolTip>
@@ -1259,7 +1259,7 @@
                                 Thumb.DragStarted="OnSeekDragStarted" Thumb.DragCompleted="OnSeekDragCompleted" ValueChanged="OnSeekValueChanged"/>
                         <TextBlock x:Name="ExternalTransportHint" Grid.Column="6" Margin="12,0,8,0" VerticalAlignment="Center"
                                    FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap" Visibility="Collapsed"
-                                   Text="Knapparna skickar medietangenter till appen som spelar."/>
+                                   Text="The buttons send media keys to the app that is playing."/>
                         <TextBlock x:Name="TrackTimeText" Grid.Column="7" Text="0:00 / 0:00" FontSize="11" Foreground="#6B7280"
                                    VerticalAlignment="Center" MinWidth="76" TextAlignment="Right"/>
                     </Grid>
@@ -1280,16 +1280,16 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <TextBlock x:Name="MusicVolumeLabel" Text="Musikvolym" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="MusicVolumeLabel" Text="Music volume" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Slider x:Name="MusicVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" VerticalAlignment="Center"
                                 LargeChange="0" SmallChange="0.05"
-                                ValueChanged="OnMusicVolumeChanged" ToolTip="Hur högt musiken hörs för andra (i mic-kanalen)"/>
+                                ValueChanged="OnMusicVolumeChanged" ToolTip="How loud others hear the music (in the mic channel)"/>
                         <TextBlock x:Name="MusicVolumePercentText" Grid.Column="2" Text="50 %" FontSize="11" Foreground="#10233A"
                                    FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
                         <ToggleButton x:Name="VolumeLinkToggle" Grid.Column="3" Width="24" Height="24" Margin="6,0" Cursor="Hand"
                                       Checked="OnVolumeLinkChanged" Unchecked="OnVolumeLinkChanged"
                                       ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True"
-                                      ToolTip="Synka volymerna — dra i ena reglaget så följer det andra med och behåller skillnaden mellan dem. Når ett reglage 0 eller max stannar det där, men skillnaden kommer tillbaka när du drar åt andra hållet.">
+                                      ToolTip="Link volumes — drag one slider and the other follows while preserving the difference between them. If a slider reaches 0 or maximum, it stays there, but the difference returns when you drag the other way.">
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="ToggleButton">
                                     <Border x:Name="LinkBg" Background="Transparent" CornerRadius="6">
@@ -1311,10 +1311,10 @@
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
-                        <TextBlock x:Name="MonitorVolumeLabel" Grid.Column="4" Text="Medhörning" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="MonitorVolumeLabel" Grid.Column="4" Text="Monitoring" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Slider x:Name="MonitorVolumeSlider" Grid.Column="5" Minimum="0" Maximum="1" VerticalAlignment="Center"
                                 LargeChange="0" SmallChange="0.05"
-                                ValueChanged="OnMonitorVolumeChanged" ToolTip="Hur högt musiken hörs i dina egna hörlurar"/>
+                                ValueChanged="OnMonitorVolumeChanged" ToolTip="How loud the music is in your own headphones"/>
                         <TextBlock x:Name="MonitorVolumePercentText" Grid.Column="6" Text="50 %" FontSize="11" Foreground="#10233A"
                                    FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
                     </Grid>
@@ -1333,16 +1333,16 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Path Data="{StaticResource MusicIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
-                                <TextBlock Grid.Column="1" Text="Musik ignorerar push-to-talk — musiken sänds så länge den spelar" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Column="1" Text="Music ignores push-to-talk — music is transmitted while playing" VerticalAlignment="Center" TextWrapping="Wrap"/>
                             </Grid>
                             <CheckBox.ToolTip>
                                 <ToolTip>
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource TipTitle}" Text="Musik förbi push-to-talk"/>
+                                        <TextBlock Style="{StaticResource TipTitle}" Text="Music bypasses push-to-talk"/>
                                         <TextBlock Style="{StaticResource TipBody}"
-                                                   Text="Med det här på fortsätter musiken in i mic-kanalen även när push-to-talk håller micen tyst — perfekt när spelet ska höra musiken hela tiden medan din röst bara sänds när du håller hotkeyn."/>
+                                                   Text="When this is on, music continues into the mic channel even while push-to-talk mutes the mic — ideal when the game should always hear the music but your voice is transmitted only while you hold the hotkey."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="Micen följer alltid push-to-talk som vanligt. Valet är bara aktivt när push-to-talk är på — utan push-to-talk sänds musiken ändå så länge den spelar."/>
+                                                   Text="The mic always follows push-to-talk as usual. This option is active only when push-to-talk is on — without push-to-talk, music is transmitted whenever it plays."/>
                                     </StackPanel>
                                 </ToolTip>
                             </CheckBox.ToolTip>
@@ -1356,16 +1356,16 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <Path Data="{StaticResource HeadphonesIcon}" Fill="#D97706" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
-                                <TextBlock Grid.Column="1" Text="Endast medhörning — förhandsgranska utan att sända till mic-kanalen" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                <TextBlock Grid.Column="1" Text="Monitor only — preview without transmitting to the mic channel" VerticalAlignment="Center" TextWrapping="Wrap"/>
                             </Grid>
                             <CheckBox.ToolTip>
                                 <ToolTip>
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource TipTitle}" Text="Förhandsgranska musiken"/>
+                                        <TextBlock Style="{StaticResource TipTitle}" Text="Preview the music"/>
                                         <TextBlock Style="{StaticResource TipBody}"
-                                                   Text="Med det här på skickas musiken aldrig till mic-kanalen — du hör den bara själv i medhörningen och kan lyssna igenom en låt eller ställa in volymen innan andra får höra den. Micen påverkas inte alls."/>
+                                                   Text="When this is on, music is never sent to the mic channel — only you hear it through monitoring, so you can preview a track or set the volume before others hear it. The mic is not affected."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="Är Sekundär ut igång får den fortfarande musiken — streamen (t.ex. OBS) hör alltså samma sak som du. Overlayens musikcirkel blir bärnstensfärgad med hörlurar så länge läget är på."/>
+                                                   Text="If the secondary output is active, it still receives the music — so a stream such as OBS hears the same thing you do. The overlay's music circle shows amber headphones while this mode is on."/>
                                     </StackPanel>
                                 </ToolTip>
                             </CheckBox.ToolTip>
@@ -1384,11 +1384,11 @@
                              card and shift the transport buttons mid-interaction. -->
                         <TextBlock x:Name="MusicStatusText" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
                                    MinHeight="28"
-                                   Text="Dubbelklicka på en låt för att spela. Musiken mixas med micen när routning är aktiv."/>
+                                   Text="Double-click a track to play it. Music is mixed with the mic while routing is active."/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <ToggleButton x:Name="QueueChipBtn" Visibility="Collapsed" Cursor="Hand" Margin="8,0,0,0"
                                           Checked="OnQueueChipChecked" ToolTipService.ShowDuration="30000"
-                                          ToolTip="Visa kön — dra låtarna för att ändra ordning">
+                                          ToolTip="Show the queue — drag tracks to reorder them">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
                                         <Border x:Name="ChipBg" Background="#EDE9FE" CornerRadius="8" Padding="7,2">
@@ -1411,7 +1411,7 @@
                                 </ToggleButton.Template>
                             </ToggleButton>
                             <Button x:Name="ClearQueueBtn" Height="18" Width="18" Padding="0" Margin="4,0,0,0" Visibility="Collapsed"
-                                    Click="OnClearQueueClick" ToolTip="Rensa kön" Background="Transparent" BorderThickness="0">
+                                    Click="OnClearQueueClick" ToolTip="Clear the queue" Background="Transparent" BorderThickness="0">
                                 <Path Data="{StaticResource CloseIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="10" Height="10"/>
                             </Button>
                             <Popup x:Name="QueuePopup" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
@@ -1433,8 +1433,8 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="Kommande låtar" FontWeight="SemiBold" FontSize="11.5" Foreground="#10233A" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="1" Height="20" Padding="6,0" Click="OnClearQueueClick" Content="Rensa"
+                                            <TextBlock Text="Upcoming tracks" FontWeight="SemiBold" FontSize="11.5" Foreground="#10233A" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Height="20" Padding="6,0" Click="OnClearQueueClick" Content="Clear"
                                                     FontSize="10.5" Background="#F3F4F6" Foreground="#6B7280" BorderBrush="#E5E7EB" BorderThickness="1"/>
                                         </Grid>
                                         <ListBox x:Name="QueueListBox" Grid.Row="1" MaxHeight="250" BorderThickness="0" Background="Transparent"
@@ -1469,7 +1469,7 @@
                                                             <TextBlock Grid.Column="2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                             <Button Grid.Column="3" Width="18" Height="18" Padding="0" Margin="6,0,0,0"
                                                                     Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                                                    Click="OnQueueRemoveClick" Tag="{Binding}" ToolTip="Ta bort ur kön">
+                                                                    Click="OnQueueRemoveClick" Tag="{Binding}" ToolTip="Remove from the queue">
                                                                 <Path Data="{StaticResource CloseIcon}" Fill="#9CA3AF" Width="9" Height="9" Stretch="Uniform"/>
                                                             </Button>
                                                         </Grid>
@@ -1479,7 +1479,7 @@
                                             </ListBox.ItemTemplate>
                                         </ListBox>
                                         <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="10" Foreground="#9CA3AF" TextWrapping="Wrap"
-                                                   Text="Dra för att ändra ordning · Dubbelklick spelar direkt"/>
+                                                   Text="Drag to reorder · Double-click to play immediately"/>
                                     </Grid>
                                 </Border>
                             </Popup>
@@ -1494,24 +1494,24 @@
             <Expander.Header>
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource InfoIcon}" Fill="#3B82F6" Style="{StaticResource SectionIcon}" Width="14" Height="14" Margin="0,0,6,0"/>
-                    <TextBlock Text="VB-CABLE setup-guide" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
+                    <TextBlock Text="VB-CABLE setup guide" FontWeight="SemiBold" FontSize="12" Foreground="#10233A" VerticalAlignment="Center"/>
                 </StackPanel>
             </Expander.Header>
             <Border Padding="14,10" CornerRadius="0,0,10,10" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="0,1,0,0">
                 <StackPanel>
                     <TextBlock TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5">
-                        <Run Text="1. Installera VB-CABLE från "/>
+                        <Run Text="1. Install VB-CABLE from "/>
                         <Hyperlink NavigateUri="https://vb-audio.com/Cable/" RequestNavigate="OnGuideNavigate">vb-audio.com/Cable</Hyperlink>
                         <Run Text="."/>
                     </TextBlock>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
-                               Text="2. Kör setup som admin och starta om Windows vid behov."/>
+                               Text="2. Run setup as administrator and restart Windows if needed."/>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
-                               Text="3. Välj CABLE Input som Virtuell kabel ut i MicMixer."/>
+                               Text="3. Select CABLE Input as the virtual cable output in MicMixer."/>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
-                               Text="4. I Discord/OBS välj CABLE Output som mikrofon."/>
+                               Text="4. In Discord or OBS, select CABLE Output as the microphone."/>
                     <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Foreground="#1F2937" FontSize="11.5"
-                               Text="5. Musik: om mottagaren (t.ex. Discord/FiveM) har brusreducering aktiverad kan musiken dämpas — stäng av brusreducering där för bäst musikljud."/>
+                               Text="5. Music: if the receiving app (e.g. Discord or FiveM) has noise suppression enabled, it may reduce the music — disable noise suppression there for the best sound."/>
                 </StackPanel>
             </Border>
         </Expander>
@@ -1525,13 +1525,13 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock VerticalAlignment="Center" FontSize="11.5" Foreground="#526173" TextWrapping="Wrap">
-                    <Run Text="Gillar du MicMixer? Överväg gärna att ge bort en sub till "/>
+                    <Run Text="Like MicMixer? Consider gifting a subscription to "/>
                     <Hyperlink NavigateUri="https://www.twitch.tv/pixlexi"
                                RequestNavigate="OnGuideNavigate"
-                               Foreground="#7C3AED" FontWeight="SemiBold">Pixlexi</Hyperlink><Run Text=" på Twitch."/>
+                               Foreground="#7C3AED" FontWeight="SemiBold">Pixlexi</Hyperlink><Run Text=" on Twitch."/>
                 </TextBlock>
                 <Button Grid.Column="1" Margin="14,0,0,0" Padding="10,4"
-                        Click="OnAboutClick" Content="Mer information"
+                        Click="OnAboutClick" Content="More information"
                         FontSize="11" FontWeight="SemiBold" Cursor="Hand"
                         Background="#F8FAFC" Foreground="#334155"
                         BorderBrush="#C9D2DD" BorderThickness="1"/>

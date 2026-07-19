@@ -64,12 +64,12 @@ public sealed partial class YouTubeDownloader
                             System.Globalization.CultureInfo.InvariantCulture,
                             out double percent))
                     {
-                        progress?.Report(new DownloadProgress(percent, "Laddar ner..."));
+                        progress?.Report(new DownloadProgress(percent, "Downloading..."));
                     }
                 }
                 else if (line.StartsWith("[ExtractAudio]", StringComparison.Ordinal))
                 {
-                    progress?.Report(new DownloadProgress(null, "Konverterar till MP3..."));
+                    progress?.Report(new DownloadProgress(null, "Converting to MP3..."));
                 }
                 else if (line.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) && Path.IsPathRooted(line))
                 {
@@ -90,7 +90,7 @@ public sealed partial class YouTubeDownloader
             throw new InvalidOperationException(ExtractErrorMessage(errorOutput.ToString()));
         }
 
-        Log.Information("yt-dlp finished: {ResultPath}.", resultPath ?? "(okänd fil)");
+        Log.Information("yt-dlp finished: {ResultPath}.", resultPath ?? "(unknown file)");
         return resultPath;
     }
 
@@ -102,7 +102,7 @@ public sealed partial class YouTubeDownloader
 
         return lines.LastOrDefault(line => line.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase))
             ?? lines.LastOrDefault()
-            ?? "yt-dlp misslyckades utan felmeddelande.";
+            ?? "yt-dlp failed without an error message.";
     }
 
     [GeneratedRegex(@"(\d+(?:\.\d+)?)%")]

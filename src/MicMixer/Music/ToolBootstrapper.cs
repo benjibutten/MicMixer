@@ -56,7 +56,7 @@ public sealed class ToolBootstrapper
         if (!IsToolInstalled(YtDlpPath, YtDlpVersionMarkerPath, YtDlpVersion))
         {
             Log.Information("Downloading yt-dlp {Version} to {Path}.", YtDlpVersion, YtDlpPath);
-            status?.Report($"Laddar ner yt-dlp {YtDlpVersion}...");
+            status?.Report($"Downloading yt-dlp {YtDlpVersion}...");
             await DownloadVerifiedFileAsync(YtDlpDownloadUrl, YtDlpPath, YtDlpSha256, cancellationToken);
             File.WriteAllText(YtDlpVersionMarkerPath, YtDlpVersion);
         }
@@ -64,13 +64,13 @@ public sealed class ToolBootstrapper
         if (!IsToolInstalled(FfmpegPath, FfmpegVersionMarkerPath, FfmpegVersion))
         {
             Log.Information("Downloading ffmpeg {Version} to {Path}.", FfmpegVersion, FfmpegPath);
-            status?.Report("Laddar ner ffmpeg (~160 MB, engångs)...");
+            status?.Report("Downloading ffmpeg (~160 MB, one-time download)...");
             string zipPath = Path.Combine(ToolsDirectory, "ffmpeg.zip.tmp");
 
             try
             {
                 await DownloadVerifiedFileAsync(FfmpegDownloadUrl, zipPath, FfmpegArchiveSha256, cancellationToken);
-                status?.Report("Packar upp ffmpeg...");
+                status?.Report("Extracting ffmpeg...");
                 ExtractFfmpeg(zipPath);
                 File.WriteAllText(FfmpegVersionMarkerPath, FfmpegVersion);
             }
@@ -141,7 +141,7 @@ public sealed class ToolBootstrapper
                 "Checksum mismatch for {Url}: expected {Expected}, got {Actual}.",
                 url, expectedSha256, actualSha256);
             throw new InvalidOperationException(
-                "Nedladdningen kunde inte verifieras (checksumman stämmer inte). Försök igen senare.");
+                "The download could not be verified (checksum mismatch). Please try again later.");
         }
 
         File.Move(tempPath, destination, overwrite: true);
@@ -160,7 +160,7 @@ public sealed class ToolBootstrapper
             {
                 if (executableName == "ffmpeg.exe")
                 {
-                    throw new InvalidOperationException("ffmpeg.exe hittades inte i det nedladdade arkivet.");
+                    throw new InvalidOperationException("ffmpeg.exe was not found in the downloaded archive.");
                 }
 
                 continue;

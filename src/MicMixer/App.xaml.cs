@@ -276,15 +276,15 @@ public partial class App : System.Windows.Application
 
         try
         {
-            string message = "Ett internt fel inträffade och loggades. MicMixer fortsätter köra.";
-            message += $"{Environment.NewLine}{Environment.NewLine}Senaste fel: {exception.Message}";
+            string message = "An internal error occurred and was logged. MicMixer will continue running.";
+            message += $"{Environment.NewLine}{Environment.NewLine}Latest error: {exception.Message}";
 
             if (suppressedSinceLastDialog > 0)
             {
-                message += $"{Environment.NewLine}{Environment.NewLine}{suppressedSinceLastDialog} liknande fel undertrycktes för att undvika popup-storm.";
+                message += $"{Environment.NewLine}{Environment.NewLine}{suppressedSinceLastDialog} similar errors were suppressed to avoid a flood of pop-ups.";
             }
 
-            System.Windows.MessageBox.Show(message, "MicMixer — Fel", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(message, "MicMixer — Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch
         {

@@ -362,9 +362,9 @@ let retryDelay = 500;
 
 function updateStatus() {
   if (!debug) return;
-  const source = demo ? 'demo' : connected ? 'ansluten' : 'frånkopplad — försöker igen…';
+  const source = demo ? 'demo' : connected ? 'connected' : 'disconnected — retrying…';
   statusBox.textContent = (demo || connected)
-    ? `${source} — mic: ${lastState ? lastState.mic : '?'}  musik: ${lastState ? lastState.music : '?'}  meter: ${lastState && lastState.meter ? 'på' : 'av'}`
+    ? `${source} — mic: ${lastState ? lastState.mic : '?'}  music: ${lastState ? lastState.music : '?'}  meter: ${lastState && lastState.meter ? 'on' : 'off'}`
     : source;
 }
 

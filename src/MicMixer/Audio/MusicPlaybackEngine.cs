@@ -426,7 +426,7 @@ public sealed class MusicPlaybackEngine : IDisposable
 
         stoppedOutput.PlaybackStopped -= OnMonitorStopped;
 
-        string message = e.Exception?.Message ?? "Ljudenheten stoppades oväntat.";
+        string message = e.Exception?.Message ?? "The audio device stopped unexpectedly.";
         if (e.Exception != null)
         {
             Log.Error(e.Exception, "Music monitor playback stopped with exception.");
@@ -452,7 +452,7 @@ public sealed class MusicPlaybackEngine : IDisposable
             });
         }
 
-        Error?.Invoke(this, $"Medhörning stoppades: {message}");
+        Error?.Invoke(this, $"Monitoring stopped: {message}");
     }
 
     /// <summary>

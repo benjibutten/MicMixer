@@ -20,8 +20,8 @@ the checkbox). The settings UI shows the overlay address, and the link can be
 opened in a normal browser to test it.
 
 The OBS overlay works independently of the on-screen overlay indicator: either
-one, both, or neither can be enabled. The **Volymindikator** and
-**Känslighet** settings apply to both overlays.
+one, both, or neither can be enabled. The **Volume meter** and
+**Sensitivity** settings apply to both overlays.
 
 ## OBS setup
 

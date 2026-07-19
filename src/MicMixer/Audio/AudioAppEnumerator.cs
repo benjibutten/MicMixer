@@ -24,7 +24,7 @@ public sealed class AudioAppOption
 
     public bool IsPlaying { get; }
 
-    public string FriendlyName => IsPlaying ? $"{DisplayName} — spelar ljud" : DisplayName;
+    public string FriendlyName => IsPlaying ? $"{DisplayName} — playing audio" : DisplayName;
 }
 
 /// <summary>

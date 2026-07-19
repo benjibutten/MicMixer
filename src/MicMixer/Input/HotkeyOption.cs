@@ -146,11 +146,11 @@ public sealed class HotkeyBinding
     {
         return mouseCode switch
         {
-            MouseHotkeyCode.LeftButton => new HotkeyBinding("mouse:left", "Vänster musknapp", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.LeftButton }),
-            MouseHotkeyCode.RightButton => new HotkeyBinding("mouse:right", "Höger musknapp", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.RightButton }),
-            MouseHotkeyCode.MiddleButton => new HotkeyBinding("mouse:middle", "Mittenknapp", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.MiddleButton }),
-            MouseHotkeyCode.XButton1 => new HotkeyBinding("mouse:x1", "Musknapp X1", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.XButton1 }),
-            MouseHotkeyCode.XButton2 => new HotkeyBinding("mouse:x2", "Musknapp X2", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.XButton2 }),
+            MouseHotkeyCode.LeftButton => new HotkeyBinding("mouse:left", "Left mouse button", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.LeftButton }),
+            MouseHotkeyCode.RightButton => new HotkeyBinding("mouse:right", "Right mouse button", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.RightButton }),
+            MouseHotkeyCode.MiddleButton => new HotkeyBinding("mouse:middle", "Middle mouse button", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.MiddleButton }),
+            MouseHotkeyCode.XButton1 => new HotkeyBinding("mouse:x1", "Mouse button X1", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.XButton1 }),
+            MouseHotkeyCode.XButton2 => new HotkeyBinding("mouse:x2", "Mouse button X2", HotkeyDeviceKind.Mouse, new[] { (int)MouseHotkeyCode.XButton2 }),
             _ => Default
         };
     }
@@ -230,15 +230,15 @@ public sealed class HotkeyBinding
 
         return virtualKey switch
         {
-            0x20 => "Mellanslag",
+            0x20 => "Space",
             0x09 => "Tab",
             0x1B => "Escape",
             0x0D => "Enter",
             0x08 => "Backspace",
-            0x25 => "Pil vänster",
-            0x26 => "Pil upp",
-            0x27 => "Pil höger",
-            0x28 => "Pil ned",
+            0x25 => "Left arrow",
+            0x26 => "Up arrow",
+            0x27 => "Right arrow",
+            0x28 => "Down arrow",
             _ => KeyInterop.KeyFromVirtualKey(virtualKey) switch
             {
                 Key.None => $"VK {virtualKey}",
