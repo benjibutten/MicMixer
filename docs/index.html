@@ -99,7 +99,7 @@
       <a href="#use">What it's for</a>
       <a href="#overlay">Overlay</a>
       <a href="#setup">Setup</a>
-      <a href="code-signing-policy.html">Code signing policy</a>
+      <a href="#guides">Guides</a>
       <a href="https://github.com/benjibutten/MicMixer">GitHub</a>
     </nav>
   </div>
@@ -126,11 +126,9 @@
     Download the versioned <code>MicMixer-&lt;version&gt;-win-x64.zip</code> from the
     <a href="https://github.com/benjibutten/MicMixer/releases/latest">latest release</a>.
     Windows 10/11, x64. Self-contained, no .NET install needed. Apache-2.0.
-  </p>
-  <p class="fineprint">
-    <a href="code-signing-policy.html">Code signing policy</a>:
-    Current releases are unsigned. We have applied to SignPath Foundation; approval and
-    signing integration are pending. Each release states its actual signing status.
+    Every release is built automatically from the source in this repository.
+    Windows shows a warning the first time you run it —
+    <a href="#first-run">here's what to click</a>.
   </p>
 
   <figure class="shot">
@@ -147,11 +145,13 @@
 
   <h3>Playing music without depending on the game's push-to-talk</h3>
   <p>
-    Normally, in-game voice forces a choice: hold the talk key all night to keep your music
-    audible, or let the music cut out every time you release it. With MicMixer, the game
-    listens to the virtual cable with an open mic, and MicMixer's own push-to-talk decides
-    what reaches it. Enable <em>Music ignores push-to-talk</em> and the music flows
-    continuously while your voice still waits for the hotkey.
+    On roleplay servers like FiveM, in-game voice often forces a choice: hold the talk key all
+    night to keep your music audible, or let the music cut out every time you release it. If
+    the server allows an open or voice-activated input, the game can listen to the virtual
+    cable while MicMixer's own push-to-talk decides what reaches it. Enable
+    <em>Music ignores push-to-talk</em> and the music flows continuously while your voice
+    still waits for the hotkey. Servers that force their own push-to-talk cannot use this
+    setup without keeping that second gate open.
   </p>
 
   <h3>Talking to your stream while music plays, without both leaking into the game</h3>
@@ -226,11 +226,35 @@
     <li>Pick your mic (and optionally a modded mic), and select <em>CABLE Input</em> as the virtual cable output.</li>
     <li>In the game or chat app, select <em>CABLE Output</em> as the microphone. Click <em>Enable</em> in MicMixer.</li>
   </ol>
+  <h3 id="first-run">The Windows warning on first run</h3>
+  <p>
+    MicMixer is not code-signed yet, so the first time you run it Windows shows a blue
+    <em>"Windows protected your PC"</em> box with the Run button hidden. Click
+    <em>More info</em>, then <em>Run anyway</em>. Any new app from a small publisher gets
+    this: it means Windows hasn't seen the file often enough yet, not that it found
+    anything wrong with it.
+  </p>
+  <p>
+    If you'd rather check the download yourself first, each release ships a
+    <code>.sha256</code> checksum next to the ZIP, and the
+    <a href="code-signing-policy.html">code signing policy</a> covers how releases are built
+    and where signing currently stands.
+  </p>
+
   <p>
     The <a href="https://github.com/benjibutten/MicMixer#readme">README</a> covers the rest:
     hotkeys, music routing in detail, local monitoring, troubleshooting, and where settings
     and logs live.
   </p>
+</section>
+
+<section class="wrap" id="guides">
+  <h2>Guides</h2>
+  <p>Step-by-step walkthroughs for the two most common setups:</p>
+  <ul>
+    <li><a href="https://github.com/benjibutten/MicMixer/blob/main/docs/guides/fivem-music-through-mic.md">Play music in FiveM without holding push-to-talk</a> — route MicMixer into the game, gate your voice, and keep the music flowing.</li>
+    <li><a href="https://github.com/benjibutten/MicMixer/blob/main/docs/guides/discord-single-input.md">Mic and music as one Discord input</a> — send your voice and your music to Discord as a single microphone.</li>
+  </ul>
 </section>
 
 <footer>

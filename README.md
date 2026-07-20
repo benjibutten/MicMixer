@@ -1,12 +1,51 @@
 # MicMixer
 
-MicMixer is a Windows application that routes microphone audio and music into a
-single virtual microphone channel. It is intended for applications that only
-allow one microphone input while you want to speak normally, temporarily switch
-to a voice-modified microphone, and mix music into the same channel.
+MicMixer routes your microphone and your music into one virtual microphone, and
+gives voice and music **separate** rules. Apps like FiveM, Discord, and any
+voice chat that only accepts one microphone just see a single ordinary input;
+MicMixer decides what goes into it — your normal mic, a voice-modified mic,
+music, or silence — and you can switch live, mid-session.
 
-MicMixer is built with WPF and uses NAudio for audio capture, playback, and
-routing.
+[**Download for Windows**](https://github.com/benjibutten/MicMixer/releases/latest)
+· Windows 10/11 x64 · self-contained, no .NET install · Apache-2.0
+
+![The MicMixer main window: device selection, global hotkey, push-to-talk, secondary output, and the built-in music player.](docs/assets/micmixer-main.png)
+
+## What it's for
+
+- **Music in FiveM without holding the game's push-to-talk.** On servers that
+  allow an open or voice-activated input, the game listens to the cable while
+  MicMixer's own push-to-talk gates your voice. *Music ignores push-to-talk*
+  keeps the track flowing. Walk through it in
+  [Play music in FiveM without holding push-to-talk](docs/guides/fivem-music-through-mic.md).
+- **A voice changer on a key.** Pick your real mic and a modified one (for
+  example Voicemod's virtual device); hold the hotkey to switch to the modified
+  voice, release to go back, with a configurable release delay.
+- **A separate mix for streaming or recording.** The secondary output plays the
+  full mic-plus-music mix — taken before the push-to-talk gate — on an extra
+  device that OBS or Streamlabs can capture, so your stream hears everything
+  while the game only hears what you let through the gate.
+
+## Quick setup
+
+1. Install a virtual audio cable such as [VB-CABLE](https://vb-audio.com/Cable/).
+2. In MicMixer, select your real mic and **CABLE Input** as the virtual output.
+3. In FiveM, Discord, or your chat app, select **CABLE Output** as its microphone.
+4. Click **Enable**. Use the linked guides below for push-to-talk and music rules.
+
+## Trust at a glance
+
+- Official releases are built by GitHub Actions from the tagged source commit.
+- Releases since `v2026.7.5` include a `.sha256` file for the Windows archive.
+- The current Windows release is **unsigned**. Check the release notes for its
+  authoritative signing status and see the [code signing policy](https://benjibutten.github.io/MicMixer/code-signing-policy.html).
+
+## Guides
+
+- [Play music in FiveM without holding push-to-talk](docs/guides/fivem-music-through-mic.md)
+- [Mic and music as one Discord input](docs/guides/discord-single-input.md)
+
+The rest of this document is the detailed reference.
 
 ## Features
 
