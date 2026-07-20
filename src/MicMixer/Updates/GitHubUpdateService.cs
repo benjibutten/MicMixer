@@ -94,14 +94,10 @@ internal sealed class GitHubUpdateService
             progress?.Report(new UpdateProgress("Verifying download…"));
             string checksumText = await _httpClient.GetStringAsync(update.ChecksumUri, cancellationToken);
             string expectedHash = ParseChecksum(checksumText);
-            string actualHash;
             await using (var zipStream = File.OpenRead(zipPath))
             {
-                actualHash = Convert.ToHexString(await SHA256.HashDataAsync(zipStream, cancellationToken));
+                await VerifySha256Async(zipStream, expectedHash, cancellationToken);
             }
-
-            if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("The downloaded update failed its SHA-256 integrity check.");
 
             string executablePath = Environment.ProcessPath
                 ?? throw new InvalidOperationException("Could not determine the running executable path.");
@@ -156,6 +152,16 @@ internal sealed class GitHubUpdateService
         if (hash.Length != 64 || hash.Any(c => !Uri.IsHexDigit(c)))
             throw new InvalidDataException("The release checksum file is invalid.");
         return hash.ToUpperInvariant();
+    }
+
+    internal static async Task VerifySha256Async(
+        Stream stream,
+        string expectedHash,
+        CancellationToken cancellationToken = default)
+    {
+        string actualHash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+        if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The downloaded update failed its SHA-256 integrity check.");
     }
 
     private async Task DownloadFileAsync(
