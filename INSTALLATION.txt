@@ -54,9 +54,9 @@ or mismatched download; it is not a replacement for Windows code signing.
 
 Code signing and privacy
 ------------------------
-Free code signing is provided by SignPath.io, certificate by SignPath Foundation,
-for eligible Windows release builds after enrollment and signing integration are
-complete. The GitHub release notes state the actual signing status of each build.
+Current releases are unsigned. We have applied to SignPath Foundation; approval
+and signing integration are pending. Each GitHub release states its actual
+signing status.
 
 Code signing policy:
 https://benjibutten.github.io/MicMixer/code-signing-policy.html

@@ -34,32 +34,38 @@
 </header>
 <main class="wrap">
   <h1>Code signing policy</h1>
-  <p class="updated">Effective and last updated: July 19, 2026</p>
+  <p class="updated">Effective and last updated: July 20, 2026</p>
 
   <h2>Signing service and scope</h2>
-  <p><strong>Free code signing provided by SignPath.io, certificate by SignPath Foundation.</strong></p>
+  <p><strong>Current releases are unsigned.</strong></p>
+  <p>
+    The project has applied to SignPath Foundation. Approval and signing integration are pending;
+    SignPath does not currently provide signing for MicMixer releases.
+  </p>
   <p>
     This policy covers official Windows release builds of <code>MicMixer.exe</code> published through
-    <a href="https://github.com/benjibutten/MicMixer/releases">GitHub Releases</a>. The executable
-    inside a release archive is the Authenticode-signed artifact; the ZIP archive itself is not an
-    Authenticode-signable format and is accompanied by a SHA-256 checksum.
+    <a href="https://github.com/benjibutten/MicMixer/releases">GitHub Releases</a>. The ZIP archive
+    is accompanied by a SHA-256 checksum. If signing is approved and integrated, the executable
+    inside the archive will be the Authenticode-signed artifact; ZIP archives themselves are not
+    Authenticode-signable.
   </p>
   <p class="status">
-    Enrollment and build integration are being prepared. Until SignPath Foundation approval and
-    integration are complete, a release may be unsigned. Each release's notes state its actual
-    signing status and are authoritative for that release.
+    Each release's notes state its actual signing status and are authoritative for that release.
+    The policy will be updated only after signing is integrated and a published signature has been
+    verified.
   </p>
 
   <h2>Project roles</h2>
   <ul>
     <li>Author and committer: <a href="https://github.com/benjibutten">BenjiButten (@benjibutten)</a></li>
     <li>Reviewer: <a href="https://github.com/benjibutten">BenjiButten (@benjibutten)</a></li>
-    <li>Signing approver: <a href="https://github.com/benjibutten">BenjiButten (@benjibutten)</a></li>
+    <li>Future signing approver: <a href="https://github.com/benjibutten">BenjiButten (@benjibutten)</a></li>
   </ul>
   <p>
     Contributions from people without commit access are reviewed before they are merged. Every
-    signing request requires manual approval by the signing approver. Multi-factor authentication
-    is required for accounts with source-control or signing access.
+    If signing is integrated, every signing request will require manual approval by the signing
+    approver. Multi-factor authentication is required for accounts with source-control access and
+    will be required for signing access.
   </p>
 
   <h2>Source and build provenance</h2>

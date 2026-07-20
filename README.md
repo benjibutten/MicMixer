@@ -72,11 +72,9 @@ Development builds do not perform update checks.
 
 ## Code signing and privacy
 
-Free code signing is provided by [SignPath.io](https://signpath.io/), certificate
-by [SignPath Foundation](https://signpath.org/), for eligible Windows release
-builds after enrollment and signing integration are complete. Until then, a
-release may be unsigned. The release notes state the actual signing status for
-each build.
+Current releases are unsigned. We have applied to
+[SignPath Foundation](https://signpath.org/); approval and signing integration
+are pending. Each release states its actual signing status.
 
 See the [code signing policy](https://benjibutten.github.io/MicMixer/code-signing-policy.html)
 for the signing scope, project roles, and build provenance. MicMixer's automatic
@@ -325,17 +323,25 @@ dotnet publish .\src\MicMixer\MicMixer.csproj `
 
 ## CI/CD
 
-Pull requests targeting `main` run `.github/workflows/pr-build.yml`, which restores
-dependencies and builds the application in Release configuration on Windows.
+Pushes to `main` that change `src/**` run `.github/workflows/release.yml`. The
+workflow restores the complete solution, runs the full test suite, publishes a
+self-contained `win-x64` build, optionally signs and verifies the executable,
+and creates a ZIP plus SHA-256 checksum. The release tag is created for the exact
+commit that was checked out and built. Documentation, tests, solution, and
+workflow-only pushes do not trigger an application release.
 
-Pushes to `main` that change application source or project files run
-`.github/workflows/release.yml`. The workflow publishes a self-contained `win-x64`
-build, optionally signs and verifies the executable when the code-signing secrets
-are configured, creates a zip archive plus SHA-256 file, and creates or updates
-the latest GitHub Release. The release notes state whether that build was signed.
+Update [RELEASE_NOTES.md](RELEASE_NOTES.md) with user-visible changes alongside
+the app code. The workflow adds the version, commit, archive hash, and verified
+signing status when it creates the GitHub Release.
 
-Documentation- and workflow-only pushes do not trigger an application release. A
-release can also be started manually through `workflow_dispatch`.
+For changes that benefit from integration testing, feature branches can be
+combined on the optional `next` branch before `next` is merged to `main`. Small
+fixes can go directly through a feature branch to `main`. Only `main` publishes
+a release.
+
+Run `.github/workflows/build.yml` manually on any branch to produce a candidate
+ZIP and SHA-256 file. Candidate builds run the same restore, test, and publish
+steps but do not create a tag or public release.
 
 ## Support and acknowledgements
 

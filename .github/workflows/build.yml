@@ -1,4 +1,4 @@
-name: Build
+name: Candidate build
 
 on:
   workflow_dispatch:
@@ -7,18 +7,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: candidate-${{ github.ref }}
   cancel-in-progress: true
 
 env:
+  SOLUTION_PATH: MicMixer.slnx
   PROJECT_PATH: src/MicMixer/MicMixer.csproj
+  RUNTIME_ID: win-x64
 
 jobs:
-  build:
+  candidate:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout selected branch
         uses: actions/checkout@v7
 
       - name: Setup .NET SDK
@@ -26,10 +28,55 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore dependencies
+      - name: Compute candidate metadata
+        id: meta
         shell: pwsh
-        run: dotnet restore $env:PROJECT_PATH
+        run: |
+          $safeRef = "${{ github.ref_name }}" -replace '[^A-Za-z0-9._-]', '-'
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          "asset_name=MicMixer-candidate-$safeRef-$shortSha-win-x64.zip" >> $env:GITHUB_OUTPUT
 
-      - name: Build app
+      - name: Restore solution
         shell: pwsh
-        run: dotnet build $env:PROJECT_PATH -c Release --no-restore
+        run: dotnet restore $env:SOLUTION_PATH -r $env:RUNTIME_ID -p:PublishReadyToRun=true
+
+      - name: Run full test suite
+        shell: pwsh
+        run: dotnet test $env:SOLUTION_PATH -c Release --no-restore
+
+      - name: Publish candidate
+        shell: pwsh
+        run: |
+          $publishDir = Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID"
+          dotnet publish $env:PROJECT_PATH `
+            -c Release `
+            -r $env:RUNTIME_ID `
+            --no-restore `
+            --self-contained true `
+            -p:ContinuousIntegrationBuild=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=false `
+            -p:PublishReadyToRun=true `
+            -p:InformationalVersion="candidate+${{ github.sha }}" `
+            -o $publishDir
+
+      - name: Package candidate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $zipPath = Join-Path $PWD "artifacts/${{ steps.meta.outputs.asset_name }}"
+          Compress-Archive -Path "artifacts/publish/$env:RUNTIME_ID/*" -DestinationPath $zipPath
+          $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ${{ steps.meta.outputs.asset_name }}" | Set-Content -Path "$zipPath.sha256" -NoNewline
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: micmixer-candidate-${{ github.run_id }}
+          path: |
+            artifacts/${{ steps.meta.outputs.asset_name }}
+            artifacts/${{ steps.meta.outputs.asset_name }}.sha256
+          if-no-files-found: error
