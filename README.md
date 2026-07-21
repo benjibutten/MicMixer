@@ -1,10 +1,11 @@
 # MicMixer
 
-MicMixer routes your microphone and your music into one virtual microphone, and
-gives voice and music **separate** rules. Apps like FiveM, Discord, and any
-voice chat that only accepts one microphone just see a single ordinary input;
-MicMixer decides what goes into it — your normal mic, a voice-modified mic,
-music, or silence — and you can switch live, mid-session.
+MicMixer is a push-to-talk mixer for your voice, your music, and your voice
+changer. It routes all three into one virtual microphone and gives them
+**separate** rules. Apps like FiveM, Discord, and any voice chat that only
+accepts one microphone just see a single ordinary input; MicMixer decides what
+goes into it — your normal mic, a voice changer, music, or silence — and you
+can switch live, mid-session.
 
 [**Download for Windows**](https://github.com/benjibutten/MicMixer/releases/latest)
 · Windows 10/11 x64 · self-contained, no .NET install · Apache-2.0
