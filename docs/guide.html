@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide — MicMixer</title>
+<meta name="description" content="MicMixer setup guides and documentation.">
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="assets/guide.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <img src="assets/icon.png" alt="" width="64" height="64">
+    <a class="name" href="./">MicMixer</a>
+    <nav class="top-links">
+      <a href="./#use">What it's for</a>
+      <a href="./#setup">Setup</a>
+      <a href="./#guides">Guides</a>
+      <a href="https://github.com/benjibutten/MicMixer">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <p class="crumb"><a href="./#guides">← MicMixer</a> / <span id="crumb-doc">Guide</span></p>
+  <article class="doc" id="doc">
+    <p class="doc-error">Loading…
+      <noscript>This viewer needs JavaScript. You can read the guides directly on
+        <a href="https://github.com/benjibutten/MicMixer/tree/main/docs">GitHub</a>.</noscript>
+    </p>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>
+      <a href="./">MicMixer</a> ·
+      <a href="https://github.com/benjibutten/MicMixer">Source on GitHub</a> ·
+      <a href="privacy.html">Privacy policy</a>
+    </p>
+  </div>
+</footer>
+
+<script src="assets/marked.min.js"></script>
+<script>
+  (() => {
+    const REPO = 'https://github.com/benjibutten/MicMixer';
+    const BLOB = REPO + '/blob/main/';
+    const FAKE = 'https://x.invalid';
+    const DOCS_ROOT = '/repo/docs/';
+    const container = document.getElementById('doc');
+
+    // Which documents this viewer is allowed to load.
+    const ALLOWED = new Set([
+      'guides/fivem-music-through-mic.md',
+      'guides/discord-single-input.md',
+      'stream-overlay.md',
+      'control-api.md',
+    ]);
+
+    const showError = (msg) => {
+      container.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'doc-error';
+      p.append(msg + ' ');
+      const a = document.createElement('a');
+      a.href = REPO + '/tree/main/docs';
+      a.textContent = 'Browse the docs on GitHub.';
+      p.append(a);
+      container.append(p);
+    };
+
+    const params = new URLSearchParams(location.search);
+    const doc = params.get('doc') || '';
+
+    if (!ALLOWED.has(doc)) {
+      document.title = 'Guide not found — MicMixer';
+      showError('That guide could not be found.');
+      return;
+    }
+
+    const dir = doc.includes('/') ? doc.slice(0, doc.lastIndexOf('/') + 1) : '';
+    const baseUrl = FAKE + DOCS_ROOT + dir;
+
+    const rewriteLink = (a) => {
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      let url;
+      try { url = new URL(href, baseUrl); } catch { return; }
+      if (url.origin !== FAKE) {
+        // Absolute external link.
+        a.target = '_blank';
+        a.rel = 'noopener';
+        return;
+      }
+      const path = url.pathname;
+      if (path.startsWith(DOCS_ROOT)) {
+        const rel = path.slice(DOCS_ROOT.length);
+        if (rel.endsWith('.md')) {
+          a.setAttribute('href', 'guide.html?doc=' + encodeURIComponent(rel) + url.hash);
+        } else {
+          // Another page or asset that lives under docs/ (served as-is on Pages).
+          a.setAttribute('href', rel + url.hash);
+        }
+      } else if (path.startsWith('/repo/')) {
+        // A repository file outside docs/ (e.g. the README) — send to GitHub.
+        a.setAttribute('href', BLOB + path.slice('/repo/'.length) + url.hash);
+        a.target = '_blank';
+        a.rel = 'noopener';
+      }
+    };
+
+    fetch(doc)
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+      .then((md) => {
+        container.innerHTML = marked.parse(md);
+        container.querySelectorAll('a[href]').forEach(rewriteLink);
+        container.querySelectorAll('table').forEach((table) => {
+          const scroll = document.createElement('div');
+          scroll.className = 'table-scroll';
+          table.replaceWith(scroll);
+          scroll.append(table);
+        });
+        const h1 = container.querySelector('h1');
+        const title = (h1 && h1.textContent.trim()) || 'Guide';
+        document.title = title + ' — MicMixer';
+        document.getElementById('crumb-doc').textContent = title;
+      })
+      .catch(() => {
+        document.title = 'Guide unavailable — MicMixer';
+        showError('This guide could not be loaded.');
+      });
+  })();
+</script>
+
+</body>
+</html>

@@ -30,6 +30,11 @@ License: Apache License 2.0
 Sources: https://github.com/google/material-design-icons
          https://pictogrammers.com/library/mdi/
 
+Marked 12.0.2
+Copyright (c) 2011-2024, Christopher Jeffrey
+License: MIT
+Source: https://github.com/markedjs/marked
+
 Tools downloaded separately by MicMixer
 ----------------------------------------
 
