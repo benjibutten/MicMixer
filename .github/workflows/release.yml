@@ -202,8 +202,9 @@ jobs:
           SignPath Foundation approval and signing integration are pending. The
           code-signing status above is authoritative for this release.
 
-          Download the zip asset below and extract over your existing MicMixer folder,
-          then run MicMixer.exe. Keeping the same install path helps Windows keep tray icon preferences.
+          For a manual ZIP installation, download the asset below and extract it over
+          your existing MicMixer folder, then run MicMixer.exe. Keeping the same install
+          path helps Windows keep tray icon preferences.
 
           Windows Defender SmartScreen may warn about a newly published or unsigned build.
           Verify that the archive came from this GitHub release and compare its SHA-256
@@ -222,3 +223,24 @@ jobs:
           artifactErrorsFailBuild: true
           replacesArtifacts: true
           makeLatest: true
+
+      - name: Submit updated manifest to winget-pkgs
+        # The first package version is submitted manually after its release exists.
+        # Once WINGET_TOKEN is configured, later releases open update PRs automatically.
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_TOKEN))
+          {
+            Write-Host "WINGET_TOKEN is not configured; skipping winget submission."
+            return
+          }
+
+          $url = "https://github.com/benjibutten/MicMixer/releases/download/${{ steps.meta.outputs.tag_name }}/${{ steps.meta.outputs.asset_name }}"
+          Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$env:RUNNER_TEMP/wingetcreate.exe"
+          & "$env:RUNNER_TEMP/wingetcreate.exe" update BenjiButten.MicMixer `
+            --version ${{ steps.meta.outputs.version }} `
+            --urls "$url" `
+            --submit `
+            --token $env:WINGET_TOKEN
