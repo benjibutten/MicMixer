@@ -21,6 +21,18 @@ internal static class UpdateCoordinator
             return;
         }
 
+        // When MicMixer was installed with Windows Package Manager (winget), let
+        // winget own upgrades. Self-updating in place would swap the executable
+        // without winget's knowledge, leaving `winget upgrade` to see a stale
+        // version. Automatic checks are skipped entirely; a manual check still
+        // reports whether a newer version exists but points to winget to install it.
+        bool managedByWinget = InstallEnvironment.IsManagedByWinget;
+        if (managedByWinget && !manual)
+        {
+            Log.Information("Skipping automatic update check; MicMixer is managed by Windows Package Manager (winget).");
+            return;
+        }
+
         if (Interlocked.Exchange(ref _checkInProgress, 1) != 0)
             return;
 
@@ -31,6 +43,18 @@ internal static class UpdateCoordinator
             {
                 if (manual)
                     MessageBox.Show(owner, "You already have the latest version.", "MicMixer Update", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (managedByWinget)
+            {
+                // Only manual checks reach this point for a winget-managed install.
+                MessageBox.Show(
+                    owner,
+                    $"MicMixer {update.TagName} is available. You have {AppVersion.DisplayText}.\n\nMicMixer was installed with Windows Package Manager, so update it from a terminal:\n\n    winget upgrade --id BenjiButten.MicMixer --exact",
+                    "MicMixer Update Available",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
             }
 
