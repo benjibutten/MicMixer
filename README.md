@@ -14,7 +14,7 @@ can switch live, mid-session.
 
 ## What it's for
 
-- **Music in FiveM without holding the game's push-to-talk.** On servers that
+- **Music in games without holding the game's push-to-talk.** In games and on servers that
   allow an open or voice-activated input, the game listens to the cable while
   MicMixer's own push-to-talk gates your voice. *Music ignores push-to-talk*
   keeps the track flowing. Walk through it in
