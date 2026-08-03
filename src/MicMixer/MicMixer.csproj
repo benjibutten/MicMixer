@@ -53,7 +53,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CliWrap" Version="3.10.2" />
+    <PackageReference Include="CliWrap" Version="3.10.4" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Serilog" Version="4.4.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
