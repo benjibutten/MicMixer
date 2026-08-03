@@ -95,6 +95,12 @@ Download the versioned `MicMixer-<version>-win-x64.zip` archive from
 [GitHub Releases](https://github.com/benjibutten/MicMixer/releases/latest), extract
 it, and run `MicMixer.exe`.
 
+Alternatively, install MicMixer with Windows Package Manager:
+
+```powershell
+winget install --id BenjiButten.MicMixer --exact
+```
+
 MicMixer is distributed outside Microsoft Store. Windows Defender SmartScreen
 may show **Windows protected your PC** for an unsigned or newly published build.
 Verify that the archive came from the official GitHub release and compare its
@@ -108,7 +114,8 @@ main window is open. When a newer version is available, MicMixer can download,
 verify, install, and restart itself. You can also run a manual check from
 **About → Check for updates**. Installs in protected folders may trigger a UAC
 prompt, and Windows may show a security warning when a new build restarts.
-Development builds do not perform update checks.
+Installations made through winget are updated through winget instead of the
+built-in updater. Development builds do not perform update checks.
 
 ## Code signing and privacy
 
