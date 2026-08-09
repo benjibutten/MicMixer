@@ -224,6 +224,30 @@ jobs:
           replacesArtifacts: true
           makeLatest: true
 
+      - name: Sync the winget-pkgs fork
+        # wingetcreate pushes its submission branch from this fork and syncs the fork
+        # itself first. That built-in sync fails once the fork has fallen far enough
+        # behind upstream, which strands an otherwise finished release, so the sync
+        # happens here instead. It is best effort: a failure only warns, since
+        # wingetcreate may still succeed on its own.
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          FORK_REPO: ${{ github.repository_owner }}/winget-pkgs
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN))
+          {
+            Write-Host "WINGET_TOKEN is not configured; skipping fork sync."
+            return
+          }
+
+          gh repo sync $env:FORK_REPO --source microsoft/winget-pkgs
+          if ($LASTEXITCODE -ne 0)
+          {
+            Write-Host "::warning::Could not sync $env:FORK_REPO; letting wingetcreate try anyway."
+            exit 0
+          }
+
       - name: Submit updated manifest to winget-pkgs
         # The first package version is submitted manually after its release exists.
         # Once WINGET_TOKEN is configured, later releases open update PRs automatically.
