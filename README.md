@@ -180,6 +180,10 @@ Add music by either:
 - Pasting a YouTube link and clicking **Download MP3**.
 - Opening a configured music folder and adding your own `.mp3` files.
 
+Only links to a single video are accepted. Pasting a YouTube search, playlist, or
+channel link is refused with an explanation rather than downloading everything behind
+it, and a video link that carries a mix or radio list downloads just that one video.
+
 The first download installs local copies of `yt-dlp` and `ffmpeg`. The ffmpeg
 package is relatively large, so the first download may take longer. The tools are
 reused for subsequent downloads.

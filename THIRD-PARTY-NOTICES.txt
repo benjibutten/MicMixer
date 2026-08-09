@@ -8,7 +8,7 @@ license terms.
 Components included with MicMixer
 ---------------------------------
 
-CliWrap 3.10.2
+CliWrap 3.10.4
 Copyright (c) Alexey Golub and contributors
 License: MIT
 Source: https://github.com/Tyrrrz/CliWrap

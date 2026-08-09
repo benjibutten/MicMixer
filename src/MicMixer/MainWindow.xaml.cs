@@ -3278,13 +3278,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        string url = YoutubeUrlBox.Text.Trim();
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        DownloadUrlCheck check = DownloadUrlValidator.Check(YoutubeUrlBox.Text);
+        if (!check.IsAllowed)
         {
-            MusicStatusText.Text = "Paste a valid link (https://...).";
+            MusicStatusText.Text = check.Error!;
             return;
         }
+
+        string url = check.Url!;
 
         _isDownloading = true;
         DownloadBtn.IsEnabled = false;
