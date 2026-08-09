@@ -46,6 +46,9 @@ public sealed partial class YouTubeDownloader
                 "--audio-quality", "0",
                 "--ffmpeg-location", _tools.ToolsDirectory,
                 "--no-playlist",
+                // Last line of defence: even if a link slips past DownloadUrlValidator and
+                // resolves to a playlist, only its first entry is ever fetched.
+                "--playlist-items", "1",
                 "--newline",
                 "--no-simulate",
                 "--print", "after_move:filepath",

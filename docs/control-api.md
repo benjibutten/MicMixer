@@ -40,7 +40,12 @@ unsupported protocol version.
 | `cancelDelayedPlay` | none |
 | `setDelayedStartSeconds` | `seconds` (clamped to MicMixer's supported range) |
 | `setSingleTrackMode` | `mode`: `Off`, `Once`, or `Always` |
-| `downloadFromUrl` | absolute HTTP(S) `url`, optional destination `folderId` |
+| `downloadFromUrl` | absolute HTTP(S) `url` for a single video, optional destination `folderId` |
+
+`downloadFromUrl` accepts only links that stand for one video. A YouTube search,
+playlist, or channel link is rejected with `invalid_argument` instead of pulling in
+every entry behind it, and a video link is stripped of its `list` and radio
+parameters before the download starts.
 
 State includes `volumesLinked`, the volume-sync toggle that makes one volume slider
 follow the other. When it is enabled, a single `setMusicVolume` or `setMonitorVolume`

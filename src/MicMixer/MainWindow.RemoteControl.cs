@@ -422,11 +422,15 @@ public partial class MainWindow
 
     private ControlResult RemoteDownloadFromUrl(JsonElement? payload)
     {
-        if (!TryGetString(payload, "url", out string? url)
-            || !Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (!TryGetString(payload, "url", out string? url))
         {
             return ControlResult.Fail("invalid_argument", "url must be a valid http or https URL.");
+        }
+
+        DownloadUrlCheck check = DownloadUrlValidator.Check(url);
+        if (!check.IsAllowed)
+        {
+            return ControlResult.Fail("invalid_argument", check.Error!);
         }
 
         if (_isDownloading)
@@ -444,7 +448,7 @@ public partial class MainWindow
             }
         }
 
-        YoutubeUrlBox.Text = url;
+        YoutubeUrlBox.Text = check.Url!;
         _ = StartDownloadAsync(downloadFolder);
         return ControlResult.Ok();
     }
