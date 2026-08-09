@@ -1,0 +1,191 @@
+name: yt-dlp watch
+
+# yt-dlp is pinned by version and SHA-256 in ToolBootstrapper.cs, so when YouTube
+# breaks an extractor no user can download anything until MicMixer ships new
+# constants. yt-dlp cuts a release precisely when such a break is fixed, so a new
+# release upstream is the signal to release MicMixer. This job turns that signal
+# into a ready-to-merge pull request; merging it touches src/** and therefore
+# publishes a new MicMixer release on its own.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: yt-dlp-watch
+  cancel-in-progress: false
+
+env:
+  BOOTSTRAPPER_PATH: src/MicMixer/Music/ToolBootstrapper.cs
+  UPSTREAM_REPO: yt-dlp/yt-dlp
+
+jobs:
+  watch:
+    name: Check for a newer yt-dlp release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Compare the pinned version against the latest release
+        id: check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $source = Get-Content -LiteralPath $env:BOOTSTRAPPER_PATH -Raw
+          $pinnedMatch = [regex]::Match($source, 'private const string YtDlpVersion = "(?<version>[^"]+)";')
+          if (-not $pinnedMatch.Success)
+          {
+            throw "Could not read YtDlpVersion from $env:BOOTSTRAPPER_PATH. The constant was probably renamed."
+          }
+
+          $pinned = $pinnedMatch.Groups["version"].Value
+          $latest = gh release view --repo $env:UPSTREAM_REPO --json tagName --jq ".tagName"
+          if ($LASTEXITCODE -ne 0) { throw "Could not read the latest $env:UPSTREAM_REPO release." }
+
+          # yt-dlp tags its stable releases as yyyy.MM.dd. Anything else is a tag
+          # shape this job was not written for, so stop rather than guess.
+          if ($latest -notmatch '^\d{4}\.\d{2}\.\d{2}$')
+          {
+            throw "Unexpected yt-dlp tag '$latest'; refusing to pin it automatically."
+          }
+
+          Write-Host "Pinned: $pinned. Latest: $latest."
+
+          if ($pinned -eq $latest)
+          {
+            "update_needed=false" >> $env:GITHUB_OUTPUT
+            return
+          }
+
+          # A branch that still exists, or a pull request that was already opened and
+          # dismissed, means this version has been dealt with. Without this the job
+          # would reopen the same pull request every morning.
+          $branch = "automation/yt-dlp-$latest"
+          if (-not [string]::IsNullOrWhiteSpace((git ls-remote --heads origin $branch)))
+          {
+            Write-Host "Branch $branch already exists; nothing to do."
+            "update_needed=false" >> $env:GITHUB_OUTPUT
+            return
+          }
+
+          $existingPr = gh pr list --head $branch --state all --json number --jq ".[0].number"
+          if (-not [string]::IsNullOrWhiteSpace($existingPr))
+          {
+            Write-Host "Pull request #$existingPr already covers $latest; nothing to do."
+            "update_needed=false" >> $env:GITHUB_OUTPUT
+            return
+          }
+
+          "update_needed=true" >> $env:GITHUB_OUTPUT
+          "pinned=$pinned" >> $env:GITHUB_OUTPUT
+          "latest=$latest" >> $env:GITHUB_OUTPUT
+          "branch=$branch" >> $env:GITHUB_OUTPUT
+
+      - name: Download the new yt-dlp and record its checksum
+        id: tool
+        if: steps.check.outputs.update_needed == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $version = "${{ steps.check.outputs.latest }}"
+          $url = "https://github.com/$env:UPSTREAM_REPO/releases/download/$version/yt-dlp.exe"
+          $exePath = Join-Path $env:RUNNER_TEMP "yt-dlp.exe"
+
+          Invoke-WebRequest -Uri $url -OutFile $exePath -UseBasicParsing
+
+          # The hash goes into the app's download verification, so it has to come from
+          # a binary that actually runs and reports the version it claims to be.
+          $output = & $exePath --version
+          if ($LASTEXITCODE -ne 0) { throw "The downloaded yt-dlp.exe did not run." }
+
+          $reported = (@($output) | Where-Object { $_ } | Select-Object -First 1)
+          if ("$reported".Trim() -ne $version)
+          {
+            throw "The downloaded yt-dlp reports '$reported' but the release tag is '$version'."
+          }
+
+          $hash = (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "yt-dlp $version verified. SHA-256: $hash"
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Repin yt-dlp in the bootstrapper
+        if: steps.check.outputs.update_needed == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $version = "${{ steps.check.outputs.latest }}"
+          $hash = "${{ steps.tool.outputs.sha256 }}"
+          $path = (Resolve-Path -LiteralPath $env:BOOTSTRAPPER_PATH).Path
+
+          # Read and write the bytes ourselves so the existing byte-order mark and
+          # line endings survive, keeping the diff down to the two constants.
+          $bytes = [IO.File]::ReadAllBytes($path)
+          $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+          $source = Get-Content -LiteralPath $path -Raw
+
+          # The download URL is composed from the version constant, so only the
+          # version and the checksum need rewriting.
+          $updated = $source -replace 'private const string YtDlpVersion = "[^"]+";', "private const string YtDlpVersion = `"$version`";"
+          $updated = $updated -replace 'private const string YtDlpSha256 = "[^"]+";', "private const string YtDlpSha256 = `"$hash`";"
+
+          if ($updated -eq $source) { throw "Rewriting the yt-dlp constants changed nothing." }
+          if ($updated -notmatch [regex]::Escape($version)) { throw "The new version is missing after the rewrite." }
+          if ($updated -notmatch [regex]::Escape($hash)) { throw "The new checksum is missing after the rewrite." }
+
+          [IO.File]::WriteAllText($path, $updated, [Text.UTF8Encoding]::new($hasBom))
+
+      - name: Open the update pull request
+        if: steps.check.outputs.update_needed == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $pinned = "${{ steps.check.outputs.pinned }}"
+          $version = "${{ steps.check.outputs.latest }}"
+          $branch = "${{ steps.check.outputs.branch }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b $branch
+          git add $env:BOOTSTRAPPER_PATH
+          git commit -m "chore(tools): bump pinned yt-dlp to $version"
+          git push origin $branch
+
+          $body = @"
+          yt-dlp released ``$version``; MicMixer pins ``$pinned``.
+
+          The pinned version and its SHA-256 in ``$env:BOOTSTRAPPER_PATH`` were updated.
+          The checksum was taken from ``yt-dlp.exe`` of that release after running it and
+          confirming it reports ``$version``. The version marker file makes existing
+          installs re-download the tool by themselves.
+
+          Upstream release notes: https://github.com/$env:UPSTREAM_REPO/releases/tag/$version
+
+          Merging this touches ``src/**`` and therefore publishes a new MicMixer release,
+          so update ``RELEASE_NOTES.md`` first if this release needs its own entry.
+
+          Note that pull requests opened with the built-in workflow token do not start
+          CI. The release workflow runs the full test suite before it publishes, so a
+          bad merge fails there rather than shipping.
+          "@
+
+          gh pr create `
+            --base main `
+            --head $branch `
+            --title "chore(tools): bump pinned yt-dlp to $version" `
+            --body $body `
+            --label dependencies
