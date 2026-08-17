@@ -89,9 +89,9 @@ internal sealed class SecondaryTapBranch : ISampleProvider
         _trimScratch = new byte[_highWatermarkBytes - _trimTargetBytes];
 
         _buffer = new BufferedWaveProvider(
-            WaveFormat.CreateIeeeFloatWaveFormat(sourceFormat.SampleRate, sourceFormat.Channels))
+            WaveFormat.CreateIeeeFloatWaveFormat(sourceFormat.SampleRate, sourceFormat.Channels),
+            TimeSpan.FromSeconds(1))
         {
-            BufferDuration = TimeSpan.FromSeconds(1),
             DiscardOnBufferOverflow = true,
             ReadFully = false
         };
@@ -153,7 +153,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
                     _trimScratch = new byte[discard];
                 }
 
-                _buffer.Read(_trimScratch, 0, discard);
+                _buffer.Read(_trimScratch.AsSpan(0, discard));
 
                 // The fill level just moved by hand; the smoothed view of it must
                 // not chase the step and over-correct the rate for seconds after.
@@ -177,9 +177,14 @@ internal sealed class SecondaryTapBranch : ISampleProvider
         _buffer.AddSamples(_writeScratch, 0, byteCount);
     }
 
+    public int Read(Span<float> buffer)
+    {
+        return _volumeProvider.Read(buffer);
+    }
+
     public int Read(float[] buffer, int offset, int count)
     {
-        return _volumeProvider.Read(buffer, offset, count);
+        return Read(buffer.AsSpan(offset, count));
     }
 
     /// <summary>Rounds a byte count down to a whole number of frames.</summary>
@@ -254,9 +259,10 @@ internal sealed class SecondaryTapBranch : ISampleProvider
 
         public WaveFormat WaveFormat => _source.WaveFormat;
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
             int channels = _channels;
+            int count = buffer.Length;
 
             // Whole frames only. The caller aligns the request, so a remainder
             // here means a partial frame that must not be fed through.
@@ -293,7 +299,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
                     _phase -= 1d;
                 }
 
-                int target = offset + written;
+                int target = written;
                 float position = (float)_phase;
 
                 for (int channel = 0; channel < channels; channel++)
@@ -350,7 +356,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
             int wanted = Math.Min(_refillTargetSamples, _scratch.Length) - _scratchFill;
             if (wanted > 0)
             {
-                _scratchFill += _source.Read(_scratch, _scratchFill, wanted);
+                _scratchFill += _source.Read(_scratch.AsSpan(_scratchFill, wanted));
             }
 
             return _scratchFill >= _channels;
@@ -423,14 +429,14 @@ internal sealed class SecondaryTapBranch : ISampleProvider
 
         public WaveFormat WaveFormat => _source.WaveFormat;
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
             if (_branch._rebuffering)
             {
                 if (_branch._buffer.BufferedBytes < _branch._primeBytes)
                 {
-                    Array.Clear(buffer, offset, count);
-                    return count;
+                    buffer.Clear();
+                    return buffer.Length;
                 }
 
                 _branch._rebuffering = false;
@@ -444,8 +450,8 @@ internal sealed class SecondaryTapBranch : ISampleProvider
             // would come back short and be read as starvation, so the remainder is
             // silenced here instead — every caller in the chain requests whole
             // frames, and one that did not must not restart the branch.
-            int wholeFrames = count - (count % _channels);
-            int samplesRead = _source.Read(buffer, offset, wholeFrames);
+            int wholeFrames = buffer.Length - (buffer.Length % _channels);
+            int samplesRead = _source.Read(buffer[..wholeFrames]);
 
             if (samplesRead < wholeFrames)
             {
@@ -456,12 +462,12 @@ internal sealed class SecondaryTapBranch : ISampleProvider
                 _source.ResetToSilence();
             }
 
-            if (samplesRead < count)
+            if (samplesRead < buffer.Length)
             {
-                Array.Clear(buffer, offset + samplesRead, count - samplesRead);
+                buffer[samplesRead..].Clear();
             }
 
-            return count;
+            return buffer.Length;
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using NAudio.Wave;
 
 namespace MicMixer.Audio;
@@ -22,33 +23,38 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
 
     public WaveFormat WaveFormat { get; }
 
-    public int Read(byte[] buffer, int offset, int count)
+    public int Read(Span<byte> buffer)
     {
         int bytesPerSample = Math.Max(WaveFormat.BitsPerSample / 8, 1);
-        int alignedByteCount = count - (count % bytesPerSample);
+        int alignedByteCount = buffer.Length - (buffer.Length % bytesPerSample);
         int samplesRequested = alignedByteCount / bytesPerSample;
 
         EnsureCapacity(samplesRequested);
 
-        int samplesRead = _source.Read(_sourceBuffer, 0, samplesRequested);
+        int samplesRead = _source.Read(_sourceBuffer.AsSpan(0, samplesRequested));
         int bytesWritten = _outputSampleFormat switch
         {
-            OutputSampleFormat.Float32 => WriteFloat32(buffer, offset, samplesRead),
-            OutputSampleFormat.Pcm16 => WritePcm16(buffer, offset, samplesRead),
-            OutputSampleFormat.Pcm24 => WritePcm24(buffer, offset, samplesRead),
-            OutputSampleFormat.Pcm32 => WritePcm32(buffer, offset, samplesRead),
+            OutputSampleFormat.Float32 => WriteFloat32(buffer, samplesRead),
+            OutputSampleFormat.Pcm16 => WritePcm16(buffer, samplesRead),
+            OutputSampleFormat.Pcm24 => WritePcm24(buffer, samplesRead),
+            OutputSampleFormat.Pcm32 => WritePcm32(buffer, samplesRead),
             _ => throw new NotSupportedException($"Unsupported output format: {WaveFormat.Encoding} {WaveFormat.BitsPerSample}-bit")
         };
 
-        if (bytesWritten < count)
+        if (bytesWritten < buffer.Length)
         {
-            Array.Clear(buffer, offset + bytesWritten, count - bytesWritten);
+            buffer[bytesWritten..].Clear();
         }
 
-        return count;
+        return buffer.Length;
     }
 
-    private int WriteFloat32(byte[] buffer, int offset, int samplesRead)
+    public int Read(byte[] buffer, int offset, int count)
+    {
+        return Read(buffer.AsSpan(offset, count));
+    }
+
+    private int WriteFloat32(Span<byte> buffer, int samplesRead)
     {
         // Clamp to full scale: mixed sources (mic + music) can sum above ±1.0.
         for (int i = 0; i < samplesRead; i++)
@@ -65,16 +71,16 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         }
 
         int bytesWritten = samplesRead * sizeof(float);
-        Buffer.BlockCopy(_sourceBuffer, 0, buffer, offset, bytesWritten);
+        MemoryMarshal.AsBytes(_sourceBuffer.AsSpan(0, samplesRead)).CopyTo(buffer);
         return bytesWritten;
     }
 
-    private int WritePcm16(byte[] buffer, int offset, int samplesRead)
+    private int WritePcm16(Span<byte> buffer, int samplesRead)
     {
         for (int i = 0; i < samplesRead; i++)
         {
             short value = ConvertToPcm16(_sourceBuffer[i]);
-            int writeOffset = offset + (i * 2);
+            int writeOffset = i * 2;
             buffer[writeOffset] = (byte)value;
             buffer[writeOffset + 1] = (byte)(value >> 8);
         }
@@ -82,12 +88,12 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         return samplesRead * 2;
     }
 
-    private int WritePcm24(byte[] buffer, int offset, int samplesRead)
+    private int WritePcm24(Span<byte> buffer, int samplesRead)
     {
         for (int i = 0; i < samplesRead; i++)
         {
             int value = ConvertToPcm24(_sourceBuffer[i]);
-            int writeOffset = offset + (i * 3);
+            int writeOffset = i * 3;
             buffer[writeOffset] = (byte)value;
             buffer[writeOffset + 1] = (byte)(value >> 8);
             buffer[writeOffset + 2] = (byte)(value >> 16);
@@ -96,12 +102,12 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         return samplesRead * 3;
     }
 
-    private int WritePcm32(byte[] buffer, int offset, int samplesRead)
+    private int WritePcm32(Span<byte> buffer, int samplesRead)
     {
         for (int i = 0; i < samplesRead; i++)
         {
             int value = ConvertToPcm32(_sourceBuffer[i]);
-            int writeOffset = offset + (i * 4);
+            int writeOffset = i * 4;
             buffer[writeOffset] = (byte)value;
             buffer[writeOffset + 1] = (byte)(value >> 8);
             buffer[writeOffset + 2] = (byte)(value >> 16);

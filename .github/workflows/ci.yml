@@ -36,4 +36,4 @@ jobs:
 
       - name: Build and run tests
         shell: pwsh
-        run: dotnet test $env:SOLUTION_PATH -c Release --no-restore
+        run: dotnet test --solution $env:SOLUTION_PATH -c Release --no-restore

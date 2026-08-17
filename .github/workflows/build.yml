@@ -42,7 +42,7 @@ jobs:
 
       - name: Run full test suite
         shell: pwsh
-        run: dotnet test $env:SOLUTION_PATH -c Release --no-restore
+        run: dotnet test --solution $env:SOLUTION_PATH -c Release --no-restore
 
       - name: Publish candidate
         shell: pwsh

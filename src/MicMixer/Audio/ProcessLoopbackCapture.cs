@@ -1,7 +1,5 @@
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
-using NAudio.CoreAudioApi.Interfaces;
-using NAudio.Wasapi.CoreAudioApi.Interfaces;
 using NAudio.Wave;
 using Serilog;
 
@@ -98,9 +96,8 @@ public sealed class ProcessLoopbackCapture : IDisposable
             frameEvent = new EventWaitHandle(false, EventResetMode.AutoReset);
             audioClient.SetEventHandle(frameEvent.SafeWaitHandle.DangerousGetHandle());
 
-            _buffer = new BufferedWaveProvider(format)
+            _buffer = new BufferedWaveProvider(format, TimeSpan.FromSeconds(2))
             {
-                BufferDuration = TimeSpan.FromSeconds(2),
                 DiscardOnBufferOverflow = true,
                 ReadFully = false
             };
@@ -261,7 +258,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
             _trimBuffer = new byte[discard];
         }
 
-        buffer.Read(_trimBuffer, 0, discard);
+        buffer.Read(_trimBuffer.AsSpan(0, discard));
     }
 
     private void UpdatePeak(byte[] data, int byteCount, bool isFloat)
@@ -305,129 +302,13 @@ public sealed class ProcessLoopbackCapture : IDisposable
         while (Interlocked.CompareExchange(ref _peakBits, newBits, currentBits) != currentBits);
     }
 
-    // --- Activation interop -------------------------------------------------
-
-    private const string VirtualAudioDeviceProcessLoopback = "VAD\\Process_Loopback";
-    private const int ActivationTypeProcessLoopback = 1; // AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK
-    private const int LoopbackModeIncludeTargetProcessTree = 0; // PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
-    private const ushort VtBlob = 0x41; // VT_BLOB
-
     private static AudioClient ActivateProcessLoopbackClient(int processId)
     {
-        // AUDIOCLIENT_ACTIVATION_PARAMS with the process-loopback union member.
-        var activationParams = new AudioClientActivationParams
-        {
-            ActivationType = ActivationTypeProcessLoopback,
-            TargetProcessId = processId,
-            ProcessLoopbackMode = LoopbackModeIncludeTargetProcessTree
-        };
-
-        int paramsSize = Marshal.SizeOf<AudioClientActivationParams>();
-        IntPtr paramsPtr = Marshal.AllocHGlobal(paramsSize);
-        IntPtr propVariantPtr = IntPtr.Zero;
-
-        try
-        {
-            Marshal.StructureToPtr(activationParams, paramsPtr, false);
-
-            var propVariant = new PropVariantBlob
-            {
-                Vt = VtBlob,
-                BlobSize = (uint)paramsSize,
-                BlobData = paramsPtr
-            };
-            propVariantPtr = Marshal.AllocHGlobal(Marshal.SizeOf<PropVariantBlob>());
-            Marshal.StructureToPtr(propVariant, propVariantPtr, false);
-
-            var handler = new ActivationHandler();
-            Guid audioClientIid = new("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"); // IID_IAudioClient
-
-            int hr = ActivateAudioInterfaceAsync(
-                VirtualAudioDeviceProcessLoopback,
-                ref audioClientIid,
-                propVariantPtr,
-                handler,
-                out IActivateAudioInterfaceAsyncOperation operation);
-            Marshal.ThrowExceptionForHR(hr);
-
-            object activated = handler.WaitForCompletion(TimeSpan.FromSeconds(5));
-            GC.KeepAlive(operation);
-
-            return new AudioClient((IAudioClient)activated);
-        }
-        finally
-        {
-            if (propVariantPtr != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(propVariantPtr);
-            }
-
-            Marshal.FreeHGlobal(paramsPtr);
-        }
-    }
-
-    [DllImport("Mmdevapi.dll", ExactSpelling = true)]
-    private static extern int ActivateAudioInterfaceAsync(
-        [MarshalAs(UnmanagedType.LPWStr)] string deviceInterfacePath,
-        ref Guid riid,
-        IntPtr activationParams,
-        IActivateAudioInterfaceCompletionHandler completionHandler,
-        out IActivateAudioInterfaceAsyncOperation activationOperation);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AudioClientActivationParams
-    {
-        public int ActivationType;
-        public int TargetProcessId;
-        public int ProcessLoopbackMode;
-    }
-
-    /// <summary>PROPVARIANT restricted to the VT_BLOB member used here.</summary>
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PropVariantBlob
-    {
-        public ushort Vt;
-        public ushort Reserved1;
-        public ushort Reserved2;
-        public ushort Reserved3;
-        public uint BlobSize;
-        public IntPtr BlobData;
-    }
-
-    /// <summary>
-    /// Managed CCWs are apartment-agile, so the completion callback (which arrives on a
-    /// WASAPI worker thread) can safely signal the waiting starter thread.
-    /// </summary>
-    private sealed class ActivationHandler : IActivateAudioInterfaceCompletionHandler
-    {
-        private readonly ManualResetEventSlim _completed = new(false);
-        private int _activateResult;
-        private object? _activatedInterface;
-
-        public void ActivateCompleted(IActivateAudioInterfaceAsyncOperation activateOperation)
-        {
-            try
-            {
-                activateOperation.GetActivateResult(out _activateResult, out _activatedInterface);
-            }
-            catch (Exception ex)
-            {
-                _activateResult = ex.HResult;
-            }
-
-            _completed.Set();
-        }
-
-        public object WaitForCompletion(TimeSpan timeout)
-        {
-            if (!_completed.Wait(timeout))
-            {
-                throw new TimeoutException("Audio capture activation did not respond.");
-            }
-
-            Marshal.ThrowExceptionForHR(_activateResult);
-            return _activatedInterface
-                ?? throw new InvalidOperationException("Audio capture was activated without an interface.");
-        }
+        return AudioClient.ActivateProcessLoopbackAsync(
+                (uint)processId,
+                ProcessLoopbackMode.IncludeTargetProcessTree)
+            .ConfigureAwait(false)
+            .GetAwaiter()
+            .GetResult();
     }
 }
