@@ -24,6 +24,10 @@ namespace MicMixer.Audio;
 /// </summary>
 internal sealed class MixFanoutSampleProvider : ISampleProvider
 {
+    private const float GateRampDurationSeconds = 0.008f;
+    private const float ClosedGain = 0f;
+    private const float OpenGain = 1f;
+
     private readonly ISampleProvider _mic;
     private readonly ISampleProvider? _music;
     private readonly Func<bool> _micGateOpen;
@@ -73,30 +77,31 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
         WaveFormat = mic.WaveFormat;
         // ~8 ms full-range ramp at the stream's interleaved sample rate, so
         // open/close never produces an audible click.
-        _gainStepPerSample = 1f / Math.Max(0.008f * WaveFormat.SampleRate * WaveFormat.Channels, 1f);
-        _micGain = micGateOpen() ? 1f : 0f;
-        _musicGain = musicGateOpen() ? 1f : 0f;
+        _gainStepPerSample = OpenGain / Math.Max(GateRampDurationSeconds * WaveFormat.SampleRate * WaveFormat.Channels, OpenGain);
+        _micGain = micGateOpen() ? OpenGain : ClosedGain;
+        _musicGain = musicGateOpen() ? OpenGain : ClosedGain;
         if (secondaryWrite != null)
         {
-            _secondaryMicGain = secondaryMicOpen() ? 1f : 0f;
-            _secondaryMusicGain = secondaryMusicOpen() ? 1f : 0f;
+            _secondaryMicGain = secondaryMicOpen() ? OpenGain : ClosedGain;
+            _secondaryMusicGain = secondaryMusicOpen() ? OpenGain : ClosedGain;
         }
     }
 
     public WaveFormat WaveFormat { get; }
 
-    public int Read(float[] buffer, int offset, int count)
+    public int Read(Span<float> buffer)
     {
-        int micRead = _mic.Read(buffer, offset, count);
+        int count = buffer.Length;
+        int micRead = _mic.Read(buffer);
         if (micRead < count)
         {
-            Array.Clear(buffer, offset + micRead, count - micRead);
+            buffer[micRead..].Clear();
         }
 
         if (_music == null)
         {
-            WriteSecondary(buffer, offset, null, count);
-            ApplyGate(buffer, offset, count, ref _micGain, _micGateOpen());
+            WriteSecondary(buffer, ReadOnlySpan<float>.Empty);
+            ApplyGate(buffer, ref _micGain, _micGateOpen());
             return count;
         }
 
@@ -105,42 +110,48 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
             _musicBuffer = new float[count];
         }
 
-        int musicRead = _music.Read(_musicBuffer, 0, count);
+        int musicRead = _music.Read(_musicBuffer.AsSpan(0, count));
         if (musicRead < count)
         {
             Array.Clear(_musicBuffer, musicRead, count - musicRead);
         }
 
-        WriteSecondary(buffer, offset, _musicBuffer, count);
+        WriteSecondary(buffer, _musicBuffer.AsSpan(0, count));
 
         if (_musicMeteringEnabled())
         {
-            MeasureMusic(_musicBuffer, count);
+            MeasureMusic(_musicBuffer.AsSpan(0, count));
         }
 
-        ApplyGate(buffer, offset, count, ref _micGain, _micGateOpen());
-        AddWithGate(_musicBuffer, buffer, offset, count, ref _musicGain, _musicGateOpen());
+        ApplyGate(buffer, ref _micGain, _micGateOpen());
+        AddWithGate(_musicBuffer.AsSpan(0, count), buffer, ref _musicGain, _musicGateOpen());
         return count;
     }
 
+    public int Read(float[] buffer, int offset, int count)
+    {
+        return Read(buffer.AsSpan(offset, count));
+    }
+
     /// <summary>Builds the secondary mix from the raw signals through its own pair of gates and pushes it.</summary>
-    private void WriteSecondary(float[] micBuffer, int micOffset, float[]? musicBuffer, int count)
+    private void WriteSecondary(ReadOnlySpan<float> micBuffer, ReadOnlySpan<float> musicBuffer)
     {
         if (_secondaryWrite == null)
         {
             return;
         }
 
+        int count = micBuffer.Length;
         if (_secondaryBuffer.Length < count)
         {
             _secondaryBuffer = new float[count];
         }
 
-        CopyWithGate(micBuffer, micOffset, _secondaryBuffer, count, ref _secondaryMicGain, _secondaryMicOpen());
+        CopyWithGate(micBuffer, _secondaryBuffer.AsSpan(0, count), ref _secondaryMicGain, _secondaryMicOpen());
 
-        if (musicBuffer != null)
+        if (!musicBuffer.IsEmpty)
         {
-            AddWithGate(musicBuffer, _secondaryBuffer, 0, count, ref _secondaryMusicGain, _secondaryMusicOpen());
+            AddWithGate(musicBuffer, _secondaryBuffer.AsSpan(0, count), ref _secondaryMusicGain, _secondaryMusicOpen());
         }
 
         // Silence is still written: the branch buffer must keep filling so the
@@ -149,15 +160,16 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
     }
 
     /// <summary>In-place ramped gate.</summary>
-    private void ApplyGate(float[] buffer, int offset, int count, ref float gain, bool isOpen)
+    private void ApplyGate(Span<float> buffer, ref float gain, bool isOpen)
     {
-        float target = isOpen ? 1f : 0f;
+        int count = buffer.Length;
+        float target = isOpen ? OpenGain : ClosedGain;
 
         if (gain == target)
         {
-            if (target == 0f)
+            if (target == ClosedGain)
             {
-                Array.Clear(buffer, offset, count);
+                buffer.Clear();
             }
 
             return;
@@ -166,24 +178,25 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
         for (int i = 0; i < count; i++)
         {
             gain = Step(gain, target);
-            buffer[offset + i] *= gain;
+            buffer[i] *= gain;
         }
     }
 
     /// <summary>Ramped gate that writes source × gain into the destination (overwrites).</summary>
-    private void CopyWithGate(float[] source, int sourceOffset, float[] destination, int count, ref float gain, bool isOpen)
+    private void CopyWithGate(ReadOnlySpan<float> source, Span<float> destination, ref float gain, bool isOpen)
     {
-        float target = isOpen ? 1f : 0f;
+        int count = destination.Length;
+        float target = isOpen ? OpenGain : ClosedGain;
 
         if (gain == target)
         {
-            if (target == 0f)
+            if (target == ClosedGain)
             {
-                Array.Clear(destination, 0, count);
+                destination.Clear();
             }
             else
             {
-                Array.Copy(source, sourceOffset, destination, 0, count);
+                source.CopyTo(destination);
             }
 
             return;
@@ -192,25 +205,26 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
         for (int i = 0; i < count; i++)
         {
             gain = Step(gain, target);
-            destination[i] = source[sourceOffset + i] * gain;
+            destination[i] = source[i] * gain;
         }
     }
 
     /// <summary>Ramped gate that adds source × gain onto the destination.</summary>
-    private void AddWithGate(float[] source, float[] destination, int destinationOffset, int count, ref float gain, bool isOpen)
+    private void AddWithGate(ReadOnlySpan<float> source, Span<float> destination, ref float gain, bool isOpen)
     {
-        float target = isOpen ? 1f : 0f;
+        int count = destination.Length;
+        float target = isOpen ? OpenGain : ClosedGain;
 
         if (gain == target)
         {
-            if (target == 0f)
+            if (target == ClosedGain)
             {
                 return;
             }
 
             for (int i = 0; i < count; i++)
             {
-                destination[destinationOffset + i] += source[i];
+                destination[i] += source[i];
             }
 
             return;
@@ -219,7 +233,7 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
         for (int i = 0; i < count; i++)
         {
             gain = Step(gain, target);
-            destination[destinationOffset + i] += source[i] * gain;
+            destination[i] += source[i] * gain;
         }
     }
 
@@ -230,8 +244,9 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
             : Math.Max(target, gain - _gainStepPerSample);
     }
 
-    private void MeasureMusic(float[] buffer, int count)
+    private void MeasureMusic(ReadOnlySpan<float> buffer)
     {
+        int count = buffer.Length;
         float max = 0f;
         double squareSum = 0d;
         for (int i = 0; i < count; i++)

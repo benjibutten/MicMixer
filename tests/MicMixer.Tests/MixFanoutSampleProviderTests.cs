@@ -189,10 +189,10 @@ public sealed class MixFanoutSampleProviderTests
 
         public WaveFormat WaveFormat { get; }
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
-            Array.Fill(buffer, _value, offset, count);
-            return count;
+            buffer.Fill(_value);
+            return buffer.Length;
         }
     }
 }

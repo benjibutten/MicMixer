@@ -359,7 +359,7 @@ Build and test locally:
 
 ```powershell
 dotnet build .\MicMixer.slnx
-dotnet test .\MicMixer.slnx --no-build
+dotnet test --solution .\MicMixer.slnx --no-build
 ```
 
 Create a self-contained Windows x64 build:

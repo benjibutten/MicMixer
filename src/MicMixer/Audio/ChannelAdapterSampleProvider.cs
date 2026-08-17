@@ -16,23 +16,23 @@ internal sealed class ChannelAdapterSampleProvider : ISampleProvider
 
     public WaveFormat WaveFormat => _waveFormat;
 
-    public int Read(float[] buffer, int offset, int count)
+    public int Read(Span<float> buffer)
     {
         int targetChannels = _waveFormat.Channels;
         int sourceChannels = _source.WaveFormat.Channels;
-        int framesRequested = count / targetChannels;
+        int framesRequested = buffer.Length / targetChannels;
         int sourceSamplesNeeded = framesRequested * sourceChannels;
 
         EnsureCapacity(sourceSamplesNeeded);
 
-        int sourceSamplesRead = _source.Read(_sourceBuffer, 0, sourceSamplesNeeded);
+        int sourceSamplesRead = _source.Read(_sourceBuffer.AsSpan(0, sourceSamplesNeeded));
         int framesRead = sourceSamplesRead / sourceChannels;
         int samplesWritten = framesRead * targetChannels;
 
         for (int frame = 0; frame < framesRead; frame++)
         {
             int sourceFrameOffset = frame * sourceChannels;
-            int targetFrameOffset = offset + (frame * targetChannels);
+            int targetFrameOffset = frame * targetChannels;
 
             if (sourceChannels == 1)
             {
@@ -63,6 +63,11 @@ internal sealed class ChannelAdapterSampleProvider : ISampleProvider
         }
 
         return samplesWritten;
+    }
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        return Read(buffer.AsSpan(offset, count));
     }
 
     private void EnsureCapacity(int sampleCount)

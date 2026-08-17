@@ -1,7 +1,5 @@
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
-using NAudio.CoreAudioApi.Interfaces;
-using NAudio.Wasapi.CoreAudioApi.Interfaces;
 using NAudio.Wave;
 using Serilog;
 
@@ -19,11 +17,27 @@ namespace MicMixer.Audio;
 /// </summary>
 public sealed class ProcessLoopbackCapture : IDisposable
 {
-    public static bool IsSupported => Environment.OSVersion.Version.Build >= 19041;
+    private const int MinimumSupportedWindowsBuild = 19_041;
+    private const int PreferredSampleRate = 48_000;
+    private const int FallbackSampleRate = 44_100;
+    private const int StereoChannelCount = 2;
+    private const int FallbackBitsPerSample = 16;
+    private const int FrameWaitTimeoutMilliseconds = 100;
+    private const string CaptureThreadName = nameof(ProcessLoopbackCapture);
+    public static bool IsSupported => Environment.OSVersion.Version.Build >= MinimumSupportedWindowsBuild;
 
     // Keep at most ~350 ms buffered; when exceeded, drop down to ~120 ms.
     private const double HighWatermarkSeconds = 0.35;
     private const double TrimTargetSeconds = 0.12;
+
+    private static readonly TimeSpan CaptureBufferDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan CaptureThreadJoinTimeout = TimeSpan.FromSeconds(5);
+    private static readonly long AudioClientBufferDurationHns = TimeSpan.FromMilliseconds(200).Ticks;
+    // Upper bound on the WASAPI/COM activation handshake. Normally a few milliseconds.
+    private static readonly TimeSpan ActivationTimeout = TimeSpan.FromSeconds(5);
+
+    private const string AlreadyStartedMessage = "Capture already started.";
+    private const string UnsupportedPlatformMessage = "Per-app audio capture requires Windows 10 version 2004 or later.";
 
     private readonly int _processId;
     private readonly ManualResetEventSlim _stopRequested = new(false);
@@ -63,12 +77,12 @@ public sealed class ProcessLoopbackCapture : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_started)
         {
-            throw new InvalidOperationException("Capture already started.");
+            throw new InvalidOperationException(AlreadyStartedMessage);
         }
 
         if (!IsSupported)
         {
-            throw new NotSupportedException("Per-app audio capture requires Windows 10 version 2004 or later.");
+            throw new NotSupportedException(UnsupportedPlatformMessage);
         }
 
         AudioClient? audioClient = null;
@@ -80,7 +94,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
 
             // The loopback engine converts to whatever format we ask for. Prefer the mix
             // engine's native format (float 48 kHz stereo); fall back to CD-quality PCM.
-            WaveFormat format = WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2);
+            WaveFormat format = WaveFormat.CreateIeeeFloatWaveFormat(PreferredSampleRate, StereoChannelCount);
             try
             {
                 Initialize(audioClient, format);
@@ -91,16 +105,15 @@ public sealed class ProcessLoopbackCapture : IDisposable
                 audioClient.Dispose();
                 audioClient = null;
                 audioClient = ActivateProcessLoopbackClient(_processId);
-                format = new WaveFormat(44_100, 16, 2);
+                format = new WaveFormat(FallbackSampleRate, FallbackBitsPerSample, StereoChannelCount);
                 Initialize(audioClient, format);
             }
 
             frameEvent = new EventWaitHandle(false, EventResetMode.AutoReset);
             audioClient.SetEventHandle(frameEvent.SafeWaitHandle.DangerousGetHandle());
 
-            _buffer = new BufferedWaveProvider(format)
+            _buffer = new BufferedWaveProvider(format, CaptureBufferDuration)
             {
-                BufferDuration = TimeSpan.FromSeconds(2),
                 DiscardOnBufferOverflow = true,
                 ReadFully = false
             };
@@ -112,7 +125,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
             _captureThread = new Thread(CaptureLoop)
             {
                 IsBackground = true,
-                Name = "ProcessLoopbackCapture"
+                Name = CaptureThreadName
             };
             _captureThread.Start();
             _started = true;
@@ -150,7 +163,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
         {
         }
 
-        if (_captureThread != null && !_captureThread.Join(TimeSpan.FromSeconds(5)))
+        if (_captureThread != null && !_captureThread.Join(CaptureThreadJoinTimeout))
         {
             // The WASAPI thread is stuck inside the audio stack. Leak the client and
             // event handles rather than disposing objects the thread may still touch.
@@ -179,7 +192,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
         audioClient.Initialize(
             AudioClientShareMode.Shared,
             AudioClientStreamFlags.Loopback | AudioClientStreamFlags.EventCallback,
-            2_000_000, // 200 ms in 100-ns units
+            AudioClientBufferDurationHns,
             0,
             format,
             Guid.Empty);
@@ -200,7 +213,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
 
             while (!_stopRequested.IsSet)
             {
-                if (!frameEvent.WaitOne(100))
+                if (!frameEvent.WaitOne(FrameWaitTimeoutMilliseconds))
                 {
                     continue;
                 }
@@ -261,7 +274,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
             _trimBuffer = new byte[discard];
         }
 
-        buffer.Read(_trimBuffer, 0, discard);
+        buffer.Read(_trimBuffer.AsSpan(0, discard));
     }
 
     private void UpdatePeak(byte[] data, int byteCount, bool isFloat)
@@ -305,129 +318,43 @@ public sealed class ProcessLoopbackCapture : IDisposable
         while (Interlocked.CompareExchange(ref _peakBits, newBits, currentBits) != currentBits);
     }
 
-    // --- Activation interop -------------------------------------------------
-
-    private const string VirtualAudioDeviceProcessLoopback = "VAD\\Process_Loopback";
-    private const int ActivationTypeProcessLoopback = 1; // AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK
-    private const int LoopbackModeIncludeTargetProcessTree = 0; // PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
-    private const ushort VtBlob = 0x41; // VT_BLOB
-
+    /// <summary>
+    /// Activates a process-loopback client, bounded by <see cref="ActivationTimeout"/>.
+    /// The underlying COM activation is asynchronous and has no cancellation; if Windows
+    /// never completes it we must not block the caller forever (the UI keeps
+    /// "starting..." state until <see cref="Start"/> returns), so the wait is capped and
+    /// a late-arriving client is disposed by a continuation instead of being leaked.
+    /// </summary>
     private static AudioClient ActivateProcessLoopbackClient(int processId)
     {
-        // AUDIOCLIENT_ACTIVATION_PARAMS with the process-loopback union member.
-        var activationParams = new AudioClientActivationParams
+        Task<AudioClient> activation = AudioClient.ActivateProcessLoopbackAsync(
+            (uint)processId,
+            ProcessLoopbackMode.IncludeTargetProcessTree);
+
+        if (!activation.Wait(ActivationTimeout))
         {
-            ActivationType = ActivationTypeProcessLoopback,
-            TargetProcessId = processId,
-            ProcessLoopbackMode = LoopbackModeIncludeTargetProcessTree
-        };
+            _ = activation.ContinueWith(
+                static t =>
+                {
+                    if (t.Status == TaskStatus.RanToCompletion)
+                    {
+                        t.Result.Dispose();
+                    }
+                    else
+                    {
+                        Log.Debug(t.Exception, "Late process loopback activation failed after timeout.");
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
 
-        int paramsSize = Marshal.SizeOf<AudioClientActivationParams>();
-        IntPtr paramsPtr = Marshal.AllocHGlobal(paramsSize);
-        IntPtr propVariantPtr = IntPtr.Zero;
-
-        try
-        {
-            Marshal.StructureToPtr(activationParams, paramsPtr, false);
-
-            var propVariant = new PropVariantBlob
-            {
-                Vt = VtBlob,
-                BlobSize = (uint)paramsSize,
-                BlobData = paramsPtr
-            };
-            propVariantPtr = Marshal.AllocHGlobal(Marshal.SizeOf<PropVariantBlob>());
-            Marshal.StructureToPtr(propVariant, propVariantPtr, false);
-
-            var handler = new ActivationHandler();
-            Guid audioClientIid = new("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2"); // IID_IAudioClient
-
-            int hr = ActivateAudioInterfaceAsync(
-                VirtualAudioDeviceProcessLoopback,
-                ref audioClientIid,
-                propVariantPtr,
-                handler,
-                out IActivateAudioInterfaceAsyncOperation operation);
-            Marshal.ThrowExceptionForHR(hr);
-
-            object activated = handler.WaitForCompletion(TimeSpan.FromSeconds(5));
-            GC.KeepAlive(operation);
-
-            return new AudioClient((IAudioClient)activated);
-        }
-        finally
-        {
-            if (propVariantPtr != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(propVariantPtr);
-            }
-
-            Marshal.FreeHGlobal(paramsPtr);
-        }
-    }
-
-    [DllImport("Mmdevapi.dll", ExactSpelling = true)]
-    private static extern int ActivateAudioInterfaceAsync(
-        [MarshalAs(UnmanagedType.LPWStr)] string deviceInterfacePath,
-        ref Guid riid,
-        IntPtr activationParams,
-        IActivateAudioInterfaceCompletionHandler completionHandler,
-        out IActivateAudioInterfaceAsyncOperation activationOperation);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AudioClientActivationParams
-    {
-        public int ActivationType;
-        public int TargetProcessId;
-        public int ProcessLoopbackMode;
-    }
-
-    /// <summary>PROPVARIANT restricted to the VT_BLOB member used here.</summary>
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PropVariantBlob
-    {
-        public ushort Vt;
-        public ushort Reserved1;
-        public ushort Reserved2;
-        public ushort Reserved3;
-        public uint BlobSize;
-        public IntPtr BlobData;
-    }
-
-    /// <summary>
-    /// Managed CCWs are apartment-agile, so the completion callback (which arrives on a
-    /// WASAPI worker thread) can safely signal the waiting starter thread.
-    /// </summary>
-    private sealed class ActivationHandler : IActivateAudioInterfaceCompletionHandler
-    {
-        private readonly ManualResetEventSlim _completed = new(false);
-        private int _activateResult;
-        private object? _activatedInterface;
-
-        public void ActivateCompleted(IActivateAudioInterfaceAsyncOperation activateOperation)
-        {
-            try
-            {
-                activateOperation.GetActivateResult(out _activateResult, out _activatedInterface);
-            }
-            catch (Exception ex)
-            {
-                _activateResult = ex.HResult;
-            }
-
-            _completed.Set();
+            throw new TimeoutException(
+                $"Windows did not complete process loopback activation for PID {processId} within {ActivationTimeout.TotalSeconds:0.#} s.");
         }
 
-        public object WaitForCompletion(TimeSpan timeout)
-        {
-            if (!_completed.Wait(timeout))
-            {
-                throw new TimeoutException("Audio capture activation did not respond.");
-            }
-
-            Marshal.ThrowExceptionForHR(_activateResult);
-            return _activatedInterface
-                ?? throw new InvalidOperationException("Audio capture was activated without an interface.");
-        }
+        // Unwraps AggregateException so callers see the original activation failure
+        // (the float -> PCM fallback and the UI message both inspect it).
+        return activation.GetAwaiter().GetResult();
     }
 }

@@ -7,6 +7,11 @@ namespace MicMixer.Audio;
 
 public sealed class AudioRouter : IDisposable
 {
+    private const int PrimaryOutputLatencyMilliseconds = 50;
+    private const int InputBufferDurationMilliseconds = 200;
+    private const int MeteringUpdatesPerSecond = 20;
+    private const int MinimumChannelCount = 1;
+
     private readonly object _syncRoot = new();
     private WasapiOut? _player;
     private InputRoute? _normalRoute;
@@ -118,7 +123,7 @@ public sealed class AudioRouter : IDisposable
             // so the overlay meter reads empty while nothing is sent.
             source = new OutputPeakTapProvider(source, this);
 
-            player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 50);
+            player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, PrimaryOutputLatencyMilliseconds);
             player.PlaybackStopped += OnPlaybackStopped;
             player.Init(new SampleToTargetWaveProvider(source, targetFormat));
 
@@ -454,9 +459,8 @@ public sealed class AudioRouter : IDisposable
         {
             _errorHandler = errorHandler;
             _capture = new WasapiCapture(device);
-            _buffer = new BufferedWaveProvider(_capture.WaveFormat)
+            _buffer = new BufferedWaveProvider(_capture.WaveFormat, TimeSpan.FromMilliseconds(InputBufferDurationMilliseconds))
             {
-                BufferDuration = TimeSpan.FromMilliseconds(200),
                 DiscardOnBufferOverflow = true,
                 ReadFully = false
             };
@@ -465,7 +469,9 @@ public sealed class AudioRouter : IDisposable
             _capture.RecordingStopped += OnRecordingStopped;
 
             var source = FormatNormalizer.Normalize(_buffer.ToSampleProvider(), targetFormat);
-            var samplesPerNotification = Math.Max(targetFormat.SampleRate * Math.Max(targetFormat.Channels, 1) / 20, targetFormat.Channels);
+            var samplesPerNotification = Math.Max(
+                targetFormat.SampleRate * Math.Max(targetFormat.Channels, MinimumChannelCount) / MeteringUpdatesPerSecond,
+                targetFormat.Channels);
             _meter = new MeteringSampleProvider(source, samplesPerNotification);
             _meter.StreamVolume += OnStreamVolume;
         }
@@ -479,9 +485,9 @@ public sealed class AudioRouter : IDisposable
             _capture.StartRecording();
         }
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
-            int samplesRead = _meter.Read(buffer, offset, count);
+            int samplesRead = _meter.Read(buffer);
 
             if (samplesRead == 0)
             {
@@ -489,6 +495,11 @@ public sealed class AudioRouter : IDisposable
             }
 
             return samplesRead;
+        }
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            return Read(buffer.AsSpan(offset, count));
         }
 
         public void Dispose()
@@ -555,9 +566,9 @@ public sealed class AudioRouter : IDisposable
 
         public WaveFormat WaveFormat => _source.WaveFormat;
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
-            int samplesRead = _source.Read(buffer, offset, count);
+            int samplesRead = _source.Read(buffer);
             if (samplesRead == 0 || !_router.OutputMeteringEnabled)
             {
                 return samplesRead;
@@ -567,7 +578,7 @@ public sealed class AudioRouter : IDisposable
             double squareSum = 0d;
             for (int i = 0; i < samplesRead; i++)
             {
-                float sample = buffer[offset + i];
+                float sample = buffer[i];
                 float abs = Math.Abs(sample);
                 if (abs > max)
                 {
@@ -589,6 +600,11 @@ public sealed class AudioRouter : IDisposable
             }
 
             return samplesRead;
+        }
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            return Read(buffer.AsSpan(offset, count));
         }
     }
 
@@ -612,25 +628,31 @@ public sealed class AudioRouter : IDisposable
 
         public WaveFormat WaveFormat { get; }
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
+            int count = buffer.Length;
             EnsureCapacity(count);
 
-            int normalRead = _normalRoute.Read(_normalBuffer, 0, count);
-            int moddedRead = _moddedRoute?.Read(_moddedBuffer, 0, count) ?? 0;
+            int normalRead = _normalRoute.Read(_normalBuffer.AsSpan(0, count));
+            int moddedRead = _moddedRoute?.Read(_moddedBuffer.AsSpan(0, count)) ?? 0;
 
             bool useModdedInput = _moddedRoute != null && _useModdedInput();
             float[] selectedBuffer = useModdedInput ? _moddedBuffer : _normalBuffer;
             int selectedSamples = useModdedInput ? moddedRead : normalRead;
 
-            Array.Copy(selectedBuffer, 0, buffer, offset, selectedSamples);
+            selectedBuffer.AsSpan(0, selectedSamples).CopyTo(buffer);
 
             if (selectedSamples < count)
             {
-                Array.Clear(buffer, offset + selectedSamples, count - selectedSamples);
+                buffer[selectedSamples..].Clear();
             }
 
             return count;
+        }
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            return Read(buffer.AsSpan(offset, count));
         }
 
         private void EnsureCapacity(int count)

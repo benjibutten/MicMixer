@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -19,14 +20,22 @@ public sealed class MusicPlaybackEngine : IDisposable
 {
     private const int InternalSampleRate = 48_000;
     private const int InternalChannels = 2;
+    private const double MixHighWatermarkSeconds = 0.4;
+    private const double MixTrimTargetSeconds = 0.15;
+    private const double MixBufferCapacitySeconds = 1d;
+    private const int MonitorOutputLatencyMilliseconds = 100;
+    private const float DefaultMusicVolume = 0.5f;
+    private const float DefaultMonitorVolume = 0.5f;
+    private const float MinimumVolume = 0f;
+    private const float MaximumVolume = 1f;
 
     // Bounded-latency policy for the monitor→mix fanout buffer: clock drift between
     // the monitor device (producer) and the routing device (consumer) slowly walks
     // the fill level; past the high watermark the oldest audio is dropped down to
     // the trim target instead of letting BufferedWaveProvider discard the newest.
     private static readonly int MixBytesPerSecond = InternalSampleRate * InternalChannels * sizeof(float);
-    private static readonly int MixHighWatermarkBytes = (int)(MixBytesPerSecond * 0.4);
-    private static readonly int MixTrimTargetBytes = (int)(MixBytesPerSecond * 0.15);
+    private static readonly int MixHighWatermarkBytes = (int)(MixBytesPerSecond * MixHighWatermarkSeconds);
+    private static readonly int MixTrimTargetBytes = (int)(MixBytesPerSecond * MixTrimTargetSeconds);
 
     private readonly object _syncRoot = new();
     private readonly BufferedWaveProvider _mixBuffer;
@@ -44,8 +53,8 @@ public sealed class MusicPlaybackEngine : IDisposable
     private string? _monitorDeviceId;
     private VolumeSampleProvider? _monitorVolumeProvider;
     private VolumeSampleProvider? _mixVolumeProvider;
-    private float _musicVolume = 0.5f;
-    private float _monitorVolume = 0.5f;
+    private float _musicVolume = DefaultMusicVolume;
+    private float _monitorVolume = DefaultMonitorVolume;
     private bool _monitorPumpActive;
     private int _monitorConfigVersion;
 
@@ -55,9 +64,10 @@ public sealed class MusicPlaybackEngine : IDisposable
 
     public MusicPlaybackEngine()
     {
-        _mixBuffer = new BufferedWaveProvider(WaveFormat.CreateIeeeFloatWaveFormat(InternalSampleRate, InternalChannels))
+        _mixBuffer = new BufferedWaveProvider(
+            WaveFormat.CreateIeeeFloatWaveFormat(InternalSampleRate, InternalChannels),
+            TimeSpan.FromSeconds(MixBufferCapacitySeconds))
         {
-            BufferDuration = TimeSpan.FromSeconds(1),
             DiscardOnBufferOverflow = true,
             ReadFully = false
         };
@@ -111,7 +121,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         {
             lock (_syncRoot)
             {
-                _musicVolume = Math.Clamp(value, 0f, 1f);
+                _musicVolume = Math.Clamp(value, MinimumVolume, MaximumVolume);
                 if (_mixVolumeProvider != null)
                 {
                     _mixVolumeProvider.Volume = _musicVolume;
@@ -127,7 +137,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         {
             lock (_syncRoot)
             {
-                _monitorVolume = Math.Clamp(value, 0f, 1f);
+                _monitorVolume = Math.Clamp(value, MinimumVolume, MaximumVolume);
                 if (_monitorVolumeProvider != null)
                 {
                     _monitorVolumeProvider.Volume = _monitorVolume;
@@ -343,7 +353,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         var volumeProvider = new VolumeSampleProvider(head) { Volume = MonitorVolume };
         var normalized = FormatNormalizer.Normalize(volumeProvider, mixFormat);
 
-        var monitorOut = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
+        var monitorOut = new WasapiOut(device, AudioClientShareMode.Shared, true, MonitorOutputLatencyMilliseconds);
         monitorOut.PlaybackStopped += OnMonitorStopped;
         monitorOut.Init(new SampleToTargetWaveProvider(normalized, mixFormat));
 
@@ -459,7 +469,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     /// Core decode step shared by both clock modes. Returns actual samples read;
     /// 0 when idle/paused. Detects end of track and raises <see cref="TrackEnded"/>.
     /// </summary>
-    private int PumpRead(float[] buffer, int offset, int count)
+    private int PumpRead(Span<float> buffer)
     {
         AudioFileReader? endedReader = null;
         string? endedPath = null;
@@ -472,7 +482,7 @@ public sealed class MusicPlaybackEngine : IDisposable
                 return 0;
             }
 
-            samplesRead = _playbackChain.Read(buffer, offset, count);
+            samplesRead = _playbackChain.Read(buffer);
 
             // A short read from an external source just means "nothing captured yet";
             // only file playback interprets an empty read as end of track.
@@ -509,9 +519,9 @@ public sealed class MusicPlaybackEngine : IDisposable
         return samplesRead;
     }
 
-    private void PushToMixBuffer(byte[] scratch, float[] buffer, int offset, int count)
+    private void PushToMixBuffer(byte[] scratch, ReadOnlySpan<float> buffer)
     {
-        int byteCount = count * sizeof(float);
+        int byteCount = buffer.Length * sizeof(float);
 
         if (_mixBuffer.BufferedBytes + byteCount > MixHighWatermarkBytes)
         {
@@ -523,24 +533,24 @@ public sealed class MusicPlaybackEngine : IDisposable
                     _mixTrimBuffer = new byte[discard];
                 }
 
-                _mixBuffer.Read(_mixTrimBuffer, 0, discard);
+                _mixBuffer.Read(_mixTrimBuffer.AsSpan(0, discard));
                 Log.Debug("Mix buffer trimmed {DiscardedBytes} bytes to bound music latency.", discard);
             }
         }
 
-        Buffer.BlockCopy(buffer, offset * sizeof(float), scratch, 0, byteCount);
+        MemoryMarshal.AsBytes(buffer).CopyTo(scratch);
         _mixBuffer.AddSamples(scratch, 0, byteCount);
     }
 
-    private int ReadForMix(float[] buffer, int offset, int count)
+    private int ReadForMix(Span<float> buffer)
     {
         if (Volatile.Read(ref _monitorPumpActive))
         {
             // Monitor output is the clock; drain what it teed into the buffer.
-            return _mixBufferReader.Read(buffer, offset, count);
+            return _mixBufferReader.Read(buffer);
         }
 
-        return PumpRead(buffer, offset, count);
+        return PumpRead(buffer);
     }
 
     /// <summary>
@@ -559,24 +569,24 @@ public sealed class MusicPlaybackEngine : IDisposable
 
         public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(InternalSampleRate, InternalChannels);
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
-            int samplesRead = _engine.PumpRead(buffer, offset, count);
+            int samplesRead = _engine.PumpRead(buffer);
 
-            if (samplesRead < count)
+            if (samplesRead < buffer.Length)
             {
-                Array.Clear(buffer, offset + samplesRead, count - samplesRead);
+                buffer[samplesRead..].Clear();
             }
 
-            if (_scratch.Length < count * sizeof(float))
+            if (_scratch.Length < buffer.Length * sizeof(float))
             {
-                _scratch = new byte[count * sizeof(float)];
+                _scratch = new byte[buffer.Length * sizeof(float)];
             }
 
             // Tee the full block (including silence) so the mix side stays time-aligned.
-            _engine.PushToMixBuffer(_scratch, buffer, offset, count);
+            _engine.PushToMixBuffer(_scratch, buffer);
 
-            return count;
+            return buffer.Length;
         }
     }
 
@@ -595,16 +605,16 @@ public sealed class MusicPlaybackEngine : IDisposable
 
         public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(InternalSampleRate, InternalChannels);
 
-        public int Read(float[] buffer, int offset, int count)
+        public int Read(Span<float> buffer)
         {
-            int samplesRead = _engine.ReadForMix(buffer, offset, count);
+            int samplesRead = _engine.ReadForMix(buffer);
 
-            if (samplesRead < count)
+            if (samplesRead < buffer.Length)
             {
-                Array.Clear(buffer, offset + samplesRead, count - samplesRead);
+                buffer[samplesRead..].Clear();
             }
 
-            return count;
+            return buffer.Length;
         }
     }
 }
