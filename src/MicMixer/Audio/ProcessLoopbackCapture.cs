@@ -17,14 +17,27 @@ namespace MicMixer.Audio;
 /// </summary>
 public sealed class ProcessLoopbackCapture : IDisposable
 {
-    public static bool IsSupported => Environment.OSVersion.Version.Build >= 19041;
+    private const int MinimumSupportedWindowsBuild = 19_041;
+    private const int PreferredSampleRate = 48_000;
+    private const int FallbackSampleRate = 44_100;
+    private const int StereoChannelCount = 2;
+    private const int FallbackBitsPerSample = 16;
+    private const int FrameWaitTimeoutMilliseconds = 100;
+    private const string CaptureThreadName = nameof(ProcessLoopbackCapture);
+    public static bool IsSupported => Environment.OSVersion.Version.Build >= MinimumSupportedWindowsBuild;
 
     // Keep at most ~350 ms buffered; when exceeded, drop down to ~120 ms.
     private const double HighWatermarkSeconds = 0.35;
     private const double TrimTargetSeconds = 0.12;
 
+    private static readonly TimeSpan CaptureBufferDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan CaptureThreadJoinTimeout = TimeSpan.FromSeconds(5);
+    private static readonly long AudioClientBufferDurationHns = TimeSpan.FromMilliseconds(200).Ticks;
     // Upper bound on the WASAPI/COM activation handshake. Normally a few milliseconds.
     private static readonly TimeSpan ActivationTimeout = TimeSpan.FromSeconds(5);
+
+    private const string AlreadyStartedMessage = "Capture already started.";
+    private const string UnsupportedPlatformMessage = "Per-app audio capture requires Windows 10 version 2004 or later.";
 
     private readonly int _processId;
     private readonly ManualResetEventSlim _stopRequested = new(false);
@@ -64,12 +77,12 @@ public sealed class ProcessLoopbackCapture : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_started)
         {
-            throw new InvalidOperationException("Capture already started.");
+            throw new InvalidOperationException(AlreadyStartedMessage);
         }
 
         if (!IsSupported)
         {
-            throw new NotSupportedException("Per-app audio capture requires Windows 10 version 2004 or later.");
+            throw new NotSupportedException(UnsupportedPlatformMessage);
         }
 
         AudioClient? audioClient = null;
@@ -81,7 +94,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
 
             // The loopback engine converts to whatever format we ask for. Prefer the mix
             // engine's native format (float 48 kHz stereo); fall back to CD-quality PCM.
-            WaveFormat format = WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2);
+            WaveFormat format = WaveFormat.CreateIeeeFloatWaveFormat(PreferredSampleRate, StereoChannelCount);
             try
             {
                 Initialize(audioClient, format);
@@ -92,14 +105,14 @@ public sealed class ProcessLoopbackCapture : IDisposable
                 audioClient.Dispose();
                 audioClient = null;
                 audioClient = ActivateProcessLoopbackClient(_processId);
-                format = new WaveFormat(44_100, 16, 2);
+                format = new WaveFormat(FallbackSampleRate, FallbackBitsPerSample, StereoChannelCount);
                 Initialize(audioClient, format);
             }
 
             frameEvent = new EventWaitHandle(false, EventResetMode.AutoReset);
             audioClient.SetEventHandle(frameEvent.SafeWaitHandle.DangerousGetHandle());
 
-            _buffer = new BufferedWaveProvider(format, TimeSpan.FromSeconds(2))
+            _buffer = new BufferedWaveProvider(format, CaptureBufferDuration)
             {
                 DiscardOnBufferOverflow = true,
                 ReadFully = false
@@ -112,7 +125,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
             _captureThread = new Thread(CaptureLoop)
             {
                 IsBackground = true,
-                Name = "ProcessLoopbackCapture"
+                Name = CaptureThreadName
             };
             _captureThread.Start();
             _started = true;
@@ -150,7 +163,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
         {
         }
 
-        if (_captureThread != null && !_captureThread.Join(TimeSpan.FromSeconds(5)))
+        if (_captureThread != null && !_captureThread.Join(CaptureThreadJoinTimeout))
         {
             // The WASAPI thread is stuck inside the audio stack. Leak the client and
             // event handles rather than disposing objects the thread may still touch.
@@ -179,7 +192,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
         audioClient.Initialize(
             AudioClientShareMode.Shared,
             AudioClientStreamFlags.Loopback | AudioClientStreamFlags.EventCallback,
-            2_000_000, // 200 ms in 100-ns units
+            AudioClientBufferDurationHns,
             0,
             format,
             Guid.Empty);
@@ -200,7 +213,7 @@ public sealed class ProcessLoopbackCapture : IDisposable
 
             while (!_stopRequested.IsSet)
             {
-                if (!frameEvent.WaitOne(100))
+                if (!frameEvent.WaitOne(FrameWaitTimeoutMilliseconds))
                 {
                     continue;
                 }

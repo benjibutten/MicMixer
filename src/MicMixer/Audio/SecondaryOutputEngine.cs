@@ -16,19 +16,26 @@ namespace MicMixer.Audio;
 /// tees each finished secondary block into a bounded buffer via <see cref="Write"/>,
 /// and the secondary WasapiOut drains that buffer at its own pace. The two devices
 /// run on independent clocks, so <see cref="SecondaryTapBranch"/> resamples by
-/// fractions of a percent to hold the buffer at its target instead of dropping or
-/// inserting audio — what plays out stays continuous for whatever captures it.
+/// fractions of a percent to hold the buffer at its target instead of periodically
+/// dropping or inserting audio — what plays out stays continuous for whatever
+/// captures it.
 /// The secondary device can never block or stop the primary chain — a failure here
 /// tears down only this engine.
 /// </summary>
 public sealed class SecondaryOutputEngine : IDisposable
 {
+    private const int OutputLatencyMilliseconds = 100;
+    private const float DefaultVolume = 1f;
+    private const float MinimumVolume = 0f;
+    private const float MaximumVolume = 1f;
+    private const string UnexpectedStopMessage = "The audio device stopped unexpectedly.";
+
     private readonly object _syncRoot = new();
     private volatile SecondaryTapBranch? _branch;
     private WasapiOut? _out;
     private bool _enabled;
     private string? _deviceId;
-    private float _volume = 1f;
+    private float _volume = DefaultVolume;
     private volatile bool _ignorePushToTalk = true;
     private bool _disposed;
 
@@ -74,7 +81,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         {
             lock (_syncRoot)
             {
-                _volume = Math.Clamp(value, 0f, 1f);
+                _volume = Math.Clamp(value, MinimumVolume, MaximumVolume);
                 if (_branch is { } branch)
                 {
                     branch.Volume = _volume;
@@ -202,7 +209,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         var branch = new SecondaryTapBranch(sourceFormat);
         var normalized = FormatNormalizer.Normalize(branch, mixFormat);
 
-        var output = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
+        var output = new WasapiOut(device, AudioClientShareMode.Shared, true, OutputLatencyMilliseconds);
         output.PlaybackStopped += OnPlaybackStopped;
 
         try
@@ -275,9 +282,8 @@ public sealed class SecondaryOutputEngine : IDisposable
             }
             else
             {
-                const string message = "The audio device stopped unexpectedly.";
                 Log.Warning("Secondary output stopped unexpectedly without an exception.");
-                RaiseError(message);
+                RaiseError(UnexpectedStopMessage);
             }
         });
     }

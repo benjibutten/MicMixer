@@ -24,6 +24,10 @@ namespace MicMixer.Audio;
 /// </summary>
 internal sealed class MixFanoutSampleProvider : ISampleProvider
 {
+    private const float GateRampDurationSeconds = 0.008f;
+    private const float ClosedGain = 0f;
+    private const float OpenGain = 1f;
+
     private readonly ISampleProvider _mic;
     private readonly ISampleProvider? _music;
     private readonly Func<bool> _micGateOpen;
@@ -73,13 +77,13 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
         WaveFormat = mic.WaveFormat;
         // ~8 ms full-range ramp at the stream's interleaved sample rate, so
         // open/close never produces an audible click.
-        _gainStepPerSample = 1f / Math.Max(0.008f * WaveFormat.SampleRate * WaveFormat.Channels, 1f);
-        _micGain = micGateOpen() ? 1f : 0f;
-        _musicGain = musicGateOpen() ? 1f : 0f;
+        _gainStepPerSample = OpenGain / Math.Max(GateRampDurationSeconds * WaveFormat.SampleRate * WaveFormat.Channels, OpenGain);
+        _micGain = micGateOpen() ? OpenGain : ClosedGain;
+        _musicGain = musicGateOpen() ? OpenGain : ClosedGain;
         if (secondaryWrite != null)
         {
-            _secondaryMicGain = secondaryMicOpen() ? 1f : 0f;
-            _secondaryMusicGain = secondaryMusicOpen() ? 1f : 0f;
+            _secondaryMicGain = secondaryMicOpen() ? OpenGain : ClosedGain;
+            _secondaryMusicGain = secondaryMusicOpen() ? OpenGain : ClosedGain;
         }
     }
 
@@ -159,11 +163,11 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
     private void ApplyGate(Span<float> buffer, ref float gain, bool isOpen)
     {
         int count = buffer.Length;
-        float target = isOpen ? 1f : 0f;
+        float target = isOpen ? OpenGain : ClosedGain;
 
         if (gain == target)
         {
-            if (target == 0f)
+            if (target == ClosedGain)
             {
                 buffer.Clear();
             }
@@ -182,11 +186,11 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
     private void CopyWithGate(ReadOnlySpan<float> source, Span<float> destination, ref float gain, bool isOpen)
     {
         int count = destination.Length;
-        float target = isOpen ? 1f : 0f;
+        float target = isOpen ? OpenGain : ClosedGain;
 
         if (gain == target)
         {
-            if (target == 0f)
+            if (target == ClosedGain)
             {
                 destination.Clear();
             }
@@ -209,11 +213,11 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
     private void AddWithGate(ReadOnlySpan<float> source, Span<float> destination, ref float gain, bool isOpen)
     {
         int count = destination.Length;
-        float target = isOpen ? 1f : 0f;
+        float target = isOpen ? OpenGain : ClosedGain;
 
         if (gain == target)
         {
-            if (target == 0f)
+            if (target == ClosedGain)
             {
                 return;
             }

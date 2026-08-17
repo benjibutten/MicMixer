@@ -7,6 +7,18 @@ namespace MicMixer.Audio;
 // surface runtime array type issues on modern .NET when the destination buffer is a byte overlay.
 internal sealed class SampleToTargetWaveProvider : IWaveProvider
 {
+    private const int Float32BitsPerSample = 32;
+    private const int Pcm16BitsPerSample = 16;
+    private const int Pcm24BitsPerSample = 24;
+    private const int Pcm32BitsPerSample = 32;
+    private const int Pcm16BytesPerSample = sizeof(short);
+    private const int Pcm24BytesPerSample = 3;
+    private const int Pcm32BytesPerSample = sizeof(int);
+    private const int BitsPerByte = 8;
+    private const int MinimumBytesPerSample = 1;
+    private const float MinimumSampleValue = -1f;
+    private const float MaximumSampleValue = 1f;
+
     private static readonly Guid PcmSubFormat = new("00000001-0000-0010-8000-00AA00389B71");
     private static readonly Guid FloatSubFormat = new("00000003-0000-0010-8000-00AA00389B71");
 
@@ -25,7 +37,7 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
 
     public int Read(Span<byte> buffer)
     {
-        int bytesPerSample = Math.Max(WaveFormat.BitsPerSample / 8, 1);
+        int bytesPerSample = Math.Max(WaveFormat.BitsPerSample / BitsPerByte, MinimumBytesPerSample);
         int alignedByteCount = buffer.Length - (buffer.Length % bytesPerSample);
         int samplesRequested = alignedByteCount / bytesPerSample;
 
@@ -60,13 +72,13 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         for (int i = 0; i < samplesRead; i++)
         {
             float value = _sourceBuffer[i];
-            if (value > 1f)
+            if (value > MaximumSampleValue)
             {
-                _sourceBuffer[i] = 1f;
+                _sourceBuffer[i] = MaximumSampleValue;
             }
-            else if (value < -1f)
+            else if (value < MinimumSampleValue)
             {
-                _sourceBuffer[i] = -1f;
+                _sourceBuffer[i] = MinimumSampleValue;
             }
         }
 
@@ -80,12 +92,12 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         for (int i = 0; i < samplesRead; i++)
         {
             short value = ConvertToPcm16(_sourceBuffer[i]);
-            int writeOffset = i * 2;
+            int writeOffset = i * Pcm16BytesPerSample;
             buffer[writeOffset] = (byte)value;
             buffer[writeOffset + 1] = (byte)(value >> 8);
         }
 
-        return samplesRead * 2;
+        return samplesRead * Pcm16BytesPerSample;
     }
 
     private int WritePcm24(Span<byte> buffer, int samplesRead)
@@ -93,13 +105,13 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         for (int i = 0; i < samplesRead; i++)
         {
             int value = ConvertToPcm24(_sourceBuffer[i]);
-            int writeOffset = i * 3;
+            int writeOffset = i * Pcm24BytesPerSample;
             buffer[writeOffset] = (byte)value;
             buffer[writeOffset + 1] = (byte)(value >> 8);
             buffer[writeOffset + 2] = (byte)(value >> 16);
         }
 
-        return samplesRead * 3;
+        return samplesRead * Pcm24BytesPerSample;
     }
 
     private int WritePcm32(Span<byte> buffer, int samplesRead)
@@ -107,14 +119,14 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         for (int i = 0; i < samplesRead; i++)
         {
             int value = ConvertToPcm32(_sourceBuffer[i]);
-            int writeOffset = i * 4;
+            int writeOffset = i * Pcm32BytesPerSample;
             buffer[writeOffset] = (byte)value;
             buffer[writeOffset + 1] = (byte)(value >> 8);
             buffer[writeOffset + 2] = (byte)(value >> 16);
             buffer[writeOffset + 3] = (byte)(value >> 24);
         }
 
-        return samplesRead * 4;
+        return samplesRead * Pcm32BytesPerSample;
     }
 
     private void EnsureCapacity(int sampleCount)
@@ -135,10 +147,10 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
 
         return (targetFormat.BitsPerSample, isFloat, isPcm) switch
         {
-            (32, true, _) => OutputSampleFormat.Float32,
-            (16, _, true) => OutputSampleFormat.Pcm16,
-            (24, _, true) => OutputSampleFormat.Pcm24,
-            (32, _, true) => OutputSampleFormat.Pcm32,
+            (Float32BitsPerSample, true, _) => OutputSampleFormat.Float32,
+            (Pcm16BitsPerSample, _, true) => OutputSampleFormat.Pcm16,
+            (Pcm24BitsPerSample, _, true) => OutputSampleFormat.Pcm24,
+            (Pcm32BitsPerSample, _, true) => OutputSampleFormat.Pcm32,
             _ => throw new NotSupportedException(
                 $"Output format {targetFormat.Encoding} ({targetFormat.BitsPerSample}-bit) is not supported.")
         };
@@ -146,12 +158,12 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
 
     private static short ConvertToPcm16(float value)
     {
-        if (value >= 1f)
+        if (value >= MaximumSampleValue)
         {
             return short.MaxValue;
         }
 
-        if (value <= -1f)
+        if (value <= MinimumSampleValue)
         {
             return short.MinValue;
         }
@@ -164,12 +176,12 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         const int maxValue = 8_388_607;
         const int minValue = -8_388_608;
 
-        if (value >= 1f)
+        if (value >= MaximumSampleValue)
         {
             return maxValue;
         }
 
-        if (value <= -1f)
+        if (value <= MinimumSampleValue)
         {
             return minValue;
         }
@@ -182,12 +194,12 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
         const int maxValue = int.MaxValue;
         const int minValue = int.MinValue;
 
-        if (value >= 1f)
+        if (value >= MaximumSampleValue)
         {
             return maxValue;
         }
 
-        if (value <= -1f)
+        if (value <= MinimumSampleValue)
         {
             return minValue;
         }

@@ -7,6 +7,11 @@ namespace MicMixer.Audio;
 
 public sealed class AudioRouter : IDisposable
 {
+    private const int PrimaryOutputLatencyMilliseconds = 50;
+    private const int InputBufferDurationMilliseconds = 200;
+    private const int MeteringUpdatesPerSecond = 20;
+    private const int MinimumChannelCount = 1;
+
     private readonly object _syncRoot = new();
     private WasapiOut? _player;
     private InputRoute? _normalRoute;
@@ -118,7 +123,7 @@ public sealed class AudioRouter : IDisposable
             // so the overlay meter reads empty while nothing is sent.
             source = new OutputPeakTapProvider(source, this);
 
-            player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, 50);
+            player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, PrimaryOutputLatencyMilliseconds);
             player.PlaybackStopped += OnPlaybackStopped;
             player.Init(new SampleToTargetWaveProvider(source, targetFormat));
 
@@ -454,7 +459,7 @@ public sealed class AudioRouter : IDisposable
         {
             _errorHandler = errorHandler;
             _capture = new WasapiCapture(device);
-            _buffer = new BufferedWaveProvider(_capture.WaveFormat, TimeSpan.FromMilliseconds(200))
+            _buffer = new BufferedWaveProvider(_capture.WaveFormat, TimeSpan.FromMilliseconds(InputBufferDurationMilliseconds))
             {
                 DiscardOnBufferOverflow = true,
                 ReadFully = false
@@ -464,7 +469,9 @@ public sealed class AudioRouter : IDisposable
             _capture.RecordingStopped += OnRecordingStopped;
 
             var source = FormatNormalizer.Normalize(_buffer.ToSampleProvider(), targetFormat);
-            var samplesPerNotification = Math.Max(targetFormat.SampleRate * Math.Max(targetFormat.Channels, 1) / 20, targetFormat.Channels);
+            var samplesPerNotification = Math.Max(
+                targetFormat.SampleRate * Math.Max(targetFormat.Channels, MinimumChannelCount) / MeteringUpdatesPerSecond,
+                targetFormat.Channels);
             _meter = new MeteringSampleProvider(source, samplesPerNotification);
             _meter.StreamVolume += OnStreamVolume;
         }

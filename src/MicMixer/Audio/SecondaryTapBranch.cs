@@ -17,7 +17,8 @@ namespace MicMixer.Audio;
 /// branch plays back a hair faster or slower than nominal (at most
 /// <see cref="MaxRateAdjustment"/>, i.e. well under the ~0.01% drift of real
 /// hardware clocks) to steer the fill level back to <see cref="PrimeBytes"/>.
-/// Nothing is dropped or inserted, so the stream stays continuous and monotonic;
+/// During normal clock drift nothing is dropped or inserted, so the stream stays
+/// continuous and monotonic;
 /// capture software downstream (OBS and friends) sees no timestamp discontinuity
 /// to compensate for.
 ///
@@ -36,6 +37,12 @@ namespace MicMixer.Audio;
 internal sealed class SecondaryTapBranch : ISampleProvider
 {
     private const int TrimLogThrottleMilliseconds = 5_000;
+    private const double HighWatermarkSeconds = 0.4;
+    private const double TrimTargetSeconds = 0.15;
+    private const double WriteScratchDurationSeconds = 0.25;
+    private const double BufferCapacitySeconds = 1d;
+    private const float MinimumVolume = 0f;
+    private const float MaximumVolume = 1f;
 
     /// <summary>
     /// Largest playback-rate correction, as a fraction of the nominal rate. 0.5%
@@ -76,8 +83,8 @@ internal sealed class SecondaryTapBranch : ISampleProvider
         // are real: 0.15 s at 22 050 Hz stereo is 3307.5 frames.
         _frameBytes = sourceFormat.Channels * sizeof(float);
         int bytesPerSecond = sourceFormat.SampleRate * _frameBytes;
-        _highWatermarkBytes = AlignToFrame((int)(bytesPerSecond * 0.4));
-        _trimTargetBytes = AlignToFrame((int)(bytesPerSecond * 0.15));
+        _highWatermarkBytes = AlignToFrame((int)(bytesPerSecond * HighWatermarkSeconds));
+        _trimTargetBytes = AlignToFrame((int)(bytesPerSecond * TrimTargetSeconds));
         _primeBytes = _trimTargetBytes;
         _sampleRate = sourceFormat.SampleRate;
         _smoothedFillBytes = _trimTargetBytes;
@@ -85,12 +92,12 @@ internal sealed class SecondaryTapBranch : ISampleProvider
         // Preallocated so the steady-state write path never allocates on the
         // primary audio thread: a WasapiOut block is well under 250 ms, and a
         // trim discards at most highWatermark - trimTarget bytes.
-        _writeScratch = new byte[bytesPerSecond / 4];
+        _writeScratch = new byte[(int)(bytesPerSecond * WriteScratchDurationSeconds)];
         _trimScratch = new byte[_highWatermarkBytes - _trimTargetBytes];
 
         _buffer = new BufferedWaveProvider(
             WaveFormat.CreateIeeeFloatWaveFormat(sourceFormat.SampleRate, sourceFormat.Channels),
-            TimeSpan.FromSeconds(1))
+            TimeSpan.FromSeconds(BufferCapacitySeconds))
         {
             DiscardOnBufferOverflow = true,
             ReadFully = false
@@ -112,7 +119,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
     public float Volume
     {
         get => _volumeProvider.Volume;
-        set => _volumeProvider.Volume = Math.Clamp(value, 0f, 1f);
+        set => _volumeProvider.Volume = Math.Clamp(value, MinimumVolume, MaximumVolume);
     }
 
     internal int BufferedBytes => _buffer.BufferedBytes;

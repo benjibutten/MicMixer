@@ -20,14 +20,22 @@ public sealed class MusicPlaybackEngine : IDisposable
 {
     private const int InternalSampleRate = 48_000;
     private const int InternalChannels = 2;
+    private const double MixHighWatermarkSeconds = 0.4;
+    private const double MixTrimTargetSeconds = 0.15;
+    private const double MixBufferCapacitySeconds = 1d;
+    private const int MonitorOutputLatencyMilliseconds = 100;
+    private const float DefaultMusicVolume = 0.5f;
+    private const float DefaultMonitorVolume = 0.5f;
+    private const float MinimumVolume = 0f;
+    private const float MaximumVolume = 1f;
 
     // Bounded-latency policy for the monitor→mix fanout buffer: clock drift between
     // the monitor device (producer) and the routing device (consumer) slowly walks
     // the fill level; past the high watermark the oldest audio is dropped down to
     // the trim target instead of letting BufferedWaveProvider discard the newest.
     private static readonly int MixBytesPerSecond = InternalSampleRate * InternalChannels * sizeof(float);
-    private static readonly int MixHighWatermarkBytes = (int)(MixBytesPerSecond * 0.4);
-    private static readonly int MixTrimTargetBytes = (int)(MixBytesPerSecond * 0.15);
+    private static readonly int MixHighWatermarkBytes = (int)(MixBytesPerSecond * MixHighWatermarkSeconds);
+    private static readonly int MixTrimTargetBytes = (int)(MixBytesPerSecond * MixTrimTargetSeconds);
 
     private readonly object _syncRoot = new();
     private readonly BufferedWaveProvider _mixBuffer;
@@ -45,8 +53,8 @@ public sealed class MusicPlaybackEngine : IDisposable
     private string? _monitorDeviceId;
     private VolumeSampleProvider? _monitorVolumeProvider;
     private VolumeSampleProvider? _mixVolumeProvider;
-    private float _musicVolume = 0.5f;
-    private float _monitorVolume = 0.5f;
+    private float _musicVolume = DefaultMusicVolume;
+    private float _monitorVolume = DefaultMonitorVolume;
     private bool _monitorPumpActive;
     private int _monitorConfigVersion;
 
@@ -58,7 +66,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     {
         _mixBuffer = new BufferedWaveProvider(
             WaveFormat.CreateIeeeFloatWaveFormat(InternalSampleRate, InternalChannels),
-            TimeSpan.FromSeconds(1))
+            TimeSpan.FromSeconds(MixBufferCapacitySeconds))
         {
             DiscardOnBufferOverflow = true,
             ReadFully = false
@@ -113,7 +121,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         {
             lock (_syncRoot)
             {
-                _musicVolume = Math.Clamp(value, 0f, 1f);
+                _musicVolume = Math.Clamp(value, MinimumVolume, MaximumVolume);
                 if (_mixVolumeProvider != null)
                 {
                     _mixVolumeProvider.Volume = _musicVolume;
@@ -129,7 +137,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         {
             lock (_syncRoot)
             {
-                _monitorVolume = Math.Clamp(value, 0f, 1f);
+                _monitorVolume = Math.Clamp(value, MinimumVolume, MaximumVolume);
                 if (_monitorVolumeProvider != null)
                 {
                     _monitorVolumeProvider.Volume = _monitorVolume;
@@ -345,7 +353,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         var volumeProvider = new VolumeSampleProvider(head) { Volume = MonitorVolume };
         var normalized = FormatNormalizer.Normalize(volumeProvider, mixFormat);
 
-        var monitorOut = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
+        var monitorOut = new WasapiOut(device, AudioClientShareMode.Shared, true, MonitorOutputLatencyMilliseconds);
         monitorOut.PlaybackStopped += OnMonitorStopped;
         monitorOut.Init(new SampleToTargetWaveProvider(normalized, mixFormat));
 
