@@ -25,6 +25,8 @@ namespace MicMixer;
 public partial class MainWindow : Window, IMicMixerControlHost
 {
     private const int MaxReleaseDelayMilliseconds = 5_000;
+    private const float ExternalSignalActivationThreshold = 0.005f;
+    private static readonly TimeSpan ExternalSignalHoldDuration = TimeSpan.FromSeconds(2);
 
     private readonly AudioRouter _router;
     private readonly SecondaryOutputEngine _secondaryOutput;
@@ -42,6 +44,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _musicTimer;
     private readonly DispatcherTimer _delayedStartTimer;
     private readonly DispatcherTimer _settingsSaveTimer;
+    private readonly SignalActivityTracker _externalSignalActivity = new(
+        ExternalSignalActivationThreshold,
+        ExternalSignalHoldDuration);
+    private readonly Stopwatch _uptime = Stopwatch.StartNew();
     private List<TrackItem> _allTracks = new();
     private readonly Dictionary<string, TrackItem> _trackByPath = new(StringComparer.OrdinalIgnoreCase);
     private TrackItem? _playingTrackItem;
@@ -645,6 +651,18 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // Peak-hold with decay so short transients stay visible.
             float peak = capture.ReadAndResetPeak();
             CaptureLevelMeter.Value = Math.Min(1d, Math.Max(peak, CaptureLevelMeter.Value * 0.82));
+
+            // The raw capture arrives in short packets and music naturally has
+            // quiet gaps. Keep a time-based activity latch instead of deriving
+            // overlay visibility from the decaying presentation meter: crossing
+            // that meter's threshold used to repeatedly hide/reset the music
+            // ring, making external mode flash and appear to have a dead gauge.
+            if (_externalSignalActivity.Observe(peak, _uptime.Elapsed))
+            {
+                _overlayIndicator?.SetMusicState(ComputeOverlayMusicState());
+                PublishObsOverlayState();
+            }
+
             UpdateExternalCaptureStatusText();
         }
 
@@ -2654,7 +2672,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        bool hasAudioSignal = CaptureLevelMeter.Value > 0.005;
+        bool hasAudioSignal = _externalSignalActivity.IsActive;
         ExternalCaptureRouteState state = ExternalCaptureRoute.Evaluate(
             hasAudioSignal,
             _router.IsRouting,
@@ -2725,6 +2743,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _appCapture = null;
         _captureTarget = null;
         _lastExternalCaptureRouteState = null;
+        _externalSignalActivity.Reset();
 
         if (capture != null)
         {
@@ -3722,10 +3741,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return _music.IsPlaying;
         }
 
-        // The capture object exists as long as external mode runs, even while the
-        // app is paused or silent — require recently measured audio. The capture
-        // meter holds peaks with ~1 s decay, so this also bridges short gaps.
-        return _appCapture != null && CaptureLevelMeter.Value > 0.02;
+        // Process capture has no play/pause state. Use the stable activity latch
+        // fed from raw capture packets so normal gaps between beats do not hide
+        // and reset the music indicator.
+        return _appCapture != null && _externalSignalActivity.IsActive;
     }
 
     private void OnOverlayIndicatorChanged(object sender, RoutedEventArgs e)
