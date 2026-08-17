@@ -23,6 +23,9 @@ public sealed class ProcessLoopbackCapture : IDisposable
     private const double HighWatermarkSeconds = 0.35;
     private const double TrimTargetSeconds = 0.12;
 
+    // Upper bound on the WASAPI/COM activation handshake. Normally a few milliseconds.
+    private static readonly TimeSpan ActivationTimeout = TimeSpan.FromSeconds(5);
+
     private readonly int _processId;
     private readonly ManualResetEventSlim _stopRequested = new(false);
 
@@ -302,13 +305,43 @@ public sealed class ProcessLoopbackCapture : IDisposable
         while (Interlocked.CompareExchange(ref _peakBits, newBits, currentBits) != currentBits);
     }
 
+    /// <summary>
+    /// Activates a process-loopback client, bounded by <see cref="ActivationTimeout"/>.
+    /// The underlying COM activation is asynchronous and has no cancellation; if Windows
+    /// never completes it we must not block the caller forever (the UI keeps
+    /// "starting..." state until <see cref="Start"/> returns), so the wait is capped and
+    /// a late-arriving client is disposed by a continuation instead of being leaked.
+    /// </summary>
     private static AudioClient ActivateProcessLoopbackClient(int processId)
     {
-        return AudioClient.ActivateProcessLoopbackAsync(
-                (uint)processId,
-                ProcessLoopbackMode.IncludeTargetProcessTree)
-            .ConfigureAwait(false)
-            .GetAwaiter()
-            .GetResult();
+        Task<AudioClient> activation = AudioClient.ActivateProcessLoopbackAsync(
+            (uint)processId,
+            ProcessLoopbackMode.IncludeTargetProcessTree);
+
+        if (!activation.Wait(ActivationTimeout))
+        {
+            _ = activation.ContinueWith(
+                static t =>
+                {
+                    if (t.Status == TaskStatus.RanToCompletion)
+                    {
+                        t.Result.Dispose();
+                    }
+                    else
+                    {
+                        Log.Debug(t.Exception, "Late process loopback activation failed after timeout.");
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            throw new TimeoutException(
+                $"Windows did not complete process loopback activation for PID {processId} within {ActivationTimeout.TotalSeconds:0.#} s.");
+        }
+
+        // Unwraps AggregateException so callers see the original activation failure
+        // (the float -> PCM fallback and the UI message both inspect it).
+        return activation.GetAwaiter().GetResult();
     }
 }
