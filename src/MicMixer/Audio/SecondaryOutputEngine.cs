@@ -14,9 +14,12 @@ namespace MicMixer.Audio;
 ///
 /// The primary routing output remains the master clock: <see cref="AudioRouter"/>
 /// tees each finished secondary block into a bounded buffer via <see cref="Write"/>,
-/// and the secondary WasapiOut drains that buffer at its own pace (the same
-/// drift-absorption pattern as the music monitor fanout). The secondary device can
-/// never block or stop the primary chain — a failure here tears down only this engine.
+/// and the secondary WasapiOut drains that buffer at its own pace. The two devices
+/// run on independent clocks, so <see cref="SecondaryTapBranch"/> resamples by
+/// fractions of a percent to hold the buffer at its target instead of dropping or
+/// inserting audio — what plays out stays continuous for whatever captures it.
+/// The secondary device can never block or stop the primary chain — a failure here
+/// tears down only this engine.
 /// </summary>
 public sealed class SecondaryOutputEngine : IDisposable
 {

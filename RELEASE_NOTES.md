@@ -2,7 +2,10 @@
 
 <!-- Update this list together with user-visible changes under src/. -->
 
-- The music download field now accepts only links to a single video. Pasting a
-  YouTube search, playlist, or channel link previously started a download of
-  every video behind it; such a link is now refused with an explanation instead.
-  A video link that carries a mix or radio list downloads just that one video.
+- The secondary output now absorbs clock drift by resampling instead of dropping
+  or inserting audio. The two devices it sits between run on independent clocks,
+  and the old correction — dumping the oldest audio or holding silence whenever
+  they had drifted far enough apart — put a break in the stream that recording and
+  streaming software compensated for by adding up to a second of audio buffering.
+  Playback now runs a fraction of a percent fast or slow to hold the level steady,
+  so what comes out stays continuous.
