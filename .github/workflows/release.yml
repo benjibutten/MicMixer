@@ -199,8 +199,7 @@ jobs:
           Code signing: ${{ steps.codesign.outputs.status }}
           Code signing policy: https://benjibutten.github.io/MicMixer/code-signing-policy.html
 
-          SignPath Foundation approval and signing integration are pending. The
-          code-signing status above is authoritative for this release.
+          The code-signing status above is authoritative for this release.
 
           For a manual ZIP installation, download the asset below and extract it over
           your existing MicMixer folder, then run MicMixer.exe. Keeping the same install
