@@ -51,6 +51,16 @@ public static partial class DownloadUrlValidator
             : DownloadUrlCheck.Reject(DescribeRejection(uri, segments));
     }
 
+    /// <summary>Returns whether the URL targets YouTube or one of its supported subdomains.</summary>
+    public static bool IsYouTubeUrl(string? text)
+    {
+        string trimmed = (text ?? string.Empty).Trim();
+
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && IsYouTubeHost(uri.Host);
+    }
+
     private static string? ExtractVideoId(Uri uri, string[] segments)
     {
         if (IsHost(uri.Host, "youtu.be"))

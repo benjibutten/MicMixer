@@ -3316,7 +3316,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
         try
         {
             var toolStatus = new Progress<string>(text => DownloadStatusText.Text = text);
-            await _toolBootstrapper.EnsureToolsAsync(toolStatus, CancellationToken.None);
+            await _toolBootstrapper.EnsureToolsAsync(
+                toolStatus,
+                CancellationToken.None,
+                requireJavaScriptRuntime: DownloadUrlValidator.IsYouTubeUrl(url));
 
             var progress = new Progress<DownloadProgress>(update =>
             {

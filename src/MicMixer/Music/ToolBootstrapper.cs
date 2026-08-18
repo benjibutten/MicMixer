@@ -7,8 +7,9 @@ using Serilog;
 namespace MicMixer.Music;
 
 /// <summary>
-/// Downloads yt-dlp and ffmpeg into a local tools folder on first use, so the
-/// user does not have to install anything themselves.
+/// Downloads yt-dlp and ffmpeg into a local tools folder on first use and, for
+/// YouTube downloads, adds a JavaScript runtime so the user does not have to
+/// install anything themselves.
 ///
 /// Versions are pinned and downloads are verified against known SHA-256 hashes,
 /// so the app behaves deterministically and a tampered download is rejected.
@@ -26,6 +27,14 @@ public sealed class ToolBootstrapper
     private const string FfmpegDownloadUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/" + FfmpegVersion + "/" + FfmpegArchiveName;
     private const string FfmpegArchiveSha256 = "aa8bd4e8365f673a3d4194dc51cb69e85365fcbaaed9bb497ca24a006573df3f";
 
+    // YouTube hides its media URLs behind a JavaScript challenge. yt-dlp can only solve
+    // that challenge when a JavaScript runtime is installed, and an unsolved challenge
+    // makes the transfer fail with HTTP 403. Deno is the runtime yt-dlp enables by default.
+    private const string DenoVersion = "v2.9.5";
+    private const string DenoArchiveName = "deno-x86_64-pc-windows-msvc.zip";
+    private const string DenoDownloadUrl = "https://github.com/denoland/deno/releases/download/" + DenoVersion + "/" + DenoArchiveName;
+    private const string DenoArchiveSha256 = "171efab55ac6b9881fd53ee4c20f8bf3bb1340ffc618483746909014db12216a";
+
     private static readonly HttpClient Http = CreateHttpClient();
 
     public string ToolsDirectory { get; } = Path.Combine(
@@ -37,16 +46,22 @@ public sealed class ToolBootstrapper
 
     public string FfmpegPath => Path.Combine(ToolsDirectory, "ffmpeg.exe");
 
+    public string DenoPath => Path.Combine(ToolsDirectory, "deno.exe");
+
     private string YtDlpVersionMarkerPath => Path.Combine(ToolsDirectory, "yt-dlp.version");
 
     private string FfmpegVersionMarkerPath => Path.Combine(ToolsDirectory, "ffmpeg.version");
 
-    public bool IsReady => IsToolInstalled(YtDlpPath, YtDlpVersionMarkerPath, YtDlpVersion)
-        && IsToolInstalled(FfmpegPath, FfmpegVersionMarkerPath, FfmpegVersion);
+    private string DenoVersionMarkerPath => Path.Combine(ToolsDirectory, "deno.version");
 
-    public async Task EnsureToolsAsync(IProgress<string>? status, CancellationToken cancellationToken)
+    public bool IsReady => AreToolsReady(requireJavaScriptRuntime: true);
+
+    public async Task EnsureToolsAsync(
+        IProgress<string>? status,
+        CancellationToken cancellationToken,
+        bool requireJavaScriptRuntime = true)
     {
-        if (IsReady)
+        if (AreToolsReady(requireJavaScriptRuntime))
         {
             return;
         }
@@ -63,27 +78,76 @@ public sealed class ToolBootstrapper
 
         if (!IsToolInstalled(FfmpegPath, FfmpegVersionMarkerPath, FfmpegVersion))
         {
-            Log.Information("Downloading ffmpeg {Version} to {Path}.", FfmpegVersion, FfmpegPath);
-            status?.Report("Downloading ffmpeg (~160 MB, one-time download)...");
-            string zipPath = Path.Combine(ToolsDirectory, "ffmpeg.zip.tmp");
+            await InstallArchivedToolAsync(
+                "ffmpeg",
+                FfmpegVersion,
+                FfmpegDownloadUrl,
+                FfmpegArchiveSha256,
+                FfmpegVersionMarkerPath,
+                "Downloading ffmpeg (~160 MB, one-time download)...",
+                requiredExecutable: "ffmpeg.exe",
+                optionalExecutables: ["ffprobe.exe"],
+                status,
+                cancellationToken);
+        }
 
+        if (requireJavaScriptRuntime
+            && !IsToolInstalled(DenoPath, DenoVersionMarkerPath, DenoVersion))
+        {
+            await InstallArchivedToolAsync(
+                "deno",
+                DenoVersion,
+                DenoDownloadUrl,
+                DenoArchiveSha256,
+                DenoVersionMarkerPath,
+                "Downloading the JavaScript runtime (~40 MB, one-time download)...",
+                requiredExecutable: "deno.exe",
+                optionalExecutables: [],
+                status,
+                cancellationToken);
+        }
+    }
+
+    private bool AreToolsReady(bool requireJavaScriptRuntime)
+    {
+        return IsToolInstalled(YtDlpPath, YtDlpVersionMarkerPath, YtDlpVersion)
+            && IsToolInstalled(FfmpegPath, FfmpegVersionMarkerPath, FfmpegVersion)
+            && (!requireJavaScriptRuntime
+                || IsToolInstalled(DenoPath, DenoVersionMarkerPath, DenoVersion));
+    }
+
+    private async Task InstallArchivedToolAsync(
+        string toolName,
+        string version,
+        string downloadUrl,
+        string archiveSha256,
+        string versionMarkerPath,
+        string downloadStatus,
+        string requiredExecutable,
+        string[] optionalExecutables,
+        IProgress<string>? status,
+        CancellationToken cancellationToken)
+    {
+        Log.Information("Downloading {Tool} {Version} to {Path}.", toolName, version, ToolsDirectory);
+        status?.Report(downloadStatus);
+        string zipPath = Path.Combine(ToolsDirectory, toolName + ".zip.tmp");
+
+        try
+        {
+            await DownloadVerifiedFileAsync(downloadUrl, zipPath, archiveSha256, cancellationToken);
+            status?.Report($"Extracting {toolName}...");
+            ExtractExecutables(zipPath, requiredExecutable, optionalExecutables);
+            File.WriteAllText(versionMarkerPath, version);
+        }
+        finally
+        {
             try
             {
-                await DownloadVerifiedFileAsync(FfmpegDownloadUrl, zipPath, FfmpegArchiveSha256, cancellationToken);
-                status?.Report("Extracting ffmpeg...");
-                ExtractFfmpeg(zipPath);
-                File.WriteAllText(FfmpegVersionMarkerPath, FfmpegVersion);
+                File.Delete(zipPath);
             }
-            finally
+            catch
             {
-                try
-                {
-                    File.Delete(zipPath);
-                }
-                catch
-                {
-                    // Leftover temp file is harmless.
-                }
+                // Leftover temp file is harmless.
             }
         }
     }
@@ -147,20 +211,20 @@ public sealed class ToolBootstrapper
         File.Move(tempPath, destination, overwrite: true);
     }
 
-    private void ExtractFfmpeg(string zipPath)
+    private void ExtractExecutables(string zipPath, string requiredExecutable, string[] optionalExecutables)
     {
         using var archive = ZipFile.OpenRead(zipPath);
 
-        foreach (string executableName in new[] { "ffmpeg.exe", "ffprobe.exe" })
+        foreach (string executableName in optionalExecutables.Prepend(requiredExecutable))
         {
             var entry = archive.Entries.FirstOrDefault(e =>
                 e.Name.Equals(executableName, StringComparison.OrdinalIgnoreCase));
 
             if (entry == null)
             {
-                if (executableName == "ffmpeg.exe")
+                if (executableName == requiredExecutable)
                 {
-                    throw new InvalidOperationException("ffmpeg.exe was not found in the downloaded archive.");
+                    throw new InvalidOperationException($"{requiredExecutable} was not found in the downloaded archive.");
                 }
 
                 continue;
