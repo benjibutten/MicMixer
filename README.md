@@ -119,9 +119,7 @@ built-in updater. Development builds do not perform update checks.
 
 ## Code signing and privacy
 
-Current releases are unsigned. We have applied to
-[SignPath Foundation](https://signpath.org/); approval and signing integration
-are pending. Each release states its actual signing status.
+Current releases are unsigned. Each release states its actual signing status.
 
 See the [code signing policy](https://benjibutten.github.io/MicMixer/code-signing-policy.html)
 for the signing scope, project roles, and build provenance. MicMixer's automatic
