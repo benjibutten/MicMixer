@@ -84,7 +84,7 @@ The rest of this document is the detailed reference.
 - Optional: Voicemod or another voice modifier that exposes a microphone device.
 - Internet access for the first media download. MicMixer downloads `yt-dlp` and
   `ffmpeg` to its local application-data directory and verifies the files using
-  SHA-256.
+  SHA-256. YouTube downloads also install the `deno` JavaScript runtime there.
 
 Release archives are self-contained, so users normally do not need to install
 .NET separately.
@@ -184,9 +184,10 @@ Only links to a single video are accepted. Pasting a YouTube search, playlist, o
 channel link is refused with an explanation rather than downloading everything behind
 it, and a video link that carries a mix or radio list downloads just that one video.
 
-The first download installs local copies of `yt-dlp` and `ffmpeg`. The ffmpeg
-package is relatively large, so the first download may take longer. The tools are
-reused for subsequent downloads.
+The first download installs local copies of `yt-dlp` and `ffmpeg`. YouTube downloads
+also install `deno`, the JavaScript runtime `yt-dlp` uses to unscramble YouTube's media
+links. These packages are relatively large, so the first download may take longer.
+The tools are reused for subsequent downloads.
 
 The library supports search, playback controls, a queue, and multiple music folders.
 When multiple folders are configured:
@@ -328,7 +329,7 @@ Important files and directories:
 
 - `settings.json`: devices, hotkey, volumes, folders, window state, and other settings.
 - `Music\`: the default MP3 library folder.
-- `tools\`: downloaded `yt-dlp` and `ffmpeg` binaries.
+- `tools\`: downloaded `yt-dlp`, `ffmpeg`, and `deno` binaries.
 - `logs\micmixer-YYYYMMDD.log`: runtime logs.
 - `startup-timeline.log`: a basic startup timeline.
 

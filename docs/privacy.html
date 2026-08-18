@@ -49,7 +49,7 @@
   <ul>
     <li>audio-device choices, hotkeys, volumes, routing options, folders, and window state;</li>
     <li>the user's local music library and any media the user chooses to download;</li>
-    <li>downloaded copies of yt-dlp and FFmpeg and their version markers;</li>
+    <li>downloaded copies of yt-dlp, FFmpeg, and, for YouTube downloads, Deno and their version markers;</li>
     <li>the time of the most recent update check; and</li>
     <li>diagnostic logs, which may contain device names, local file paths, operational errors, and media URLs entered by the user.</li>
   </ul>
@@ -83,7 +83,8 @@
     </li>
     <li>
       When the user first requests a media download, MicMixer downloads pinned copies of yt-dlp
-      and FFmpeg from GitHub and verifies their SHA-256 hashes.
+      and FFmpeg from GitHub and verifies their SHA-256 hashes. For YouTube URLs, it also downloads
+      the pinned Deno JavaScript runtime and verifies its SHA-256 hash.
     </li>
     <li>
       When the user submits a media URL, yt-dlp communicates with the service identified by that

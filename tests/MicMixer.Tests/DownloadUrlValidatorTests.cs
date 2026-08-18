@@ -89,4 +89,23 @@ public sealed class DownloadUrlValidatorTests
 
         result.IsAllowed.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("https://www.youtube.com/watch?v=Rj8k5oync78")]
+    [InlineData("https://youtu.be/Rj8k5oync78")]
+    [InlineData("https://music.youtube.com/watch?v=Rj8k5oync78")]
+    public void IsYouTubeUrl_ShouldRecognizeYouTubeHosts(string url)
+    {
+        DownloadUrlValidator.IsYouTubeUrl(url).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("https://example.com/media/song")]
+    [InlineData("https://notyoutube.com/watch?v=Rj8k5oync78")]
+    [InlineData("ftp://www.youtube.com/watch?v=Rj8k5oync78")]
+    [InlineData(null)]
+    public void IsYouTubeUrl_ShouldRejectOtherOrInvalidUrls(string? url)
+    {
+        DownloadUrlValidator.IsYouTubeUrl(url).Should().BeFalse();
+    }
 }

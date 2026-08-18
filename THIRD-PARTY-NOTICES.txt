@@ -54,6 +54,12 @@ licenses of the libraries enabled in the selected build.
 Build source: https://github.com/yt-dlp/FFmpeg-Builds
 Upstream source and license information: https://ffmpeg.org/
 
+Deno
+License: MIT. The standalone release binary also contains third-party
+components under additional licenses; see the license information supplied by
+the Deno project.
+Source and license information: https://github.com/denoland/deno
+
 License texts
 -------------
 
