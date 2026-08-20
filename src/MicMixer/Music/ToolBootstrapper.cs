@@ -18,9 +18,9 @@ namespace MicMixer.Music;
 /// </summary>
 public sealed class ToolBootstrapper
 {
-    private const string YtDlpVersion = "2026.07.04";
+    private const string YtDlpVersion = "2026.08.19";
     private const string YtDlpDownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/" + YtDlpVersion + "/yt-dlp.exe";
-    private const string YtDlpSha256 = "52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8";
+    private const string YtDlpSha256 = "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a";
 
     private const string FfmpegVersion = "autobuild-2026-07-01-16-32";
     private const string FfmpegArchiveName = "ffmpeg-N-125385-ge2e889d9da-win64-gpl.zip";
