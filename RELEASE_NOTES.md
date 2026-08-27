@@ -23,3 +23,8 @@
 - Temporary: starting MicMixer with MICMIXER_PRIMARY_LOW_LATENCY=0 runs the cable
   output the way it did before this change, so the two can be compared by ear.
   This switch will be removed once the new path is confirmed on real hardware.
+
+- The music downloader was updated. MicMixer now installs yt-dlp 2026.08.19
+  instead of 2026.07.04, which keeps downloads working when a site changes how
+  its media is served. Existing installs replace the tool by themselves the next
+  time a download starts, so there is nothing to do by hand.
