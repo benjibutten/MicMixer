@@ -24,6 +24,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private const double MixTrimTargetSeconds = 0.15;
     private const double MixBufferCapacitySeconds = 1d;
     private const int MonitorOutputLatencyMilliseconds = 100;
+    private const int MixTrimLogThrottleMilliseconds = 5_000;
     private const float DefaultMusicVolume = 0.5f;
     private const float DefaultMonitorVolume = 0.5f;
     private const float MinimumVolume = 0f;
@@ -41,6 +42,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private readonly BufferedWaveProvider _mixBuffer;
     private readonly ISampleProvider _mixBufferReader;
     private byte[] _mixTrimBuffer = Array.Empty<byte>();
+    private long _nextMixTrimLogTicks;
 
     private AudioFileReader? _reader;
     private ISampleProvider? _playbackChain;
@@ -49,7 +51,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private bool _isExternalSource;
     private bool _disposed;
 
-    private WasapiOut? _monitorOut;
+    private WasapiPlayer? _monitorOut;
     private string? _monitorDeviceId;
     private VolumeSampleProvider? _monitorVolumeProvider;
     private VolumeSampleProvider? _mixVolumeProvider;
@@ -268,7 +270,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     public void ConfigureMonitor(string? deviceId)
     {
         int version;
-        WasapiOut? oldOut;
+        WasapiPlayer? oldOut;
 
         lock (_syncRoot)
         {
@@ -316,7 +318,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        WasapiOut? oldOut;
+        WasapiPlayer? oldOut;
         lock (_syncRoot)
         {
             _monitorConfigVersion++;
@@ -347,30 +349,59 @@ public sealed class MusicPlaybackEngine : IDisposable
     {
         using var enumerator = new MMDeviceEnumerator();
         using var device = enumerator.GetDevice(deviceId);
-        var mixFormat = device.AudioClient.MixFormat;
-
-        var head = new MonitorHeadProvider(this);
-        var volumeProvider = new VolumeSampleProvider(head) { Volume = MonitorVolume };
-        var normalized = FormatNormalizer.Normalize(volumeProvider, mixFormat);
-
-        var monitorOut = new WasapiOut(device, AudioClientShareMode.Shared, true, MonitorOutputLatencyMilliseconds);
+        var monitorOut = new WasapiPlayerBuilder()
+            .WithDevice(device)
+            .WithSharedMode()
+            .WithLatency(MonitorOutputLatencyMilliseconds)
+            .WithEventSync()
+            .WithLowLatency(required: false)
+            .WithMmcssThreadPriority("Pro Audio")
+            .Build();
         monitorOut.PlaybackStopped += OnMonitorStopped;
-        monitorOut.Init(new SampleToTargetWaveProvider(normalized, mixFormat));
-
-        lock (_syncRoot)
+        try
         {
-            if (version == _monitorConfigVersion)
-            {
-                _monitorOut = monitorOut;
-                _monitorVolumeProvider = volumeProvider;
-                Volatile.Write(ref _monitorPumpActive, true);
+            var mixFormat = monitorOut.DeviceMixFormat;
+            var head = new MonitorHeadProvider(this);
+            var volumeProvider = new VolumeSampleProvider(head) { Volume = MonitorVolume };
+            var normalized = FormatNormalizer.Normalize(volumeProvider, mixFormat);
 
-                // Play only signals the render thread; it does not block on it,
-                // so it is safe to call while holding the lock — and doing so
-                // guarantees no newer configuration can detach an unstarted out.
-                monitorOut.Play();
-                return;
+            monitorOut.Init(new SampleToTargetWaveProvider(normalized, mixFormat));
+            Log.Debug(
+                "Music monitor initialized. Device={Device} LowLatency={LowLatency} LatencyMs={LatencyMs} FallbackReason={FallbackReason}",
+                monitorOut.DeviceFriendlyName,
+                monitorOut.LowLatencyActive,
+                monitorOut.LatencyMilliseconds,
+                monitorOut.LowLatencyUnavailableReason);
+
+            lock (_syncRoot)
+            {
+                if (version == _monitorConfigVersion)
+                {
+                    _monitorOut = monitorOut;
+                    _monitorVolumeProvider = volumeProvider;
+                    Volatile.Write(ref _monitorPumpActive, true);
+
+                    // Play only signals the render thread; it does not block on it,
+                    // so it is safe to call while holding the lock — and doing so
+                    // guarantees no newer configuration can detach an unstarted out.
+                    monitorOut.Play();
+                    return;
+                }
             }
+        }
+        catch
+        {
+            lock (_syncRoot)
+            {
+                if (ReferenceEquals(_monitorOut, monitorOut))
+                {
+                    DetachMonitorLocked();
+                }
+            }
+
+            monitorOut.PlaybackStopped -= OnMonitorStopped;
+            monitorOut.Dispose();
+            throw;
         }
 
         // A newer configuration superseded this start while it was being built.
@@ -378,7 +409,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         monitorOut.Dispose();
     }
 
-    private WasapiOut? DetachMonitorLocked()
+    private WasapiPlayer? DetachMonitorLocked()
     {
         var oldOut = _monitorOut;
         _monitorOut = null;
@@ -387,7 +418,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         return oldOut;
     }
 
-    private void DisposeMonitorOut(WasapiOut? monitorOut)
+    private void DisposeMonitorOut(WasapiPlayer? monitorOut)
     {
         if (monitorOut == null)
         {
@@ -413,12 +444,12 @@ public sealed class MusicPlaybackEngine : IDisposable
 
     private void OnMonitorStopped(object? sender, StoppedEventArgs e)
     {
-        if (sender is not WasapiOut stoppedOutput)
+        if (sender is not WasapiPlayer stoppedOutput)
         {
             return;
         }
 
-        WasapiOut? oldOut;
+        WasapiPlayer? oldOut;
         lock (_syncRoot)
         {
             // Ignore an event that was already queued when an older monitor was
@@ -534,7 +565,17 @@ public sealed class MusicPlaybackEngine : IDisposable
                 }
 
                 _mixBuffer.Read(_mixTrimBuffer.AsSpan(0, discard));
-                Log.Debug("Mix buffer trimmed {DiscardedBytes} bytes to bound music latency.", discard);
+
+                // Throttled like the secondary branch's trim log: with a monitor
+                // running and nothing draining the mix side, this trims every few
+                // hundred milliseconds indefinitely. The file sink is shared, so
+                // each line is a synchronous flush — on the monitor render thread.
+                long now = Environment.TickCount64;
+                if (now >= _nextMixTrimLogTicks)
+                {
+                    _nextMixTrimLogTicks = now + MixTrimLogThrottleMilliseconds;
+                    Log.Debug("Mix buffer trimmed {DiscardedBytes} bytes to bound music latency.", discard);
+                }
             }
         }
 
@@ -555,7 +596,7 @@ public sealed class MusicPlaybackEngine : IDisposable
 
     /// <summary>
     /// Head of the monitor pipeline. Never returns less than requested so the
-    /// monitor WasapiOut keeps running (silence between/after tracks).
+    /// monitor WasapiPlayer keeps running (silence between/after tracks).
     /// </summary>
     private sealed class MonitorHeadProvider : ISampleProvider
     {

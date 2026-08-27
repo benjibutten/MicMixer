@@ -8,12 +8,24 @@ namespace MicMixer.Audio;
 public sealed class AudioRouter : IDisposable
 {
     private const int PrimaryOutputLatencyMilliseconds = 50;
+    private const string PrimaryLowLatencyEnvironmentVariable = "MICMIXER_PRIMARY_LOW_LATENCY";
     private const int InputBufferDurationMilliseconds = 200;
     private const int MeteringUpdatesPerSecond = 20;
     private const int MinimumChannelCount = 1;
 
+    /// <summary>
+    /// TEMPORARY. Whether the primary output asks for IAudioClient3 low latency and
+    /// MMCSS priority — the tuning the secondary and monitor outputs already ship.
+    /// Set MICMIXER_PRIMARY_LOW_LATENCY=0 to start the cable output the way it ran
+    /// before the WasapiPlayer migration (50 ms, no MMCSS) so the two can be
+    /// compared by ear on real hardware. Remove this once the low-latency primary
+    /// has been confirmed in the field.
+    /// </summary>
+    private static readonly bool PrimaryLowLatencyRequested =
+        Environment.GetEnvironmentVariable(PrimaryLowLatencyEnvironmentVariable) is not ("0" or "false" or "FALSE" or "False");
+
     private readonly object _syncRoot = new();
-    private WasapiOut? _player;
+    private WasapiPlayer? _player;
     private InputRoute? _normalRoute;
     private InputRoute? _moddedRoute;
     private bool _useModdedInput;
@@ -70,11 +82,32 @@ public sealed class AudioRouter : IDisposable
 
         InputRoute? normalRoute = null;
         InputRoute? moddedRoute = null;
-        WasapiOut? player = null;
+        WasapiPlayer? player = null;
 
         try
         {
-            var targetFormat = outputDevice.AudioClient.MixFormat;
+            // Built before the graph: everything downstream is normalized to the
+            // format this output negotiated, so it is read back from the player
+            // rather than probed separately and assumed to match.
+            var builder = new WasapiPlayerBuilder()
+                .WithDevice(outputDevice)
+                .WithSharedMode()
+                .WithLatency(PrimaryOutputLatencyMilliseconds)
+                .WithEventSync();
+
+            if (PrimaryLowLatencyRequested)
+            {
+                // required: false — a device that cannot do IAudioClient3 falls
+                // back to plain shared mode instead of failing the whole start.
+                builder = builder
+                    .WithLowLatency(required: false)
+                    .WithMmcssThreadPriority("Pro Audio");
+            }
+
+            player = builder.Build();
+            player.PlaybackStopped += OnPlaybackStopped;
+
+            var targetFormat = player.DeviceMixFormat;
 
             normalRoute = new InputRoute(normalInputDevice, targetFormat, RaiseError);
             moddedRoute = moddedInputDevice != null
@@ -123,9 +156,18 @@ public sealed class AudioRouter : IDisposable
             // so the overlay meter reads empty while nothing is sent.
             source = new OutputPeakTapProvider(source, this);
 
-            player = new WasapiOut(outputDevice, AudioClientShareMode.Shared, true, PrimaryOutputLatencyMilliseconds);
-            player.PlaybackStopped += OnPlaybackStopped;
+            // This output is the master clock for the whole chain, including the
+            // secondary tap, so what it negotiated is the latency budget every
+            // other branch is measured against. Logged in the same shape as the
+            // capture and render branches so the budget reads end to end.
             player.Init(new SampleToTargetWaveProvider(source, targetFormat));
+            Log.Debug(
+                "Primary output initialized. Device={Device} LowLatency={LowLatency} LatencyMs={LatencyMs} FallbackReason={FallbackReason}",
+                player.DeviceFriendlyName,
+                player.LowLatencyActive,
+                player.LatencyMilliseconds,
+                player.LowLatencyUnavailableReason
+                    ?? (PrimaryLowLatencyRequested ? null : "low latency opted out via " + PrimaryLowLatencyEnvironmentVariable));
 
             normalRoute.Start();
             moddedRoute?.Start();
@@ -297,7 +339,7 @@ public sealed class AudioRouter : IDisposable
 
     public void Stop()
     {
-        WasapiOut? player;
+        WasapiPlayer? player;
         InputRoute? normalRoute;
         InputRoute? moddedRoute;
 
@@ -354,7 +396,7 @@ public sealed class AudioRouter : IDisposable
 
     private void OnPlaybackStopped(object? sender, StoppedEventArgs e)
     {
-        if (sender is not WasapiOut stoppedPlayer)
+        if (sender is not WasapiPlayer stoppedPlayer)
         {
             return;
         }
@@ -449,7 +491,7 @@ public sealed class AudioRouter : IDisposable
     private sealed class InputRoute : IDisposable
     {
         private readonly Action<string> _errorHandler;
-        private readonly WasapiCapture _capture;
+        private readonly WasapiRecorder _capture;
         private readonly BufferedWaveProvider _buffer;
         private readonly MeteringSampleProvider _meter;
         private float _currentPeak;
@@ -458,7 +500,13 @@ public sealed class AudioRouter : IDisposable
         public InputRoute(MMDevice device, WaveFormat targetFormat, Action<string> errorHandler)
         {
             _errorHandler = errorHandler;
-            _capture = new WasapiCapture(device);
+            _capture = new WasapiRecorderBuilder()
+                .WithDevice(device)
+                .WithSharedMode()
+                .WithEventSync()
+                .WithLowLatency(required: false)
+                .WithMmcssThreadPriority("Pro Audio")
+                .Build();
             _buffer = new BufferedWaveProvider(_capture.WaveFormat, TimeSpan.FromMilliseconds(InputBufferDurationMilliseconds))
             {
                 DiscardOnBufferOverflow = true,
@@ -483,6 +531,12 @@ public sealed class AudioRouter : IDisposable
         public void Start()
         {
             _capture.StartRecording();
+            Log.Debug(
+                "Audio capture started. Device={Device} LowLatency={LowLatency} LatencyMs={LatencyMs} FallbackReason={FallbackReason}",
+                _capture.DeviceFriendlyName,
+                _capture.LowLatencyActive,
+                _capture.LatencyMilliseconds,
+                _capture.LowLatencyUnavailableReason);
         }
 
         public int Read(Span<float> buffer)
@@ -527,9 +581,13 @@ public sealed class AudioRouter : IDisposable
             Volatile.Write(ref _currentPeak, 0f);
         }
 
-        private void OnDataAvailable(object? sender, WaveInEventArgs e)
+        private void OnDataAvailable(
+            ReadOnlySpan<byte> buffer,
+            AudioClientBufferFlags flags,
+            long devicePosition,
+            long qpcPosition)
         {
-            _buffer.AddSamples(e.Buffer, 0, e.BytesRecorded);
+            _buffer.AddSamples(buffer);
         }
 
         private void OnRecordingStopped(object? sender, StoppedEventArgs e)

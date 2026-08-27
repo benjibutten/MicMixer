@@ -90,7 +90,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
         _smoothedFillBytes = _trimTargetBytes;
 
         // Preallocated so the steady-state write path never allocates on the
-        // primary audio thread: a WasapiOut block is well under 250 ms, and a
+        // primary audio thread: a WasapiPlayer block is well under 250 ms, and a
         // trim discards at most highWatermark - trimTarget bytes.
         _writeScratch = new byte[(int)(bytesPerSecond * WriteScratchDurationSeconds)];
         _trimScratch = new byte[_highWatermarkBytes - _trimTargetBytes];
@@ -416,7 +416,7 @@ internal sealed class SecondaryTapBranch : ISampleProvider
     }
 
     /// <summary>
-    /// Always fills the requested count so the secondary WasapiOut keeps running
+    /// Always fills the requested count so the secondary WasapiPlayer keeps running
     /// on underflow. After a starvation it holds silence until the producer has
     /// rebuilt the cushion, converting a stall into one rare re-buffer. Steady
     /// clock drift no longer reaches this stage — the resampler absorbs it.

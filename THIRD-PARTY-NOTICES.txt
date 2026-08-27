@@ -18,10 +18,11 @@ Copyright (c) Mark Heath and contributors
 License: MIT
 Source: https://github.com/naudio/NAudio
 
-Serilog 4.4.0 and Serilog.Sinks.File 7.0.0
+Serilog 4.4.0, Serilog.Sinks.Async 2.1.0 and Serilog.Sinks.File 7.0.0
 Copyright (c) Serilog Contributors
 License: Apache License 2.0
 Sources: https://github.com/serilog/serilog
+         https://github.com/serilog/serilog-sinks-async
          https://github.com/serilog/serilog-sinks-file
 
 Material Design Icons
