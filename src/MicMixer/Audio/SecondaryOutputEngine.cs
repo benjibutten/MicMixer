@@ -14,7 +14,7 @@ namespace MicMixer.Audio;
 ///
 /// The primary routing output remains the master clock: <see cref="AudioRouter"/>
 /// tees each finished secondary block into a bounded buffer via <see cref="Write"/>,
-/// and the secondary WasapiOut drains that buffer at its own pace. The two devices
+/// and the secondary WasapiPlayer drains that buffer at its own pace. The two devices
 /// run on independent clocks, so <see cref="SecondaryTapBranch"/> resamples by
 /// fractions of a percent to hold the buffer at its target instead of periodically
 /// dropping or inserting audio — what plays out stays continuous for whatever
@@ -32,7 +32,7 @@ public sealed class SecondaryOutputEngine : IDisposable
 
     private readonly object _syncRoot = new();
     private volatile SecondaryTapBranch? _branch;
-    private WasapiOut? _out;
+    private WasapiPlayer? _out;
     private bool _enabled;
     private string? _deviceId;
     private float _volume = DefaultVolume;
@@ -127,7 +127,7 @@ public sealed class SecondaryOutputEngine : IDisposable
     /// Copies one finished secondary-mix block from the primary audio thread into
     /// the bounded fanout buffer. Non-blocking, and a no-op while the secondary
     /// output is stopped. A failure here must never travel up the primary chain's
-    /// Read into the cable's WasapiOut: the branch is detached immediately and
+    /// Read into the cable's WasapiPlayer: the branch is detached immediately and
     /// torn down off-thread.
     /// </summary>
     public void Write(float[] buffer, int offset, int count)
@@ -144,7 +144,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         }
         catch (Exception ex)
         {
-            WasapiOut? failedOutput;
+            WasapiPlayer? failedOutput;
 
             lock (_syncRoot)
             {
@@ -171,7 +171,7 @@ public sealed class SecondaryOutputEngine : IDisposable
 
     public void Stop()
     {
-        WasapiOut? output;
+        WasapiPlayer? output;
 
         lock (_syncRoot)
         {
@@ -201,20 +201,34 @@ public sealed class SecondaryOutputEngine : IDisposable
 
         using var enumerator = new MMDeviceEnumerator();
         using var device = enumerator.GetDevice(deviceId);
-        var mixFormat = device.AudioClient.MixFormat;
 
-        // No gate here: the router applies the secondary's mic and music gates
-        // (driven by IgnorePushToTalk) before each Write, so the branch just
-        // buffers, scales and plays the finished mix.
-        var branch = new SecondaryTapBranch(sourceFormat);
-        var normalized = FormatNormalizer.Normalize(branch, mixFormat);
-
-        var output = new WasapiOut(device, AudioClientShareMode.Shared, true, OutputLatencyMilliseconds);
+        var output = new WasapiPlayerBuilder()
+            .WithDevice(device)
+            .WithSharedMode()
+            .WithLatency(OutputLatencyMilliseconds)
+            .WithEventSync()
+            .WithLowLatency(required: false)
+            .WithMmcssThreadPriority("Pro Audio")
+            .Build();
         output.PlaybackStopped += OnPlaybackStopped;
 
         try
         {
+            var mixFormat = output.DeviceMixFormat;
+
+            // No gate here: the router applies the secondary's mic and music gates
+            // (driven by IgnorePushToTalk) before each Write, so the branch just
+            // buffers, scales and plays the finished mix.
+            var branch = new SecondaryTapBranch(sourceFormat);
+            var normalized = FormatNormalizer.Normalize(branch, mixFormat);
+
             output.Init(new SampleToTargetWaveProvider(normalized, mixFormat));
+            Log.Debug(
+                "Secondary output initialized. Device={Device} LowLatency={LowLatency} LatencyMs={LatencyMs} FallbackReason={FallbackReason}",
+                output.DeviceFriendlyName,
+                output.LowLatencyActive,
+                output.LatencyMilliseconds,
+                output.LowLatencyUnavailableReason);
 
             lock (_syncRoot)
             {
@@ -249,7 +263,7 @@ public sealed class SecondaryOutputEngine : IDisposable
         // that still arrives is an unexpected stop. Tear down even without an
         // exception — otherwise IsRunning stays true, the UI keeps showing
         // "Active", and the primary thread keeps filling a buffer nobody drains.
-        if (sender is not WasapiOut stoppedOutput)
+        if (sender is not WasapiPlayer stoppedOutput)
         {
             return;
         }
@@ -292,7 +306,7 @@ public sealed class SecondaryOutputEngine : IDisposable
     /// Best-effort teardown. A broken secondary device must never make Stop(),
     /// the next routing start, or the primary cable path fail.
     /// </summary>
-    private void DisposeOutput(WasapiOut? output)
+    private void DisposeOutput(WasapiPlayer? output)
     {
         if (output == null)
         {
