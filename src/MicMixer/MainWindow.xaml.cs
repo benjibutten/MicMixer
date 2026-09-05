@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using System.IO;
 using MicMixer.Audio;
 using MicMixer.Diagnostics;
+using MicMixer.Dsp;
 using MicMixer.Input;
 using MicMixer.Music;
 using MicMixer.Overlay;
@@ -167,6 +168,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _trayIcon = CreateTrayIcon();
         DryInputCombo.IsEnabled = false;
         ModdedInputCombo.IsEnabled = false;
+        ExternalModdedInputCombo.IsEnabled = false;
         OutputDeviceCombo.IsEnabled = false;
         SecondaryOutputCombo.IsEnabled = false;
 
@@ -175,6 +177,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
         SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
         SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
+        LoadVoiceProfiles();
+        LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
+        ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
+        _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
+        ProcessedVoiceVolumePercentText.Text = $"{Math.Round(_settings.ProcessedVoiceVolume * 100)} %";
         _isUpdatingUi = false;
         UpdateSecondaryVolumePercentText();
         ApplySecondaryOutputConfig();
@@ -203,7 +210,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             save: false, announce: false);
         _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
-        ApplyModdedMicUiState(_settings.SkipModdedMic);
+        ApplyModdedMicUiState(_settings.ModifiedVoiceMode);
 
         // Migrate the legacy single-folder setting into the folder list.
         var storedFolders = _settings.MusicFolderPaths is { Count: > 0 } paths
@@ -297,6 +304,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
+            ExternalModdedInputCombo.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
             SecondaryOutputCombo.IsEnabled = false;
         }
@@ -304,7 +312,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         UpdateStatusText();
 
         var selectedDryInput = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        var selectedModdedInput = (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
+        var selectedModifiedVoiceMode = (ModdedInputCombo.SelectedItem as ModifiedVoiceOption)?.Mode;
+        var selectedModdedInput = (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
         var selectedOutput = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
         var selectedMonitor = (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
         var selectedSecondary = (SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.Id;
@@ -318,11 +327,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
             try
             {
-                var moddedItems = new List<AudioDeviceOption>(inputs.Count + 1) { NoModdedMicOption };
-                moddedItems.AddRange(inputs);
-
                 DryInputCombo.ItemsSource = inputs;
-                ModdedInputCombo.ItemsSource = moddedItems;
+                ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
+                ExternalModdedInputCombo.ItemsSource = inputs;
                 OutputDeviceCombo.ItemsSource = outputs;
 
                 var drySelection = SelectInputDevice(
@@ -332,33 +339,23 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
                 DryInputCombo.SelectedItem = drySelection;
 
-                string? preferredModdedId = selectedModdedInput
-                    ?? (_settings.SkipModdedMic ? NoModdedMicOption.Id : _settings.ModdedInputDeviceId);
+                ModifiedVoiceMode preferredMode = selectedModifiedVoiceMode ?? _settings.ModifiedVoiceMode;
+                ModdedInputCombo.SelectedItem = ModifiedVoiceOptions.First(option => option.Mode == preferredMode);
 
-                AudioDeviceOption? moddedSelection;
+                AudioDeviceOption? moddedSelection = SelectInputDevice(
+                    inputs,
+                    selectedModdedInput ?? _settings.ModdedInputDeviceId,
+                    LooksLikeVoiceModDevice,
+                    drySelection?.Id);
 
-                if (preferredModdedId == NoModdedMicOption.Id)
+                // The external mode keeps the legacy physical/Voicemod device choice,
+                // but never silently aliases it to the normal microphone.
+                if (moddedSelection?.Id == drySelection?.Id)
                 {
-                    moddedSelection = NoModdedMicOption;
-                }
-                else
-                {
-                    moddedSelection = SelectInputDevice(
-                        inputs,
-                        preferredModdedId,
-                        LooksLikeVoiceModDevice,
-                        drySelection?.Id);
-
-                    // Never auto-pick the same device as the normal mic — fall back to
-                    // "no modded mic" when there is no distinct second input.
-                    if (moddedSelection == null || moddedSelection.Id == drySelection?.Id)
-                    {
-                        moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection?.Id)
-                            ?? NoModdedMicOption;
-                    }
+                    moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection?.Id);
                 }
 
-                ModdedInputCombo.SelectedItem = moddedSelection;
+                ExternalModdedInputCombo.SelectedItem = moddedSelection;
 
                 OutputDeviceCombo.SelectedItem = SelectOutputDevice(outputs, selectedOutput ?? _settings.OutputDeviceId);
 
@@ -386,6 +383,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             {
                 DryInputCombo.IsEnabled = true;
                 ModdedInputCombo.IsEnabled = true;
+                ExternalModdedInputCombo.IsEnabled = true;
                 OutputDeviceCombo.IsEnabled = true;
                 SecondaryOutputCombo.IsEnabled = true;
             }
@@ -464,26 +462,29 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        bool skipModded = IsModdedMicSkipped;
-        var moddedInput = ModdedInputCombo.SelectedItem as AudioDeviceOption;
+        ModifiedVoiceMode modifiedVoiceMode = CurrentModifiedVoiceMode;
+        bool skipModded = modifiedVoiceMode == ModifiedVoiceMode.None;
+        var moddedInput = ExternalModdedInputCombo.SelectedItem as AudioDeviceOption;
 
         if (DryInputCombo.SelectedItem is not AudioDeviceOption dryInput ||
             OutputDeviceCombo.SelectedItem is not AudioDeviceOption output ||
-            (!skipModded && moddedInput == null))
+            (modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone && moddedInput == null))
         {
-            StatusText.Text = skipModded
-                ? "Select a normal mic and virtual cable."
-                : "Select a normal mic, modded mic, and virtual cable.";
+            StatusText.Text = modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone
+                ? "Select a normal mic, external modified mic, and virtual cable."
+                : "Select a normal mic and virtual cable.";
             return;
         }
 
         // Same device for both mics works technically (two shared-mode captures),
         // the hotkey just switches between two identical signals. Warn instead of
         // hard-blocking — a silent refusal looks like a dead button.
-        if (!skipModded && dryInput.Id == moddedInput!.Id && _acknowledgedSameMicId != dryInput.Id)
+        if (modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone
+            && dryInput.Id == moddedInput!.Id
+            && _acknowledgedSameMicId != dryInput.Id)
         {
             _acknowledgedSameMicId = dryInput.Id;
-            StatusText.Text = "The normal and modded mic are the same device — the hotkey will make no audible difference. Did you mean 'No modded mic'? Click Enable again to start anyway.";
+            StatusText.Text = "The normal and external modified mic are the same device — the hotkey will make no audible difference. Did you mean 'None'? Click Enable again to start anyway.";
             return;
         }
 
@@ -516,6 +517,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ApplySecondaryOutputConfig();
 
         _isStartingRouting = true;
+        VoiceProfileCombo.IsEnabled = false;
         ToggleBtn.IsEnabled = false;
         StatusText.Text = "Starting routing...";
 
@@ -523,7 +525,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         try
         {
-            await Task.Run(() => StartRoutingByDeviceId(dryInput.Id, skipModded ? null : moddedInput!.Id, output.Id, pushToTalk));
+            string? externalInputId = modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone ? moddedInput!.Id : null;
+            bool smootherProcessing = LongerAnalysisWindowCheck.IsChecked == true;
+            await Task.Run(() => StartRoutingByDeviceId(
+                dryInput.Id,
+                externalInputId,
+                output.Id,
+                modifiedVoiceMode,
+                smootherProcessing,
+                pushToTalk));
         }
         catch (Exception ex)
         {
@@ -534,6 +544,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         finally
         {
             _isStartingRouting = false;
+            VoiceProfileCombo.IsEnabled = !_router.IsRouting;
             ToggleBtn.IsEnabled = true;
         }
 
@@ -549,13 +560,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             DryInputCombo.IsEnabled = false;
             ModdedInputCombo.IsEnabled = false;
+            ExternalModdedInputCombo.IsEnabled = false;
+            LongerAnalysisWindowCheck.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
             SecondaryOutputEnabledCheck.IsEnabled = false;
             SecondaryOutputCombo.IsEnabled = false;
             UpdateSecondaryOutputStatus();
             _settings.NormalInputDeviceId = dryInput.Id;
+            _settings.ModifiedVoiceMode = modifiedVoiceMode;
             _settings.SkipModdedMic = skipModded;
-            if (!skipModded)
+            _settings.LongerAnalysisWindow = LongerAnalysisWindowCheck.IsChecked == true;
+            if (modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone)
             {
                 _settings.ModdedInputDeviceId = moddedInput!.Id;
             }
@@ -571,7 +586,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
     }
 
-    private void StartRoutingByDeviceId(string dryInputId, string? moddedInputId, string outputId, bool startMuted)
+    private void StartRoutingByDeviceId(
+        string dryInputId,
+        string? moddedInputId,
+        string outputId,
+        ModifiedVoiceMode modifiedVoiceMode,
+        bool smootherProcessing,
+        bool startMuted)
     {
         using var enumerator = new MMDeviceEnumerator();
         using var dryInput = enumerator.GetDevice(dryInputId);
@@ -581,7 +602,25 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _router.SetUseModdedInput(false);
         // Push-to-talk must start silent; the gate opens when the hotkey is pressed.
         _router.SetOutputGateOpen(!startMuted);
-        _router.Start(dryInput, moddedInput, output);
+        // Resolve an immutable snapshot before routing. Restart factories never read files.
+        VoiceDspParameters? parameters = modifiedVoiceMode == ModifiedVoiceMode.LocalProfile
+            ? new VoiceProfileStore().Load(_settings.SelectedVoiceProfileId).Resolve(smootherProcessing)
+            : null;
+        Func<int, int, IVoiceProcessor>? processorFactory = modifiedVoiceMode == ModifiedVoiceMode.LocalProfile
+            ? (sampleRate, channels) => CreateLocalProfileProcessor(sampleRate, channels, parameters!)
+            : null;
+        _router.Start(dryInput, moddedInput, output, processorFactory);
+    }
+
+    private static IVoiceProcessor CreateLocalProfileProcessor(int sampleRate, int channels, VoiceDspParameters parameters)
+    {
+        var processor = new ProfileVoiceProcessor(sampleRate, channels, parameters);
+        Log.Information(
+            "Local voice profile processor started/restarted. AnalysisModeMs={AnalysisModeMs} AlgorithmicLatencySamples={LatencySamples} AlgorithmicLatencyMs={LatencyMs:F2}",
+            processor.Preset.BlockMilliseconds,
+            processor.LatencySamples,
+            processor.LatencySamples * 1_000d / sampleRate);
+        return processor;
     }
 
     private void StopRouting()
@@ -599,6 +638,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             DryInputCombo.IsEnabled = true;
             ModdedInputCombo.IsEnabled = true;
+            ExternalModdedInputCombo.IsEnabled = true;
+            VoiceProfileCombo.IsEnabled = CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile;
+            LongerAnalysisWindowCheck.IsEnabled = true;
             OutputDeviceCombo.IsEnabled = true;
             SecondaryOutputCombo.IsEnabled = true;
         }
@@ -699,10 +741,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _settings.NormalInputDeviceId = dryInput.Id;
         }
         else if (ReferenceEquals(sender, ModdedInputCombo)
-            && ModdedInputCombo.SelectedItem is AudioDeviceOption moddedInput)
+            && ModdedInputCombo.SelectedItem is ModifiedVoiceOption modifiedVoice)
         {
-            _settings.SkipModdedMic = moddedInput.Id == NoModdedMicOption.Id;
-            if (!_settings.SkipModdedMic)
+            _settings.ModifiedVoiceMode = modifiedVoice.Mode;
+            _settings.SkipModdedMic = modifiedVoice.Mode == ModifiedVoiceMode.None;
+        }
+        else if (ReferenceEquals(sender, ExternalModdedInputCombo)
+            && ExternalModdedInputCombo.SelectedItem is AudioDeviceOption moddedInput)
+        {
+            if (CurrentModifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone)
             {
                 _settings.ModdedInputDeviceId = moddedInput.Id;
             }
@@ -862,25 +909,103 @@ public partial class MainWindow : Window, IMicMixerControlHost
         });
     }
 
-    /// <summary>List entry in the modded-mic combo that disables the modded route entirely.</summary>
-    private static readonly AudioDeviceOption NoModdedMicOption = new("__no_modded_mic__", "No modded mic");
+    private static readonly ModifiedVoiceOption[] ModifiedVoiceOptions =
+    [
+        new(ModifiedVoiceMode.None, "None"),
+        new(ModifiedVoiceMode.ExternalMicrophone, "External microphone / Voicemod"),
+        new(ModifiedVoiceMode.LocalProfile, "Local voice profile (experimental)")
+    ];
 
-    private bool IsModdedMicSkipped =>
-        (ModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id == NoModdedMicOption.Id;
+    private ModifiedVoiceMode CurrentModifiedVoiceMode =>
+        (ModdedInputCombo.SelectedItem as ModifiedVoiceOption)?.Mode ?? _settings.ModifiedVoiceMode;
+
+    private bool IsModdedMicSkipped => CurrentModifiedVoiceMode == ModifiedVoiceMode.None;
 
     private void ApplyModdedMicUiState()
     {
-        ApplyModdedMicUiState(IsModdedMicSkipped);
+        ApplyModdedMicUiState(CurrentModifiedVoiceMode);
     }
 
-    private void ApplyModdedMicUiState(bool skip)
+    private void ApplyModdedMicUiState(ModifiedVoiceMode mode)
     {
+        bool skip = mode == ModifiedVoiceMode.None;
+        bool external = mode == ModifiedVoiceMode.ExternalMicrophone;
+        bool builtIn = mode == ModifiedVoiceMode.LocalProfile;
+
+        VoiceProfileCombo.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        VoiceProfileMessage.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        VoiceProfileCombo.IsEnabled = builtIn && !_router.IsRouting && !_isStartingRouting;
+        ExternalModdedInputCombo.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
+        LongerAnalysisWindowCheck.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        ProcessedVoiceVolumePanel.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        ExternalModdedInputCombo.IsEnabled = external && !_router.IsRouting && !_isDevicesLoading;
+        LongerAnalysisWindowCheck.IsEnabled = builtIn && !_router.IsRouting;
+
         // The hotkey still matters without a modded mic when push-to-talk gates the mix.
         bool hotkeyRelevant = !skip || IsPushToTalk;
         HotkeyConfigPanel.IsEnabled = hotkeyRelevant;
         HotkeyConfigPanel.Opacity = hotkeyRelevant ? 1.0 : 0.55;
         ModdedMeterPanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetColumnSpan(DryMeterPanel, skip ? 3 : 1);
+    }
+
+    private void LoadVoiceProfiles()
+    {
+        var result = new VoiceProfileStore().List();
+        VoiceProfileCombo.ItemsSource = result.Profiles;
+        VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+        VoiceProfileMessage.Text = result.Errors.Count > 0 ? string.Join("\n", result.Errors)
+            : result.Profiles.Count == 0 ? "No local profiles installed. Add a profile in the local MicMixer Voices folder."
+            : "Select a local voice profile.";
+        if (_settings.SelectedVoiceProfileId != null && VoiceProfileCombo.SelectedItem == null)
+            VoiceProfileMessage.Text = "The selected profile is missing or invalid. Restore it or explicitly choose another profile.";
+        UpdateVoiceWindowLabel();
+    }
+
+    private void UpdateVoiceWindowLabel()
+    {
+        if (VoiceProfileCombo.SelectedItem is VoiceProfile profile)
+            LongerAnalysisWindowCheck.Content = profile.AlternateBlockMilliseconds is float alternate
+                ? $"Alternate window: {alternate:0.##} ms (profile default: {profile.Parameters.BlockMilliseconds:0.##} ms)"
+                : "No alternate window in this profile (leave unchecked)";
+    }
+
+    private void OnVoiceProfileChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || _router == null || _router.IsRouting || _isStartingRouting) return;
+        if (VoiceProfileCombo.SelectedItem is VoiceProfile profile)
+        {
+            _settings.SelectedVoiceProfileId = profile.Id;
+            LongerAnalysisWindowCheck.IsChecked = false;
+            _settings.LongerAnalysisWindow = false;
+            VoiceProfileMessage.Text = profile.DisplayName;
+            UpdateVoiceWindowLabel();
+            _settingsStore.Save(_settings);
+        }
+    }
+
+    private void OnProcessedVoiceVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingUi || ProcessedVoiceVolumePercentText == null)
+        {
+            return;
+        }
+
+        _settings.ProcessedVoiceVolume = (float)e.NewValue;
+        _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
+        ProcessedVoiceVolumePercentText.Text = $"{Math.Round(e.NewValue * 100)} %";
+        SaveSettings();
+    }
+
+    private void OnLongerAnalysisWindowChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.LongerAnalysisWindow = LongerAnalysisWindowCheck.IsChecked == true;
+        SaveSettings();
     }
 
     private bool IsPushToTalk => _settings.PushToTalkMode;
@@ -1210,6 +1335,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 MicStatus.Muted when _router.MusicRouteOpen && HasActiveMusicSignal()
                     => "Active source: Mic muted (push-to-talk) — music transmitting",
                 MicStatus.Muted => "Active source: Muted (push-to-talk)",
+                MicStatus.Modded when CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile
+                    => "Active source: Local voice profile",
                 MicStatus.Modded => "Active source: Modded mic",
                 _ => "Active source: Normal mic"
             };
@@ -4206,4 +4333,5 @@ public partial class MainWindow : Window, IMicMixerControlHost
     #endregion
 
     private sealed record AudioDeviceOption(string Id, string FriendlyName);
+    private sealed record ModifiedVoiceOption(ModifiedVoiceMode Mode, string FriendlyName);
 }

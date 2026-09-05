@@ -330,17 +330,41 @@
                                     <Border.ToolTip>
                                         <ToolTip>
                                             <StackPanel>
-                                                <TextBlock Style="{StaticResource TipTitle}" Text="Voice-modified microphone (e.g. Voicemod)"/>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Choose how the modified voice is produced"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="The output from a voice changer — for Voicemod, it is usually called 'Voicemod Virtual Audio Device'. While you hold the hotkey, this source is heard instead of your normal mic."/>
+                                                           Text="Use an external microphone device such as Voicemod, or try MicMixer's experimental CPU-based profile processor. While you hold the hotkey, this source is heard instead of your normal mic."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                           Text="Not using a voice changer? Select 'No modded mic' — only the normal mic and music will be sent to the cable, and no hotkey is needed."/>
+                                                           Text="Select 'None' to send only the normal mic and music to the cable."/>
                                             </StackPanel>
                                         </ToolTip>
                                     </Border.ToolTip>
                                 </Border>
                             </StackPanel>
                             <ComboBox x:Name="ModdedInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
+                            <ComboBox x:Name="ExternalModdedInputCombo" Margin="0,6,0,0" DisplayMemberPath="FriendlyName"
+                                      SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5" Visibility="Collapsed"/>
+                            <ComboBox x:Name="VoiceProfileCombo" Margin="0,6,0,0" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                      SelectionChanged="OnVoiceProfileChanged" Visibility="Collapsed"/>
+                            <TextBlock x:Name="VoiceProfileMessage" TextWrapping="Wrap" FontSize="10.5" Visibility="Collapsed"/>
+                            <CheckBox x:Name="LongerAnalysisWindowCheck" Margin="0,7,0,0" FontSize="10.5"
+                                      Foreground="#475569" Content="Use profile alternate analysis window"
+                                      Checked="OnLongerAnalysisWindowChanged" Unchecked="OnLongerAnalysisWindowChanged"
+                                      ToolTip="Uses the optional alternate window stored in the selected profile. Change only while stopped."
+                                      Visibility="Collapsed"/>
+                            <Grid x:Name="ProcessedVoiceVolumePanel" Margin="0,8,0,0" Visibility="Collapsed"
+                                  ToolTip="Adjusts only the processed voice voice after the effect. 100% keeps the original level; 50% is about -6 dB.">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Processed voice volume" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <Slider x:Name="ProcessedVoiceVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="1"
+                                        SmallChange="0.01" LargeChange="0.1" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Processed voice volume" ValueChanged="OnProcessedVoiceVolumeChanged"/>
+                                <TextBlock x:Name="ProcessedVoiceVolumePercentText" Grid.Column="2" Text="100 %" Width="42"
+                                           TextAlignment="Right" FontSize="10.5" VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
 
                         <!-- Output -->
@@ -524,7 +548,7 @@
 
                         <!-- Push-to-talk: gate for the whole outgoing mix. Lives outside
                              HotkeyConfigPanel so it stays clickable when the hotkey config
-                             is dimmed for "No modded mic". -->
+                             is dimmed for the "None" modified-voice mode. -->
                         <Border Grid.Row="1" Margin="0,10,0,0" Padding="0,10,0,0" BorderBrush="#E9EEF3" BorderThickness="0,1,0,0">
                             <StackPanel>
                                 <CheckBox x:Name="PushToTalkCheck" FontSize="11.5" Foreground="#10233A"
@@ -543,7 +567,7 @@
                                             <StackPanel>
                                                 <TextBlock Style="{StaticResource TipTitle}" Text="Push-to-talk for the entire mix"/>
                                                 <TextBlock Style="{StaticResource TipBody}"
-                                                           Text="When this is on, only silence is sent to the virtual cable — neither mic nor music is heard — until you hold the hotkey. This also works with 'No modded mic': your normal mic is heard only while the hotkey is held."/>
+                                                           Text="When this is on, only silence is sent to the virtual cable — neither mic nor music is heard — until you hold the hotkey. This also works when the modified voice is 'None': your normal mic is heard only while the hotkey is held."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
                                                            Text="Want the music to remain audible while your voice is muted? Enable 'Music ignores push-to-talk' in the music card — push-to-talk will then affect only the mic."/>
                                                 <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"

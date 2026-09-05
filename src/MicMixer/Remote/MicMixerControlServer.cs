@@ -79,7 +79,7 @@ internal sealed class MicMixerControlServer : IAsyncDisposable
         using var sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var reader = new StreamReader(pipe, leaveOpen: true);
         var lineReader = new BoundedLineReader(reader, MicMixerControlProtocol.MaximumMessageCharacters);
-        using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+        var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
 
         Task writeTask = WriteLoopAsync(writer, outgoing.Reader, sessionCancellation.Token);
         Task stateTask = PublishStateLoopAsync(outgoing.Writer, sessionCancellation.Token);
@@ -106,7 +106,23 @@ internal sealed class MicMixerControlServer : IAsyncDisposable
             outgoing.Writer.TryComplete();
             await IgnoreCancellationAsync(writeTask).ConfigureAwait(false);
             await IgnoreCancellationAsync(stateTask).ConfigureAwait(false);
+            DisposeWriterAfterDisconnect(writer);
             Log.Information("StreamDecky control client disconnected from MicMixer.");
+        }
+    }
+
+    private static void DisposeWriterAfterDisconnect(StreamWriter writer)
+    {
+        try
+        {
+            writer.Dispose();
+        }
+        catch (IOException)
+        {
+            // A client may use a short-lived connection to probe whether MicMixer is
+            // available, or simply exit without a shutdown handshake. StreamWriter
+            // flushes during Dispose; a broken pipe at that point is a normal peer
+            // disconnect, not a server failure.
         }
     }
 

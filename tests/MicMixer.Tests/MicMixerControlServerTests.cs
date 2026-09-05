@@ -114,6 +114,36 @@ public sealed class MicMixerControlServerTests
         Assert.True(hello.RootElement.GetProperty("success").GetBoolean());
     }
 
+    [Fact]
+    public async Task Server_ShouldAcceptAnotherClientAfterAbruptDisconnect()
+    {
+        string pipeName = $"MicMixer.Tests.{Guid.NewGuid():N}";
+        await using var server = new MicMixerControlServer(new FakeControlHost(), pipeName);
+        server.Start();
+
+        await using (var probe = new NamedPipeClientStream(
+                         ".",
+                         pipeName,
+                         PipeDirection.InOut,
+                         PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
+        {
+            await probe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
+        }
+
+        await using var pipe = new NamedPipeClientStream(
+            ".",
+            pipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await pipe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
+        using var reader = new StreamReader(pipe, leaveOpen: true);
+        using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+
+        await writer.WriteLineAsync("{\"id\":\"hello-after-probe\",\"command\":\"hello\",\"protocolVersion\":1}");
+        using JsonDocument hello = await ReadResponseAsync(reader, "hello-after-probe");
+        Assert.True(hello.RootElement.GetProperty("success").GetBoolean());
+    }
+
     private static async Task<JsonDocument> ReadResponseAsync(StreamReader reader, string id)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));

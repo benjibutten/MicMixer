@@ -1,3 +1,4 @@
+using MicMixer.Dsp;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -28,7 +29,10 @@ public sealed class AudioRouter : IDisposable
     private WasapiPlayer? _player;
     private InputRoute? _normalRoute;
     private InputRoute? _moddedRoute;
+    private SwitchingSampleProvider? _micSource;
+    private VoiceProcessorSamplePair? _voiceProcessorPair;
     private bool _useModdedInput;
+    private float _processedVoiceVolume = 1f;
     private bool _outputGateOpen = true;
     private bool _musicIgnoresPushToTalk;
     private bool _musicMonitorOnly;
@@ -40,13 +44,21 @@ public sealed class AudioRouter : IDisposable
     private float _musicRms;
     private bool _disposed;
 
+    /// <summary>Applied after the built-in effect, before switching and output fan-out.</summary>
+    public float ProcessedVoiceVolume
+    {
+        get => Volatile.Read(ref _processedVoiceVolume);
+        set => Volatile.Write(ref _processedVoiceVolume,
+            float.IsFinite(value) ? Math.Clamp(value, 0f, 1f) : 1f);
+    }
+
     public bool IsRouting => _player?.PlaybackState == PlaybackState.Playing;
     public bool UseModdedInput => Volatile.Read(ref _useModdedInput);
     public bool OutputGateOpen => Volatile.Read(ref _outputGateOpen);
     public bool MusicIgnoresPushToTalk => Volatile.Read(ref _musicIgnoresPushToTalk);
     public bool MusicMonitorOnly => Volatile.Read(ref _musicMonitorOnly);
     public float NormalPeak => _normalRoute?.CurrentPeak ?? 0f;
-    public float ModdedPeak => _moddedRoute?.CurrentPeak ?? 0f;
+    public float ModdedPeak => _voiceProcessorPair?.ProcessedPeak ?? _moddedRoute?.CurrentPeak ?? 0f;
 
     /// <summary>
     /// Whether the music branch currently reaches the virtual cable: monitor-only
@@ -76,12 +88,23 @@ public sealed class AudioRouter : IDisposable
     /// Starts routing. When <paramref name="moddedInputDevice"/> is null only the normal
     /// mic is routed and hotkey switching has no effect.
     /// </summary>
-    public void Start(MMDevice normalInputDevice, MMDevice? moddedInputDevice, MMDevice outputDevice)
+    public void Start(
+        MMDevice normalInputDevice,
+        MMDevice? moddedInputDevice,
+        MMDevice outputDevice,
+        Func<int, int, IVoiceProcessor>? voiceProcessorFactory = null)
     {
         Stop();
 
+        if (moddedInputDevice != null && voiceProcessorFactory != null)
+        {
+            throw new ArgumentException("External and built-in modified voice sources cannot be active together.");
+        }
+
         InputRoute? normalRoute = null;
         InputRoute? moddedRoute = null;
+        SwitchingSampleProvider? micSource = null;
+        VoiceProcessorSamplePair? voiceProcessorPair = null;
         WasapiPlayer? player = null;
 
         try
@@ -114,7 +137,28 @@ public sealed class AudioRouter : IDisposable
                 ? new InputRoute(moddedInputDevice, targetFormat, RaiseError)
                 : null;
 
-            var micSource = new SwitchingSampleProvider(normalRoute, moddedRoute, () => UseModdedInput);
+            ISamplePair samplePair;
+            if (voiceProcessorFactory != null)
+            {
+                IVoiceProcessor? processor = voiceProcessorFactory(targetFormat.SampleRate, targetFormat.Channels);
+                try
+                {
+                    var diagnostics = new VoiceProcessorRuntimeDiagnostics();
+                    voiceProcessorPair = new VoiceProcessorSamplePair(normalRoute, processor, diagnostics, () => ProcessedVoiceVolume);
+                    samplePair = voiceProcessorPair;
+                    processor = null;
+                }
+                finally
+                {
+                    processor?.Dispose();
+                }
+            }
+            else
+            {
+                samplePair = new IndependentSamplePair(normalRoute, moddedRoute);
+            }
+
+            micSource = new SwitchingSampleProvider(samplePair, () => UseModdedInput);
             ISampleProvider? musicSource = MusicSourceFactory?.Invoke(targetFormat);
 
             // A secondary start failure only skips that branch — the cable
@@ -176,6 +220,8 @@ public sealed class AudioRouter : IDisposable
             {
                 _normalRoute = normalRoute;
                 _moddedRoute = moddedRoute;
+                _micSource = micSource;
+                _voiceProcessorPair = voiceProcessorPair;
                 _player = player;
 
                 try
@@ -189,6 +235,8 @@ public sealed class AudioRouter : IDisposable
                 {
                     _normalRoute = null;
                     _moddedRoute = null;
+                    _micSource = null;
+                    _voiceProcessorPair = null;
                     _player = null;
                     throw;
                 }
@@ -202,6 +250,15 @@ public sealed class AudioRouter : IDisposable
             {
                 player.PlaybackStopped -= OnPlaybackStopped;
                 player.Dispose();
+            }
+
+            try
+            {
+                micSource?.Dispose();
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Voice switching source could not be disposed cleanly.");
             }
 
             try
@@ -342,16 +399,22 @@ public sealed class AudioRouter : IDisposable
         WasapiPlayer? player;
         InputRoute? normalRoute;
         InputRoute? moddedRoute;
+        SwitchingSampleProvider? micSource;
+        VoiceProcessorSamplePair? voiceProcessorPair;
 
         lock (_syncRoot)
         {
             player = _player;
             normalRoute = _normalRoute;
             moddedRoute = _moddedRoute;
+            micSource = _micSource;
+            voiceProcessorPair = _voiceProcessorPair;
 
             _player = null;
             _normalRoute = null;
             _moddedRoute = null;
+            _micSource = null;
+            _voiceProcessorPair = null;
         }
 
         if (player != null)
@@ -373,6 +436,16 @@ public sealed class AudioRouter : IDisposable
             player.Dispose();
         }
 
+        try
+        {
+            micSource?.Dispose();
+        }
+        catch (Exception disposeException)
+        {
+            Log.Warning(disposeException, "Voice switching source could not be disposed cleanly.");
+        }
+
+        LogVoiceProcessorDiagnostics(voiceProcessorPair);
         normalRoute?.Dispose();
         moddedRoute?.Dispose();
         SecondaryOutput?.Stop();
@@ -403,6 +476,8 @@ public sealed class AudioRouter : IDisposable
 
         InputRoute? normalRoute;
         InputRoute? moddedRoute;
+        SwitchingSampleProvider? micSource;
+        VoiceProcessorSamplePair? voiceProcessorPair;
 
         lock (_syncRoot)
         {
@@ -416,8 +491,12 @@ public sealed class AudioRouter : IDisposable
             _player = null;
             normalRoute = _normalRoute;
             moddedRoute = _moddedRoute;
+            micSource = _micSource;
+            voiceProcessorPair = _voiceProcessorPair;
             _normalRoute = null;
             _moddedRoute = null;
+            _micSource = null;
+            _voiceProcessorPair = null;
 
             // Keep the secondary branch from running after its master clock has
             // stopped. Holding the router lock prevents a concurrent Start()
@@ -443,6 +522,16 @@ public sealed class AudioRouter : IDisposable
             catch (Exception disposeException)
             {
                 Log.Warning(disposeException, "Stopped audio output could not be disposed cleanly.");
+            }
+
+            try
+            {
+                micSource?.Dispose();
+                LogVoiceProcessorDiagnostics(voiceProcessorPair);
+            }
+            catch (Exception disposeException)
+            {
+                Log.Warning(disposeException, "Voice switching source could not be disposed cleanly.");
             }
 
             try
@@ -488,7 +577,25 @@ public sealed class AudioRouter : IDisposable
         Error?.Invoke(this, message);
     }
 
-    private sealed class InputRoute : IDisposable
+    private static void LogVoiceProcessorDiagnostics(VoiceProcessorSamplePair? pair)
+    {
+        if (pair == null)
+        {
+            return;
+        }
+
+        VoiceProcessorDiagnosticsSnapshot diagnostics = pair.Diagnostics.Snapshot();
+        Log.Information(
+            "Voice processor stopped. Callbacks={Callbacks} AverageProcessMs={AverageProcessMs:F3} MaximumProcessMs={MaximumProcessMs:F3} Underruns={Underruns} Overruns={Overruns} Resets={Resets}",
+            diagnostics.CallbackCount,
+            diagnostics.AverageProcessMilliseconds,
+            diagnostics.MaximumProcessMilliseconds,
+            diagnostics.Underruns,
+            diagnostics.Overruns,
+            diagnostics.Resets);
+    }
+
+    private sealed class InputRoute : ISampleProvider, IDisposable
     {
         private readonly Action<string> _errorHandler;
         private readonly WasapiRecorder _capture;
@@ -527,6 +634,7 @@ public sealed class AudioRouter : IDisposable
         public float CurrentPeak => Volatile.Read(ref _currentPeak);
 
         public WaveFormat OutputFormat => _meter.WaveFormat;
+        public WaveFormat WaveFormat => _meter.WaveFormat;
 
         public void Start()
         {
@@ -666,64 +774,4 @@ public sealed class AudioRouter : IDisposable
         }
     }
 
-    private sealed class SwitchingSampleProvider : ISampleProvider
-    {
-        private readonly InputRoute _normalRoute;
-        private readonly InputRoute? _moddedRoute;
-        private readonly Func<bool> _useModdedInput;
-        private float[] _normalBuffer = Array.Empty<float>();
-        private float[] _moddedBuffer = Array.Empty<float>();
-
-        public SwitchingSampleProvider(InputRoute normalRoute, InputRoute? moddedRoute, Func<bool> useModdedInput)
-        {
-            _normalRoute = normalRoute;
-            _moddedRoute = moddedRoute;
-            _useModdedInput = useModdedInput;
-            WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(
-                normalRoute.OutputFormat.SampleRate,
-                normalRoute.OutputFormat.Channels);
-        }
-
-        public WaveFormat WaveFormat { get; }
-
-        public int Read(Span<float> buffer)
-        {
-            int count = buffer.Length;
-            EnsureCapacity(count);
-
-            int normalRead = _normalRoute.Read(_normalBuffer.AsSpan(0, count));
-            int moddedRead = _moddedRoute?.Read(_moddedBuffer.AsSpan(0, count)) ?? 0;
-
-            bool useModdedInput = _moddedRoute != null && _useModdedInput();
-            float[] selectedBuffer = useModdedInput ? _moddedBuffer : _normalBuffer;
-            int selectedSamples = useModdedInput ? moddedRead : normalRead;
-
-            selectedBuffer.AsSpan(0, selectedSamples).CopyTo(buffer);
-
-            if (selectedSamples < count)
-            {
-                buffer[selectedSamples..].Clear();
-            }
-
-            return count;
-        }
-
-        public int Read(float[] buffer, int offset, int count)
-        {
-            return Read(buffer.AsSpan(offset, count));
-        }
-
-        private void EnsureCapacity(int count)
-        {
-            if (_normalBuffer.Length < count)
-            {
-                _normalBuffer = new float[count];
-            }
-
-            if (_moddedBuffer.Length < count)
-            {
-                _moddedBuffer = new float[count];
-            }
-        }
-    }
 }

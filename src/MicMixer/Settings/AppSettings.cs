@@ -8,6 +8,16 @@ public sealed class AppSettings
 
     public string? ModdedInputDeviceId { get; set; }
 
+    public ModifiedVoiceMode ModifiedVoiceMode { get; set; }
+
+    public string? SelectedVoiceProfileId { get; set; }
+
+    public bool LongerAnalysisWindow { get; set; }
+
+    /// <summary>Post-effect gain for processed voice only, from silence to unity.</summary>
+    public float ProcessedVoiceVolume { get; set; } = 1f;
+
+    /// <summary>Legacy mirror retained so older MicMixer builds still understand a saved settings file.</summary>
     public bool SkipModdedMic { get; set; }
 
     public string? OutputDeviceId { get; set; }

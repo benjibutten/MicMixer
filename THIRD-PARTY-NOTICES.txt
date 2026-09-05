@@ -36,6 +36,12 @@ Copyright (c) 2011-2024, Christopher Jeffrey
 License: MIT
 Source: https://github.com/markedjs/marked
 
+Signalsmith Stretch (vendored by SignalsmithStretch-CS 1.1.2)
+Copyright (c) Signalsmith Audio Ltd and the respective wrapper contributors
+Licenses: MIT
+Sources: https://github.com/Signalsmith-Audio/signalsmith-stretch
+         https://github.com/Estrol/signalsmith-stretch-cs
+
 Tools downloaded separately by MicMixer
 ----------------------------------------
 
