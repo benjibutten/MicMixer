@@ -170,3 +170,14 @@ FodyWeavers.xsd
 *.msm
 *.msp
 >>>>>>> origin/main
+# Private local voice recordings and offline comparison renders.
+recording/
+
+# Private local voices and listening material; never package these.
+/Voices/
+/PrivateVoiceArchive/
+/private/
+/presets/
+/recording/
+/legacy-voice-profile.json
+*private-manifest*.json
