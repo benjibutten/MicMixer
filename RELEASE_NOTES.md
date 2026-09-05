@@ -2,6 +2,11 @@
 
 <!-- Update this list together with user-visible changes under src/. -->
 
+- Two built-in voice starting points, Feminine and Masculine, can be used immediately or customized as local copies. They contain generic effect settings only.
+- Voice volume now gets a full-width slider. Alternate processing quality appears only for profiles that support it. Recording and comparison playback share a panel, with clear Play / Pause / Resume buttons and a separate Stop action.
+
+- Create custom local voices in the new voice designer. Record a short sample, compare original and processed playback with optional looping, adjust voice character and advanced effects, and save a new profile in local AppData without editing JSON. Test recordings stay in memory.
+
 - Local voice profiles replace the fixed voice configuration. Profile identity, display name and DSP settings are stored privately per user. Existing local installations can migrate through an explicit local binding.
 - Processed voice volume remains after DSP with smooth, saved level changes. Missing or invalid selected profiles produce an error.
 

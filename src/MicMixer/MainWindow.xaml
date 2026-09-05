@@ -346,23 +346,31 @@
                             <ComboBox x:Name="VoiceProfileCombo" Margin="0,6,0,0" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
                                       SelectionChanged="OnVoiceProfileChanged" Visibility="Collapsed"/>
                             <TextBlock x:Name="VoiceProfileMessage" TextWrapping="Wrap" FontSize="10.5" Visibility="Collapsed"/>
+                            <Button x:Name="CreateVoiceButton" Content="Create a voice…" Click="OnCreateVoice" Margin="0,7,0,0"
+                                    HorizontalAlignment="Left" Padding="10,5" Visibility="Collapsed"
+                                    ToolTip="Create or customize a local profile. Stop routing before opening the voice designer."/>
                             <CheckBox x:Name="LongerAnalysisWindowCheck" Margin="0,7,0,0" FontSize="10.5"
-                                      Foreground="#475569" Content="Use profile alternate analysis window"
+                                      Foreground="#475569"
                                       Checked="OnLongerAnalysisWindowChanged" Unchecked="OnLongerAnalysisWindowChanged"
-                                      ToolTip="Uses the optional alternate window stored in the selected profile. Change only while stopped."
-                                      Visibility="Collapsed"/>
+                                      ToolTip="Uses the other analysis window supplied by this profile. A longer window can sound smoother but adds delay. Change while routing is stopped."
+                                      Visibility="Collapsed">
+                                <TextBlock x:Name="AlternateWindowLabel" Text="Alternate processing quality" TextWrapping="Wrap"/>
+                            </CheckBox>
                             <Grid x:Name="ProcessedVoiceVolumePanel" Margin="0,8,0,0" Visibility="Collapsed"
-                                  ToolTip="Adjusts only the processed voice voice after the effect. 100% keeps the original level; 50% is about -6 dB.">
+                                  ToolTip="Adjusts only the processed voice after the effect. 100% keeps the original level; 50% is about -6 dB.">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Processed voice volume" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <Slider x:Name="ProcessedVoiceVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="1"
+                                <TextBlock Text="Voice volume" FontSize="10.5" VerticalAlignment="Center"/>
+                                <Slider x:Name="ProcessedVoiceVolumeSlider" Grid.Row="1" Grid.ColumnSpan="2" Minimum="0" Maximum="1" Value="1" Margin="0,5,0,0"
                                         SmallChange="0.01" LargeChange="0.1" VerticalAlignment="Center"
                                         AutomationProperties.Name="Processed voice volume" ValueChanged="OnProcessedVoiceVolumeChanged"/>
-                                <TextBlock x:Name="ProcessedVoiceVolumePercentText" Grid.Column="2" Text="100 %" Width="42"
+                                <TextBlock x:Name="ProcessedVoiceVolumePercentText" Grid.Column="1" Text="100 %" Width="42"
                                            TextAlignment="Right" FontSize="10.5" VerticalAlignment="Center"/>
                             </Grid>
                         </StackPanel>

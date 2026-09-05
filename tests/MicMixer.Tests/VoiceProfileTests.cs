@@ -14,6 +14,38 @@ public sealed class VoiceProfileTests : IDisposable
         Parameters = new() { PitchSemitones = 3, LowMidGainDb = -2, CompressorRatio = 4 }, AlternateBlockMilliseconds = 60 };
 
     [Fact]
+    public void BuiltInProfiles_AreAvailableWithoutFiles_AndCopiesKeepTheOriginal()
+    {
+        var store = new VoiceProfileStore(_directory);
+        store.List().Profiles.Should().HaveCount(2);
+        Directory.Exists(_directory).Should().BeFalse();
+        foreach (var original in BuiltInVoiceProfiles.All)
+        {
+            original.Validate();
+            store.Load(original.Id).Should().Be(original);
+            Action overwrite = () => store.Import(original with { DisplayName = "Changed" });
+            overwrite.Should().Throw<InvalidDataException>();
+            var copy = original with { Id = Guid.NewGuid().ToString(), DisplayName = "My copy", Parameters = original.Parameters with { PitchSemitones = 1 } };
+            store.Import(copy);
+            store.Load(copy.Id).Should().Be(copy);
+            store.Load(original.Id).Should().Be(original);
+        }
+        store.List().Profiles.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public void FileWithReservedId_CannotShadowOrDuplicateBuiltIn()
+    {
+        Directory.CreateDirectory(_directory);
+        var original = BuiltInVoiceProfiles.All[0];
+        File.WriteAllText(Path.Combine(_directory, original.Id + ".json"), "{broken");
+        var store = new VoiceProfileStore(_directory);
+        store.Load(original.Id).Should().Be(original);
+        store.List().Profiles.Should().HaveCount(2);
+        store.List().Errors.Should().ContainSingle();
+    }
+
+    [Fact]
     public void ImportRoundTrip_PreservesEveryParameter_AndNeverOverwrites()
     {
         var store = new VoiceProfileStore(_directory); var profile = Example();
@@ -25,10 +57,10 @@ public sealed class VoiceProfileTests : IDisposable
     }
 
     [Fact]
-    public void CleanInstallation_HasNoInventedVoice_AndFailsExplicitlyIfSelected()
+    public void CleanInstallation_HasStarters_ButNeverSilentlySelectsOne()
     {
         var store = new VoiceProfileStore(_directory);
-        store.List().Profiles.Should().BeEmpty(); store.List().Errors.Should().BeEmpty();
+        store.List().Profiles.Should().BeEquivalentTo(BuiltInVoiceProfiles.All); store.List().Errors.Should().BeEmpty();
         Action missingSelection = () => store.Load(null);
         missingSelection.Should().Throw<InvalidDataException>();
         Action missingFile = () => store.Load(Guid.NewGuid().ToString());
@@ -71,7 +103,7 @@ public sealed class VoiceProfileTests : IDisposable
         }
         File.WriteAllText(Path.Combine(_directory,profile.Id+".json"),node.ToJsonString());
         Action action = () => store.Load(profile.Id); action.Should().Throw<InvalidDataException>();
-        store.List().Profiles.Should().BeEmpty(); store.List().Errors.Should().ContainSingle();
+        store.List().Profiles.Should().BeEquivalentTo(BuiltInVoiceProfiles.All); store.List().Errors.Should().ContainSingle();
     }
 
     [Fact]
@@ -95,7 +127,7 @@ public sealed class VoiceProfileTests : IDisposable
         Directory.CreateDirectory(_directory);
         File.WriteAllText(Path.Combine(_directory,Guid.NewGuid()+".json"),json);
         var result = new VoiceProfileStore(_directory).List();
-        result.Profiles.Should().BeEmpty(); result.Errors.Should().ContainSingle();
+        result.Profiles.Should().BeEquivalentTo(BuiltInVoiceProfiles.All); result.Errors.Should().ContainSingle();
     }
 
     [Theory]

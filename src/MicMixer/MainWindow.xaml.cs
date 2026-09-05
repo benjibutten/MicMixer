@@ -933,10 +933,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
         bool builtIn = mode == ModifiedVoiceMode.LocalProfile;
 
         VoiceProfileCombo.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        CreateVoiceButton.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
         VoiceProfileMessage.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
         VoiceProfileCombo.IsEnabled = builtIn && !_router.IsRouting && !_isStartingRouting;
         ExternalModdedInputCombo.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
-        LongerAnalysisWindowCheck.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        UpdateVoiceWindowLabel();
         ProcessedVoiceVolumePanel.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
         ExternalModdedInputCombo.IsEnabled = external && !_router.IsRouting && !_isDevicesLoading;
         LongerAnalysisWindowCheck.IsEnabled = builtIn && !_router.IsRouting;
@@ -955,19 +956,46 @@ public partial class MainWindow : Window, IMicMixerControlHost
         VoiceProfileCombo.ItemsSource = result.Profiles;
         VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
         VoiceProfileMessage.Text = result.Errors.Count > 0 ? string.Join("\n", result.Errors)
-            : result.Profiles.Count == 0 ? "No local profiles installed. Add a profile in the local MicMixer Voices folder."
+            : result.Profiles.Count == 0 ? "No voices yet. Choose Create a voice to record, preview and save your own."
             : "Select a local voice profile.";
         if (_settings.SelectedVoiceProfileId != null && VoiceProfileCombo.SelectedItem == null)
             VoiceProfileMessage.Text = "The selected profile is missing or invalid. Restore it or explicitly choose another profile.";
         UpdateVoiceWindowLabel();
     }
 
+    private void OnCreateVoice(object sender, RoutedEventArgs e)
+    {
+        if (_router.IsRouting || _isStartingRouting)
+        {
+            VoiceProfileMessage.Text = "Stop routing before opening the voice designer.";
+            return;
+        }
+        try
+        {
+            var input = DryInputCombo.SelectedItem as AudioDeviceOption;
+            var dialog = new VoiceDesignerDialog(VoiceProfileCombo.SelectedItem as VoiceProfile,
+                input?.Id, input?.FriendlyName, (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id,
+                (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id ?? _settings.OutputDeviceId) { Owner = this };
+            if (dialog.ShowDialog() == true && dialog.SavedProfile is { } profile)
+            {
+                _settings.SelectedVoiceProfileId = profile.Id;
+                _settings.LongerAnalysisWindow = false;
+                LongerAnalysisWindowCheck.IsChecked = false;
+                LoadVoiceProfiles();
+                _settingsStore.Save(_settings);
+            }
+        }
+        catch (Exception ex) { VoiceProfileMessage.Text = "Could not open the voice designer: " + ex.Message; }
+    }
+
     private void UpdateVoiceWindowLabel()
     {
-        if (VoiceProfileCombo.SelectedItem is VoiceProfile profile)
-            LongerAnalysisWindowCheck.Content = profile.AlternateBlockMilliseconds is float alternate
-                ? $"Alternate window: {alternate:0.##} ms (profile default: {profile.Parameters.BlockMilliseconds:0.##} ms)"
-                : "No alternate window in this profile (leave unchecked)";
+        bool hasAlternate = VoiceProfileCombo.SelectedItem is VoiceProfile { AlternateBlockMilliseconds: not null };
+        LongerAnalysisWindowCheck.Visibility = CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile && hasAlternate
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (VoiceProfileCombo.SelectedItem is VoiceProfile { AlternateBlockMilliseconds: float alternate } profile)
+            AlternateWindowLabel.Text = alternate > profile.Parameters.BlockMilliseconds
+                ? "Smoother processing (more delay)" : "Alternate processing quality";
     }
 
     private void OnVoiceProfileChanged(object sender, SelectionChangedEventArgs e)
@@ -978,7 +1006,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _settings.SelectedVoiceProfileId = profile.Id;
             LongerAnalysisWindowCheck.IsChecked = false;
             _settings.LongerAnalysisWindow = false;
-            VoiceProfileMessage.Text = profile.DisplayName;
+            VoiceProfileMessage.Text = BuiltInVoiceProfiles.Find(profile.Id) != null
+                ? "Built-in starting point. Create a voice to customize a copy." : "Create a voice to customize a copy.";
             UpdateVoiceWindowLabel();
             _settingsStore.Save(_settings);
         }

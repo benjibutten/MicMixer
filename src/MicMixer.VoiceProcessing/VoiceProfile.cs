@@ -76,6 +76,7 @@ public sealed class VoiceProfileStore
     {
         if (!Guid.TryParseExact(id, "D", out _))
             throw new InvalidDataException("No valid local voice profile is selected. Select or import a profile before enabling routing.");
+        if (BuiltInVoiceProfiles.Find(id) is { } builtIn) return builtIn;
         var profile = ReadFile(Path.Combine(DirectoryPath, id + ".json"));
         if (profile.Id != id) throw new InvalidDataException("Voice profile ID does not match its filename.");
         return profile;
@@ -83,13 +84,18 @@ public sealed class VoiceProfileStore
 
     public (List<VoiceProfile> Profiles, List<string> Errors) List()
     {
-        var profiles = new List<VoiceProfile>();
+        var profiles = new List<VoiceProfile>(BuiltInVoiceProfiles.All);
         var errors = new List<string>();
         if (!Directory.Exists(DirectoryPath)) return (profiles, errors);
         try
         {
             foreach (string file in Directory.EnumerateFiles(DirectoryPath, "*.json"))
             {
+                if (BuiltInVoiceProfiles.Find(Path.GetFileNameWithoutExtension(file)) != null)
+                {
+                    errors.Add($"'{Path.GetFileName(file)}' uses a reserved built-in ID. Save a copy with a new ID.");
+                    continue;
+                }
                 try { profiles.Add(Load(Path.GetFileNameWithoutExtension(file))); }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException) { errors.Add(ex.Message); }
             }
@@ -103,6 +109,8 @@ public sealed class VoiceProfileStore
     public void Import(VoiceProfile profile)
     {
         profile.Validate();
+        if (BuiltInVoiceProfiles.Find(profile.Id) != null)
+            throw new InvalidDataException("Built-in voices cannot be overwritten. Save a copy with a new ID.");
         Directory.CreateDirectory(DirectoryPath);
         string destination = Path.Combine(DirectoryPath, profile.Id + ".json");
         string temporary = Path.Combine(DirectoryPath, Guid.NewGuid() + ".tmp");

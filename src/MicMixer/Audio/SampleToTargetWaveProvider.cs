@@ -24,13 +24,15 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
 
     private readonly ISampleProvider _source;
     private readonly OutputSampleFormat _outputSampleFormat;
+    private readonly bool _padSilence;
     private float[] _sourceBuffer = Array.Empty<float>();
 
-    public SampleToTargetWaveProvider(ISampleProvider source, WaveFormat targetFormat)
+    public SampleToTargetWaveProvider(ISampleProvider source, WaveFormat targetFormat, bool padSilence = true)
     {
         _source = source;
         WaveFormat = targetFormat;
         _outputSampleFormat = DetermineOutputSampleFormat(targetFormat);
+        _padSilence = padSilence;
     }
 
     public WaveFormat WaveFormat { get; }
@@ -58,7 +60,8 @@ internal sealed class SampleToTargetWaveProvider : IWaveProvider
             buffer[bytesWritten..].Clear();
         }
 
-        return buffer.Length;
+        // Live routes need an endless clock; finite preview clips must signal EOF.
+        return _padSilence ? buffer.Length : bytesWritten;
     }
 
     public int Read(byte[] buffer, int offset, int count)

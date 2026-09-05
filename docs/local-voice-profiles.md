@@ -1,18 +1,19 @@
 # Local voice profiles
 
 MicMixer loads voices from `%LOCALAPPDATA%\MicMixer\Voices\<UUID>.json`.
-No personal voice ships with the application. A clean installation defaults to
-no modified input; selecting Local voice profile without an installed profile
-shows an explanation and refuses to start that route. Invalid files appear as
-errors, and a missing selected ID is never replaced by the first available voice.
-Restart the app after importing a file to refresh the profile list.
+Two generic built-in starting points, **Feminine (starter)** and **Masculine
+(starter)**, are available alongside local files. No personal voice or recording
+ships with the application. A clean installation defaults to no modified input;
+choose a profile explicitly before enabling the local route. Invalid files appear
+as errors, and a missing selected ID is never replaced by the first available voice.
+Profiles saved in the voice designer appear immediately. Restart after adding files manually.
 
 ## Format and import
 
 Format version 1 contains `formatVersion`, `id` (canonical UUID), `displayName`,
 `parameters` (all VoiceDspParameters fields), and optional
 `alternateBlockMilliseconds`. Filenames must match IDs. Display names can change
-without changing identity. Records are immutable and suitable for a future editor.
+without changing identity. Records are immutable snapshots shared by routing and the voice designer.
 `VoiceProfileStore.Import` validates, writes a temporary file, and moves it without
 overwrite; existing profiles, including user edits, are preserved. Profiles are
 validated at the standard 48 kHz rate on import and at the actual stream format
@@ -82,12 +83,63 @@ deleted documents until the owner explicitly updates it. Never commit such an in
 Do not remove original recordings during source cleanup. Keep them outside the
 repository or ignored and verify `git ls-files recording` is empty.
 
-## Next editor step
+## Create a voice in the app
 
-Offer pitch/formant, tonality, analysis/interval, EQ, compressor and saturation
-controls using the same limits. Preview uses a temporary parameter snapshot;
-Save as creates a new UUID and atomically imports it. Reset restores the opened
-snapshot; Cancel discards the draft. Preserve the original profile until explicit
-save. Reconfiguration and latency-changing edits require a control-thread rebuild
-of DSP and dry delay, followed by a safe route restart; never rebuild inside the
-callback. Keep output volume independent and adjustable live through its existing ramp.
+Stop routing, select **Local voice profile**, then choose **Create a voice…**.
+Start from neutral settings, a built-in starter, or an installed profile. Give the new
+voice a name, record a short phrase from the selected normal microphone, and
+choose headphones under **Listen on**. The selected virtual cable is excluded
+from preview outputs. A sample is limited to 15 seconds, kept only in memory,
+and discarded when the dialog closes.
+
+Recording and playback share the panel above the voice controls. Use **Play original**
+and **Play voice** to audition the same phrase, with optional looping. The active
+button becomes **Pause**, then **Resume**; resuming continues from the same position.
+**Stop** returns to the start. The buttons return to Play when the sample ends.
+Edits stop the old preview; press Play voice to hear the new settings.
+Rendering runs in the background using the live DSP, flushes its tail and removes
+its reported latency to preserve the sample timeline. Preview listening volume is
+independent of the profile and the main processed-voice volume.
+
+Pitch and formant are the main voice-character controls. Warmth, clarity and air
+shape its tone, and texture adds saturation. Advanced controls expose EQ frequencies,
+compression, tonality and analysis timing. A larger analysis window can trade more
+live latency for smoother processing. The processing interval cannot exceed half
+the analysis window. Numeric fields accept exact values; sliders also support the
+keyboard. All settings use the existing DSP validation limits.
+
+**Reset** restores the starting DSP settings. **Cancel** discards the draft.
+**Save voice** writes a new UUID profile atomically and selects it immediately in
+the main window. No restart or manual JSON editing is needed. Existing profiles
+are never overwritten. The new voice uses the analysis window shown in the editor;
+legacy alternate windows remain in the original profile. Save contains parameters
+only, never the test recording. Start routing to use the new profile live.
+
+## Built-in starter tuning
+
+These are editable starting points, not guaranteed voice conversions. Perceived
+voice gender involves pitch, resonance and other speech characteristics; pitch
+alone is insufficient ([ASHA overview](https://www.asha.org/practice-portal/professional-issues/gender-affirming-voice-and-communication/)).
+The numeric choices below are engineering estimates, not prescribed or listening-validated settings.
+
+| Starter | Pitch | Extra formant adjustment | Tone |
+| --- | --- | --- | --- |
+| Feminine | +5 semitones (~1.33×) | −2 semitones | Less low-mid body, gently brighter presence/air |
+| Masculine | −5 semitones (~0.75×) | +2 semitones | More low-mid body, gently softer presence/air |
+
+The existing backend uses `compensatePitch: false`. Pitch shifts therefore also
+move the spectral envelope. The extra formant adjustments temper that shift,
+giving roughly +3/−3 semitones of net resonance movement in the tonal range,
+rather than exaggerating it. This follows the engine's
+[formant compensation behavior](https://github.com/Signalsmith-Audio/signalsmith-stretch#formant-compensation).
+Both starters use gentle 2:1 compression, no saturation and the existing 40 ms
+analysis window. Adjust Pitch to your input first, then Resonance adjustment.
+
+Starters have stable reserved UUIDs and are loaded from the application, without
+creating files in AppData. Save voice always creates a new local UUID copy; imports
+cannot overwrite or shadow a starter. The original starters remain available.
+
+The main voice volume slider occupies its own full-width row. The old alternate
+analysis-window checkbox is hidden unless the selected profile actually supplies
+an alternate. For a longer alternate it reads **Smoother processing (more delay)**;
+its tooltip explains the quality/latency tradeoff. The two starters do not need this option.
