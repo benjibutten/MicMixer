@@ -2,6 +2,9 @@
 
 <!-- Update this list together with user-visible changes under src/. -->
 
+- Local voice profiles replace the fixed voice configuration. Profile identity, display name and DSP settings are stored privately per user. Existing local installations can migrate through an explicit local binding.
+- Processed voice volume remains after DSP with smooth, saved level changes. Missing or invalid selected profiles produce an error.
+
 
 
 - Less delay through the whole audio path. Microphone capture, the virtual cable

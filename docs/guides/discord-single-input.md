@@ -19,7 +19,7 @@ receiving app changes.
 
 1. Install VB-CABLE and reboot if asked.
 2. In MicMixer, set **Normal mic** to your real microphone and **Virtual cable
-   output** to *CABLE Input*. Choose **No modded mic** if you don't use a voice
+   output** to *CABLE Input*. Choose **None** if you don't use a voice
    changer.
 3. In Discord, open **Settings → Voice & Video** and set **Input Device** to
    **CABLE Output**.

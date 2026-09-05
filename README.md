@@ -133,7 +133,7 @@ and logs are covered by the [privacy policy](https://benjibutten.github.io/MicMi
 3. Start `MicMixer.exe`.
 4. Select your physical microphone under **Normal mic**.
 5. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
-   choose **No modded mic**.
+   choose **None**.
 6. Select **CABLE Input (VB-Audio Virtual Cable)** under **Virtual cable output**.
 7. In your voice chat, game, or streaming app, select **CABLE Output** as the microphone.
 8. Click **Enable**.
@@ -150,12 +150,14 @@ button that should select the modified mic while routing is active:
 - Hotkey held: the modified mic is routed.
 - Hotkey released: the normal mic is routed.
 - Release delay above `0 ms`: the modified mic remains active until the delay ends.
-- **No modded mic**: the hotkey is disabled unless push-to-talk is enabled.
+- **None**: the hotkey is disabled unless push-to-talk is enabled.
+- **External microphone / Voicemod**: select the existing voice-changer output device.
+- **Local voice profile**: processes the physical microphone using a private local profile. Select a profile and optionally its alternate analysis window. **Processed voice volume** adjusts the wet output from 0–100% while routing is active.
 
 Push-to-talk reverses the idle behavior: while the hotkey is not held, the virtual
 cable receives silence. Neither microphone audio nor music is sent.
 
-- It also works with **No modded mic**, in which case the hotkey gates the normal mic.
+- It also works with **None**, in which case the hotkey gates the normal mic.
 - With a modified mic selected, holding the hotkey both opens the gate and selects it.
 - The release delay applies to push-to-talk as well.
 - Local music monitoring is not muted by push-to-talk.
@@ -358,8 +360,10 @@ Build and test locally:
 
 ```powershell
 dotnet build .\MicMixer.slnx
-dotnet test --solution .\MicMixer.slnx --no-build
+pwsh -File .\scripts\Test.ps1
 ```
+
+Local voice profiles are stored outside the repository. See [local voice profiles](docs/local-voice-profiles.md) for configuration, migration, verification and offline rendering.
 
 Create a self-contained Windows x64 build:
 
