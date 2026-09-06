@@ -14,6 +14,15 @@ internal static class AppVersion
 
     private static string Compute()
     {
+        string? informationalVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        if (informationalVersion?.StartsWith("test-", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return informationalVersion;
+        }
+
         var version = Current;
 
         if (version is null || version.Major < 2000)
