@@ -14,11 +14,12 @@ public sealed record VoiceProfile
 
     public VoiceDspParameters Resolve(bool alternateWindow)
     {
-        if (!alternateWindow) return Parameters;
+        // The persisted preference may outlive the profile that supplied the alternate.
+        // In that case the profile's base window is the only valid resolution.
+        if (!alternateWindow || AlternateBlockMilliseconds is not float block)
+            return Parameters;
         if (Parameters.PitchEngine == PitchEngine.TimeDomain)
-            throw new InvalidDataException("This time-domain profile has no alternate Signalsmith window.");
-        if (AlternateBlockMilliseconds is not float block)
-            throw new InvalidDataException("The selected profile has no alternate analysis window. Turn off the alternate window option.");
+            throw new InvalidDataException("Time-domain profiles cannot define an alternate Signalsmith window.");
         return Parameters with { BlockMilliseconds = block };
     }
 

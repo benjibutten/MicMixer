@@ -178,7 +178,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
         SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
         LoadVoiceProfiles();
-        LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
+        bool alternateWindowAvailable = VoiceProfileCombo.SelectedItem is VoiceProfile { AlternateBlockMilliseconds: not null };
+        bool longerAnalysisWindow = _settings.LongerAnalysisWindow && alternateWindowAvailable;
+        _settings.LongerAnalysisWindow = longerAnalysisWindow;
+        LongerAnalysisWindowCheck.IsChecked = longerAnalysisWindow;
         ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
         _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
         ProcessedVoiceVolumePercentText.Text = $"{Math.Round(_settings.ProcessedVoiceVolume * 100)} %";

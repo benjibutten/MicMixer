@@ -11,8 +11,12 @@ Profiles saved in the voice designer appear immediately. Restart after adding fi
 ## Format and import
 
 Format version 1 contains `formatVersion`, `id` (canonical UUID), `displayName`,
-`parameters` (all VoiceDspParameters fields), and optional
-`alternateBlockMilliseconds`. Filenames must match IDs. Display names can change
+`parameters`, and optional `alternateBlockMilliseconds`. All
+`VoiceDspParameters` fields are required except that format 1 may omit the
+format-2 engine fields `pitchEngine`, `timeDomainWindowMilliseconds`, and
+`timeDomainSearchMilliseconds`; omitted values select Signalsmith and its default
+time-domain settings. Format 2 requires every parameter field. Filenames must
+match IDs. Display names can change
 without changing identity. Records are immutable snapshots shared by routing and the voice designer.
 `VoiceProfileStore.Import` validates, writes a temporary file, and moves it without
 overwrite; existing profiles, including user edits, are preserved. Profiles are
@@ -20,9 +24,8 @@ validated at the standard 48 kHz rate on import and at the actual stream format
 before DSP construction. A profile incompatible with that format produces an error.
 
 Parameter limits are defined in `VoiceDspParameters.Validate`. Defaults describe
-an unshifted test starting point, not a bundled personal voice. All parameter fields
-are mandatory when loading a versioned profile. No recording or reference audio
-belongs inside a profile or application package.
+an unshifted test starting point, not a bundled personal voice. No recording or
+reference audio belongs inside a profile or application package.
 
 ## Migration
 

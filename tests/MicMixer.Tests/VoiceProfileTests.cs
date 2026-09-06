@@ -107,13 +107,12 @@ public sealed class VoiceProfileTests : IDisposable
     }
 
     [Fact]
-    public void WindowResolution_PreservesProfile_AndRequiresExplicitAlternate()
+    public void WindowResolution_PreservesProfile_AndFallsBackWhenAlternateIsUnavailable()
     {
         var profile = Example();
         profile.Resolve(false).Should().Be(profile.Parameters);
         profile.Resolve(true).Should().Be(profile.Parameters with { BlockMilliseconds = 60 });
-        Action absent = () => (profile with { AlternateBlockMilliseconds = null }).Resolve(true);
-        absent.Should().Throw<InvalidDataException>();
+        (profile with { AlternateBlockMilliseconds = null }).Resolve(true).Should().Be(profile.Parameters);
         profile.Parameters.BlockMilliseconds.Should().Be(40);
     }
 

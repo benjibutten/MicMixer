@@ -143,6 +143,8 @@ public sealed class TimeDomainVoiceTests
             Assert.Equal(PitchEngine.Signalsmith, VoiceProfileStore.ReadFile(old).Parameters.PitchEngine);
             var modern = profile with { FormatVersion = 2, Id = Guid.NewGuid().ToString(), Parameters = Parameters() };
             var store = new VoiceProfileStore(dir); store.Import(modern); Assert.Equal(modern, store.Load(modern.Id));
+            Assert.Same(modern.Parameters, modern.Resolve(true));
+            Assert.Equal(40, modern.Resolve(true).BlockMilliseconds);
             Assert.Throws<InvalidDataException>(() => (modern with { FormatVersion = 1 }).Validate());
             Assert.Throws<InvalidDataException>(() => (modern with { AlternateBlockMilliseconds = 50 }).Validate());
             Assert.Throws<ArgumentException>(() => (modern.Parameters with { FormantSemitones = 1 }).Validate(48000, 1));
