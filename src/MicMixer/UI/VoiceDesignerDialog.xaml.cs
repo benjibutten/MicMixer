@@ -57,6 +57,8 @@ internal partial class VoiceDesignerDialog : Window
             Add(AdvancedParameters, nameof(VoiceDspParameters.CompressorMakeupDb), "Makeup gain", "Level after compression (dB); avoid excessive gain", -12, 24, .5);
             Add(AdvancedParameters, nameof(VoiceDspParameters.TonalityLimitHz), "Tonality limit", "Upper frequency for tonal pitch processing (Hz)", 0, 24000, 100);
             Add(AdvancedParameters, nameof(VoiceDspParameters.FormantBaseHz), "Formant base", "Formant reference frequency; 0 uses the engine default (Hz)", 0, 24000, 10);
+            Add(AdvancedParameters, nameof(VoiceDspParameters.TimeDomainWindowMilliseconds), "Waveform window", "Time-domain waveform segment length; not total latency (ms)", 10, 50, 1);
+            Add(AdvancedParameters, nameof(VoiceDspParameters.TimeDomainSearchMilliseconds), "Waveform search", "Time-domain alignment search radius (ms)", 0, 20, 1);
             Add(AdvancedParameters, nameof(VoiceDspParameters.BlockMilliseconds), "Analysis window", "Larger windows can sound smoother but add live delay (ms)", 10, 250, 1);
             Add(AdvancedParameters, nameof(VoiceDspParameters.IntervalMilliseconds), "Processing interval", "At most half the analysis window (ms)", 1, 125, 1);
             using (var enumerator = new MMDeviceEnumerator())
@@ -138,7 +140,17 @@ internal partial class VoiceDesignerDialog : Window
     {
         if (!_ready || StartingPoint.SelectedItem is not VoiceProfile profile) return;
         _starting = profile.Parameters;
-        StartingHint.Text = BuiltInVoiceProfiles.Description(profile.Id) ?? "Customize this starting point and save your own copy. Recordings stay in memory only.";
+        StartingHint.Text = profile.Parameters.PitchEngine == PitchEngine.TimeDomain
+            ? "Time-domain voice. Pitch also moves resonance; independent resonance adjustment is unavailable. Recordings stay in memory only."
+            : BuiltInVoiceProfiles.Description(profile.Id) ?? "Customize this starting point and save your own copy. Recordings stay in memory only.";
+        foreach (var (name, slider) in _sliders)
+        {
+            bool timeDomain = _starting.PitchEngine == PitchEngine.TimeDomain;
+            bool domainOnly = name is nameof(VoiceDspParameters.TimeDomainWindowMilliseconds) or nameof(VoiceDspParameters.TimeDomainSearchMilliseconds);
+            bool spectralOnly = name is nameof(VoiceDspParameters.FormantSemitones) or nameof(VoiceDspParameters.FormantBaseHz)
+                or nameof(VoiceDspParameters.TonalityLimitHz) or nameof(VoiceDspParameters.BlockMilliseconds) or nameof(VoiceDspParameters.IntervalMilliseconds);
+            ((Grid)slider.Parent).IsEnabled = domainOnly ? timeDomain : !spectralOnly || !timeDomain;
+        }
         VoiceName.Text = profile.DisplayName == "Neutral starting point" ? "My voice" : (profile.DisplayName.Length > 93 ? profile.DisplayName[..93] : profile.DisplayName) + " (copy)";
         OnReset(this, new RoutedEventArgs());
     }
@@ -254,7 +266,7 @@ internal partial class VoiceDesignerDialog : Window
     {
         try
         {
-            var profile = new VoiceProfile { FormatVersion = 1, Id = Guid.NewGuid().ToString(), DisplayName = VoiceName.Text.Trim(), Parameters = Snapshot() };
+            var profile = new VoiceProfile { FormatVersion = _starting.PitchEngine == PitchEngine.TimeDomain ? 2 : 1, Id = Guid.NewGuid().ToString(), DisplayName = VoiceName.Text.Trim(), Parameters = Snapshot() };
             _store.Import(profile);
             SavedProfile = profile; DialogResult = true;
         }

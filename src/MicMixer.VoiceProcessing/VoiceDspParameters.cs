@@ -7,6 +7,11 @@ public sealed record VoiceDspParameters
 {
     public static VoiceDspParameters Initial { get; } = new();
 
+    // Engine-specific fields are optional for legacy format-1 profiles.
+    public PitchEngine PitchEngine { get; init; } = PitchEngine.Signalsmith;
+    public float TimeDomainWindowMilliseconds { get; init; } = 24f;
+    public float TimeDomainSearchMilliseconds { get; init; } = 8f;
+
     public float PitchSemitones { get; init; } = 0f;
     public float FormantSemitones { get; init; } = 0f;
     public float FormantBaseHz { get; init; } = 0f;
@@ -39,6 +44,15 @@ public sealed record VoiceDspParameters
         ArgumentOutOfRangeException.ThrowIfLessThan(channels, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(channels, 8);
 
+        if (!Enum.IsDefined(PitchEngine)) throw new ArgumentOutOfRangeException(nameof(PitchEngine));
+        RequireFinite(TimeDomainWindowMilliseconds, nameof(TimeDomainWindowMilliseconds), 10f, 50f);
+        RequireFinite(TimeDomainSearchMilliseconds, nameof(TimeDomainSearchMilliseconds), 0f, 20f);
+        if (PitchEngine == PitchEngine.TimeDomain)
+        {
+            RequireFinite(PitchSemitones, nameof(PitchSemitones), -12f, 12f);
+            if (FormantSemitones != 0f)
+                throw new ArgumentException("Independent resonance adjustment is not supported by the time-domain engine. Use 0.", nameof(FormantSemitones));
+        }
         RequireFinite(PitchSemitones, nameof(PitchSemitones), -24f, 24f);
         RequireFinite(FormantSemitones, nameof(FormantSemitones), -24f, 24f);
         RequireFinite(FormantBaseHz, nameof(FormantBaseHz), 0f, sampleRate / 2f);

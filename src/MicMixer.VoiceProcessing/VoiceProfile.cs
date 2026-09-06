@@ -15,6 +15,8 @@ public sealed record VoiceProfile
     public VoiceDspParameters Resolve(bool alternateWindow)
     {
         if (!alternateWindow) return Parameters;
+        if (Parameters.PitchEngine == PitchEngine.TimeDomain)
+            throw new InvalidDataException("This time-domain profile has no alternate Signalsmith window.");
         if (AlternateBlockMilliseconds is not float block)
             throw new InvalidDataException("The selected profile has no alternate analysis window. Turn off the alternate window option.");
         return Parameters with { BlockMilliseconds = block };
@@ -22,11 +24,13 @@ public sealed record VoiceProfile
 
     public void Validate()
     {
-        if (FormatVersion != 1) throw new InvalidDataException("Unsupported voice profile format version.");
+        if (FormatVersion is not (1 or 2)) throw new InvalidDataException("Unsupported voice profile format version.");
         if (!Guid.TryParseExact(Id, "D", out _)) throw new InvalidDataException("Profile ID must be a UUID.");
         if (string.IsNullOrWhiteSpace(DisplayName) || DisplayName.Length > 100)
             throw new InvalidDataException("Profile display name must contain 1–100 characters.");
         if (Parameters == null) throw new InvalidDataException("Profile DSP parameters are missing.");
+        if (Parameters.PitchEngine == PitchEngine.TimeDomain && FormatVersion != 2)
+            throw new InvalidDataException("Time-domain profiles require format version 2.");
         Parameters.Validate(48_000, 1);
         if (AlternateBlockMilliseconds != null) Resolve(true).Validate(48_000, 1);
     }
@@ -59,8 +63,16 @@ public sealed class VoiceProfileStore
             if (parameters.ValueKind != JsonValueKind.Object)
                 throw new InvalidDataException("Profile DSP parameters are missing.");
             var names = parameters.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var versionElement = document.RootElement.EnumerateObject()
+                .FirstOrDefault(p => p.Name.Equals("formatVersion", StringComparison.OrdinalIgnoreCase)).Value;
+            if (versionElement.ValueKind != JsonValueKind.Number || !versionElement.TryGetInt32(out int version))
+                throw new InvalidDataException("Profile format version is missing or invalid.");
             foreach (var property in typeof(VoiceDspParameters).GetProperties().Where(p => p.GetMethod is { IsStatic: false }))
-                if (!names.Contains(property.Name)) throw new InvalidDataException($"Missing DSP parameter: {property.Name}.");
+            {
+                bool legacyOptional = version == 1 && property.Name is nameof(VoiceDspParameters.PitchEngine)
+                    or nameof(VoiceDspParameters.TimeDomainWindowMilliseconds) or nameof(VoiceDspParameters.TimeDomainSearchMilliseconds);
+                if (!legacyOptional && !names.Contains(property.Name)) throw new InvalidDataException($"Missing DSP parameter: {property.Name}.");
+            }
             var profile = JsonSerializer.Deserialize<VoiceProfile>(json, JsonOptions)
                 ?? throw new InvalidDataException("Profile is empty.");
             profile.Validate();

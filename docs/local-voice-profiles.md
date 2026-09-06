@@ -143,3 +143,34 @@ The main voice volume slider occupies its own full-width row. The old alternate
 analysis-window checkbox is hidden unless the selected profile actually supplies
 an alternate. For a longer alternate it reads **Smoother processing (more delay)**;
 its tooltip explains the quality/latency tradeoff. The two starters do not need this option.
+
+## Time-domain pitch engine (format 2)
+
+Profiles can choose the streaming resampling/WSOLA engine with `pitchEngine:
+"TimeDomain"`, `timeDomainWindowMilliseconds` (10–50, default 24), and
+`timeDomainSearchMilliseconds` (0–20, default 8). Use `formatVersion: 2` and
+include all DSP fields. Format-1 files missing these three fields still load with
+the original Signalsmith engine and defaults. Unknown engines and malformed
+versions are rejected; old app versions reject format 2 rather than silently
+substituting another pitch algorithm.
+
+The time-domain engine uses a rational polyphase FIR resampler, a linked-channel
+waveform alignment search, 50% overlap and squared-sine weights. Absolute input
+positions avoid accumulating timing drift. Constructor-prepared buffers bound
+memory use; Process and Flush do not allocate or perform file I/O. Callback sizes
+may vary down to one frame, and Reset clears all history. The end-of-file flush
+uses zero padding, trims the reported delay and preserves the original length.
+
+Independent formant adjustment is not implemented for this engine: it must be
+zero. The designer disables unsupported resonance/Signalsmith controls and shows
+the waveform window/search controls for time-domain profiles. Copies preserve the
+engine and save as format 2. The two original starter profiles remain unchanged;
+quality at their larger shifts should be auditioned before changing defaults.
+
+Segment length is not total algorithmic latency. The processor reports the
+bounded window/search/FIR lookahead at the actual sample rate and pitch. This
+may exceed 50 ms for larger windows or shifts; callers must inspect LatencySamples.
+Preview and routing use the same processor and post-EQ/compression implementation.
+The output limiter, dry delay compensation and routing/hotkey semantics are unchanged.
+All personal profiles remain local JSON files; no private voice parameters or
+reference audio are embedded in the application.

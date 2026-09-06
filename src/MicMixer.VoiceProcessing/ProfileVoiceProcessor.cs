@@ -6,7 +6,7 @@ namespace MicMixer.Dsp;
 /// </summary>
 public sealed class ProfileVoiceProcessor : IVoiceProcessor
 {
-    private readonly SignalsmithStretchBackend _stretch;
+    private readonly IPitchBackend _stretch;
     private readonly BiquadFilter[] _equalizers;
     private readonly LinkedCompressor _compressor;
     private readonly float _saturationDrive;
@@ -20,7 +20,9 @@ public sealed class ProfileVoiceProcessor : IVoiceProcessor
         SampleRate = sampleRate;
         Channels = channels;
 
-        _stretch = new SignalsmithStretchBackend(sampleRate, channels, Preset);
+        _stretch = Preset.PitchEngine == PitchEngine.TimeDomain
+            ? new TimeDomainStretchBackend(sampleRate, channels, Preset)
+            : new SignalsmithStretchBackend(sampleRate, channels, Preset);
         _equalizers =
         [
             BiquadFilter.HighPass(sampleRate, channels, Preset.HighPassHz),

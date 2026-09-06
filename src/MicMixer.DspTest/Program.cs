@@ -112,6 +112,7 @@ internal static class DspTestApplication
         Console.WriteLine($"Input:             {inputPath}");
         Console.WriteLine($"Output:            {outputPath}");
         Console.WriteLine($"Format:            {source.SampleRate} Hz, {source.Channels} channel(s), {durationSeconds:F2} s");
+        Console.WriteLine($"Pitch engine:      {preset.PitchEngine}");
         Console.WriteLine($"Pitch/formant:     {preset.PitchSemitones:+0.##;-0.##;0} / {preset.FormantSemitones:+0.##;-0.##;0} semitones");
         Console.WriteLine($"Tonality limit:    {preset.TonalityLimitHz:0.##} Hz");
         Console.WriteLine($"Analysis/interval: {processor.AnalysisBlockSamples} / {processor.ProcessingIntervalSamples} samples");

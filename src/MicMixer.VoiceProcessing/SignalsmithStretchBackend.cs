@@ -7,7 +7,7 @@ namespace MicMixer.Dsp;
 /// SignalsmithStretch-CS. Keeping the ABI here avoids leaking a third-party API
 /// into MicMixer and fixes frame-vs-interleaved-sample counting at the boundary.
 /// </summary>
-internal sealed partial class SignalsmithStretchBackend : IDisposable
+internal sealed partial class SignalsmithStretchBackend : IPitchBackend
 {
     private const string LibraryName = "SignalsmithStretch";
     private IntPtr _handle;
