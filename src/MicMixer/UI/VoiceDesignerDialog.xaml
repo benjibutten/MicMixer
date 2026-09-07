@@ -13,11 +13,13 @@
   <StackPanel Margin="0,0,0,12">
    <TextBlock Text="Create a voice" FontSize="24" FontWeight="SemiBold"/>
    <Grid Margin="0,12,0,0">
-    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="170"/></Grid.ColumnDefinitions>
     <StackPanel Margin="0,0,12,0"><TextBlock Text="Start from"/><ComboBox x:Name="StartingPoint" Margin="0,4,0,0" MinHeight="30" DisplayMemberPath="DisplayName" SelectionChanged="OnStartingPointChanged" AutomationProperties.Name="Starting profile"/></StackPanel>
-    <StackPanel Grid.Column="1"><TextBlock Text="Name your voice"/><TextBox x:Name="VoiceName" MaxLength="100" Padding="6" Margin="0,4,0,0" TextChanged="OnNameChanged" AutomationProperties.Name="Voice name"/></StackPanel>
+    <StackPanel Grid.Column="1" Margin="0,0,12,0"><TextBlock Text="Name your voice"/><TextBox x:Name="VoiceName" MaxLength="100" Padding="6" Margin="0,4,0,0" TextChanged="OnNameChanged" AutomationProperties.Name="Voice name"/></StackPanel>
+    <StackPanel Grid.Column="2"><TextBlock Text="Pitch engine"/><ComboBox x:Name="EngineSelector" Margin="0,4,0,0" MinHeight="30" DisplayMemberPath="Name" SelectionChanged="OnEngineChanged" AutomationProperties.Name="Pitch engine"/></StackPanel>
    </Grid>
    <TextBlock x:Name="StartingHint" Foreground="#526173" FontSize="11" Margin="0,6,0,0"/>
+   <TextBlock x:Name="EngineHint" Foreground="#526173" FontSize="11" Margin="0,4,0,0"/>
   </StackPanel>
   <Border Grid.Row="1" Style="{StaticResource Card}"><StackPanel>
    <TextBlock Text="Your test sample · record, listen, compare" FontSize="15" FontWeight="SemiBold"/>

@@ -34,6 +34,7 @@ internal partial class VoiceDesignerDialog : Window
     private CancellationTokenSource? _render, _liveRender;
     private readonly Stopwatch _recordingClock = new();
     private VoiceDspParameters _starting = VoiceDspParameters.Initial;
+    private PitchEngine _engine = PitchEngine.Signalsmith;
     private VoiceProfile? _editing;
     private VoiceProfile? _neutral;
     private VoiceDspParameters? _baseline;
@@ -42,6 +43,12 @@ internal partial class VoiceDesignerDialog : Window
     private bool _ready, _recording, _closed, _resetting, _parametersValid;
     public VoiceProfile? SavedProfile { get; private set; }
     private sealed record OutputOption(string Id, string Name);
+    private sealed record EngineOption(PitchEngine Engine, string Name);
+    private static readonly EngineOption[] EngineOptions =
+    [
+        new(PitchEngine.Signalsmith, "Signalsmith (default)"),
+        new(PitchEngine.TimeDomain, "Time-domain")
+    ];
 
     public VoiceDesignerDialog(VoiceProfile? selected, string? inputId, string? inputName, string? outputId, string? cableId)
     {
@@ -75,6 +82,7 @@ internal partial class VoiceDesignerDialog : Window
             Add(AdvancedParameters, nameof(VoiceDspParameters.TimeDomainSearchMilliseconds), "Waveform search", "ms", "Time-domain alignment search radius", 0, 20, 1);
             Add(AdvancedParameters, nameof(VoiceDspParameters.BlockMilliseconds), "Analysis window", "ms", "Larger windows can sound smoother but add live delay", 10, 250, 1);
             Add(AdvancedParameters, nameof(VoiceDspParameters.IntervalMilliseconds), "Processing interval", "ms", "At most half the analysis window", 1, 125, 1);
+            EngineSelector.ItemsSource = EngineOptions;
             using (var enumerator = new MMDeviceEnumerator())
             {
                 var outputs = new List<OutputOption>();
@@ -185,7 +193,7 @@ internal partial class VoiceDesignerDialog : Window
 
     private VoiceDspParameters Snapshot()
     {
-        var parameters = _starting with { };
+        var parameters = _starting with { PitchEngine = _engine };
         foreach (var (name, row) in _rows) typeof(VoiceDspParameters).GetProperty(name)!.SetValue(parameters, (float)row.Value);
         if (parameters.IntervalMilliseconds > parameters.BlockMilliseconds / 2)
             throw new ArgumentException("Processing interval must be at most half the analysis window. Adjust either value under Advanced.");
@@ -272,19 +280,9 @@ internal partial class VoiceDesignerDialog : Window
         if (!_ready || StartingPoint.SelectedItem is not VoiceProfile profile) return;
         _starting = profile.Parameters;
         _editing = ReferenceEquals(profile, _neutral) || BuiltInVoiceProfiles.Find(profile.Id) != null ? null : profile;
-        StartingHint.Text = profile.Parameters.PitchEngine == PitchEngine.TimeDomain
-            ? "Time-domain voice. Pitch also moves resonance; independent resonance adjustment is unavailable. Recordings stay in memory only."
-            : BuiltInVoiceProfiles.Description(profile.Id) ?? (_editing != null
-                ? "Your own voice. Save the changes back to it, or keep both with Save as copy. Recordings stay in memory only."
-                : "Customize this starting point and save your own copy. Recordings stay in memory only.");
-        foreach (var (name, row) in _rows)
-        {
-            bool timeDomain = _starting.PitchEngine == PitchEngine.TimeDomain;
-            bool domainOnly = name is nameof(VoiceDspParameters.TimeDomainWindowMilliseconds) or nameof(VoiceDspParameters.TimeDomainSearchMilliseconds);
-            bool spectralOnly = name is nameof(VoiceDspParameters.FormantSemitones) or nameof(VoiceDspParameters.FormantBaseHz)
-                or nameof(VoiceDspParameters.TonalityLimitHz) or nameof(VoiceDspParameters.BlockMilliseconds) or nameof(VoiceDspParameters.IntervalMilliseconds);
-            row.Container.IsEnabled = domainOnly ? timeDomain : !spectralOnly || !timeDomain;
-        }
+        StartingHint.Text = BuiltInVoiceProfiles.Description(profile.Id) ?? (_editing != null
+            ? "Your own voice. Save the changes back to it, or keep both with Save as copy. Recordings stay in memory only."
+            : "Customize this starting point and save your own copy. Recordings stay in memory only.");
         VoiceName.Text = _editing != null ? profile.DisplayName
             : ReferenceEquals(profile, _neutral) ? "My voice"
             : (profile.DisplayName.Length > 93 ? profile.DisplayName[..93] : profile.DisplayName) + " (copy)";
@@ -306,9 +304,44 @@ internal partial class VoiceDesignerDialog : Window
     private void OnReset(object sender, RoutedEventArgs e)
     {
         _resetting = true;
+        _engine = _starting.PitchEngine;
+        EngineSelector.SelectedItem = EngineOptions.First(o => o.Engine == _engine);
         foreach (var (name, row) in _rows) row.Value = (float)typeof(VoiceDspParameters).GetProperty(name)!.GetValue(_starting)!;
         _resetting = false;
+        UpdateRowAvailability();
+        UpdateEngineHint();
         DraftChanged();
+    }
+
+    private void OnEngineChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_ready || EngineSelector.SelectedItem is not EngineOption option) return;
+        _engine = option.Engine;
+        // Independent resonance adjustment is not supported by the time-domain engine.
+        if (_engine == PitchEngine.TimeDomain && _rows.TryGetValue(nameof(VoiceDspParameters.FormantSemitones), out var formant))
+            formant.Value = 0;
+        UpdateRowAvailability();
+        UpdateEngineHint();
+        DraftChanged();
+    }
+
+    private void UpdateRowAvailability()
+    {
+        bool timeDomain = _engine == PitchEngine.TimeDomain;
+        foreach (var (name, row) in _rows)
+        {
+            bool domainOnly = name is nameof(VoiceDspParameters.TimeDomainWindowMilliseconds) or nameof(VoiceDspParameters.TimeDomainSearchMilliseconds);
+            bool spectralOnly = name is nameof(VoiceDspParameters.FormantSemitones) or nameof(VoiceDspParameters.FormantBaseHz)
+                or nameof(VoiceDspParameters.TonalityLimitHz) or nameof(VoiceDspParameters.BlockMilliseconds) or nameof(VoiceDspParameters.IntervalMilliseconds);
+            row.Container.IsEnabled = domainOnly ? timeDomain : !spectralOnly || !timeDomain;
+        }
+    }
+
+    private void UpdateEngineHint()
+    {
+        EngineHint.Text = _engine == PitchEngine.TimeDomain
+            ? "Time-domain: lower latency. Pitch also moves resonance; independent resonance adjustment is unavailable."
+            : "Signalsmith: the default engine, better suited to larger pitch shifts.";
     }
 
     private void UpdateButtons()
@@ -441,7 +474,7 @@ internal partial class VoiceDesignerDialog : Window
         {
             var profile = new VoiceProfile
             {
-                FormatVersion = _starting.PitchEngine == PitchEngine.TimeDomain ? 2 : 1,
+                FormatVersion = _engine == PitchEngine.TimeDomain ? 2 : 1,
                 Id = target?.Id ?? Guid.NewGuid().ToString(),
                 DisplayName = VoiceName.Text.Trim(),
                 Parameters = Snapshot(),
