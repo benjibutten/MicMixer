@@ -25,6 +25,15 @@ internal sealed class VoicePreview : IDisposable
 
     public void SetVolume(float volume) => _playingSamples?.SetVolume(volume);
 
+    /// <summary>Swaps in a re-rendered take without interrupting playback or losing the position.</summary>
+    public void ReplaceSamples(float[] samples) => _playingSamples?.Replace(samples);
+
+    /// <summary>Live input level while recording. A device unplugged mid-take reports nothing.</summary>
+    public float RecordingPeak
+    {
+        get { try { return _inputDevice?.AudioMeterInformation.MasterPeakValue ?? 0f; } catch { return 0f; } }
+    }
+
     public Task<float[]> RecordAsync(string deviceId)
     {
         StopPlayback();
@@ -141,20 +150,25 @@ internal sealed class VoicePreview : IDisposable
 
     internal sealed class PreviewSamples(float[] samples, float volume, bool loop) : ISampleProvider
     {
+        private float[] _samples = samples;
         private int _position;
         private float _volume = volume;
         private bool _loop = loop;
         public void SetVolume(float value) => Volatile.Write(ref _volume, value);
         public void SetLoop(bool value) => Volatile.Write(ref _loop, value);
+        // Swapped from the UI thread mid-playback. Every take renders to the same
+        // length, so the position stays meaningful; a shorter one just wraps early.
+        public void Replace(float[] value) => Volatile.Write(ref _samples, value);
         public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(48_000, 1);
         public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
         public int Read(Span<float> buffer)
         {
+            var current = Volatile.Read(ref _samples);
             int written = 0;
-            while (written < buffer.Length && samples.Length > 0)
+            while (written < buffer.Length && current.Length > 0)
             {
-                if (_position == samples.Length) { if (!Volatile.Read(ref _loop)) break; _position = 0; }
-                buffer[written++] = Math.Clamp(samples[_position++] * Volatile.Read(ref _volume), -1f, 1f);
+                if (_position >= current.Length) { if (!Volatile.Read(ref _loop)) break; _position = 0; }
+                buffer[written++] = Math.Clamp(current[_position++] * Volatile.Read(ref _volume), -1f, 1f);
             }
             return written;
         }

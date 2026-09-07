@@ -184,5 +184,53 @@ public sealed class VoiceProfileTests : IDisposable
         action.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Fact]
+    public void EditingOwnProfile_OverwritesInPlace_WithoutLeavingACopyBehind()
+    {
+        var store = new VoiceProfileStore(_directory);
+        var profile = Example();
+        store.Import(profile);
+        var edited = profile with { DisplayName = "Renamed", Parameters = profile.Parameters with { PitchSemitones = -7 } };
+        store.Replace(edited);
+        store.Load(profile.Id).Should().Be(edited);
+        Directory.GetFiles(_directory, "*.json").Should().ContainSingle();
+        Directory.GetFiles(_directory, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeletingAVoice_RemovesItFromTheListWithoutTouchingTheOthers()
+    {
+        var store = new VoiceProfileStore(_directory);
+        var kept = Example();
+        var removed = Example();
+        store.Import(kept); store.Import(removed);
+        store.Delete(removed.Id);
+        store.List().Profiles.Should().NotContain(removed).And.Contain(kept);
+        store.List().Errors.Should().BeEmpty();
+        Action reload = () => store.Load(removed.Id);
+        reload.Should().Throw<InvalidDataException>();
+    }
+
+    [Theory]
+    [InlineData("../escape")]
+    [InlineData("invalid")]
+    public void UnsafeIdentity_IsRejectedByDelete(string id)
+    {
+        Action action = () => new VoiceProfileStore(_directory).Delete(id);
+        action.Should().Throw<InvalidDataException>();
+    }
+
+    [Fact]
+    public void BuiltInVoices_RefuseBothOverwriteAndDeletion()
+    {
+        var store = new VoiceProfileStore(_directory);
+        var builtIn = BuiltInVoiceProfiles.All[0];
+        Action replace = () => store.Replace(builtIn with { DisplayName = "Hijacked" });
+        replace.Should().Throw<InvalidDataException>();
+        Action delete = () => store.Delete(builtIn.Id);
+        delete.Should().Throw<InvalidDataException>();
+        store.Load(builtIn.Id).Should().Be(builtIn);
+    }
+
     public void Dispose() { if (Directory.Exists(_directory)) Directory.Delete(_directory, true); }
 }

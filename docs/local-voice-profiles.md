@@ -99,7 +99,8 @@ Recording and playback share the panel above the voice controls. Use **Play orig
 and **Play voice** to audition the same phrase, with optional looping. The active
 button becomes **Pause**, then **Resume**; resuming continues from the same position.
 **Stop** returns to the start. The buttons return to Play when the sample ends.
-Edits stop the old preview; press Play voice to hear the new settings.
+Edits while the sample is playing re-render it in the background and swap it in
+at the same position, so a slider can be dialled in by ear without restarting.
 Rendering runs in the background using the live DSP, flushes its tail and removes
 its reported latency to preserve the sample timeline. Preview listening volume is
 independent of the profile and the main processed-voice volume.
@@ -108,15 +109,22 @@ Pitch and formant are the main voice-character controls. Warmth, clarity and air
 shape its tone, and texture adds saturation. Advanced controls expose EQ frequencies,
 compression, tonality and analysis timing. A larger analysis window can trade more
 live latency for smoother processing. The processing interval cannot exceed half
-the analysis window. Numeric fields accept exact values; sliders also support the
-keyboard. All settings use the existing DSP validation limits.
+the analysis window; breaking that rule blocks saving and says so next to the Save
+button. Frequency and compressor time sliders use a logarithmic scale so their
+useful low end stays reachable; every row shows its unit. Numeric fields accept
+exact values and snap out-of-range entries to the nearest legal one; sliders also
+support the keyboard. All settings use the existing DSP validation limits.
 
-**Reset** restores the starting DSP settings. **Cancel** discards the draft.
-**Save voice** writes a new UUID profile atomically and selects it immediately in
-the main window. No restart or manual JSON editing is needed. Existing profiles
-are never overwritten. The new voice uses the analysis window shown in the editor;
-legacy alternate windows remain in the original profile. Save contains parameters
-only, never the test recording. Start routing to use the new profile live.
+**Reset** restores the starting DSP settings. **Cancel** discards the draft and
+asks first when there is something to lose. Starting from a built-in or the neutral
+point, **Save voice** writes a new UUID profile atomically and selects it in the
+main window. Starting from one of your own profiles, **Save changes** writes back
+to that profile and **Save as copy** keeps both, so editing a voice no longer
+accumulates "(copy) (copy)" duplicates. Built-in starters can never be overwritten.
+A legacy alternate window is carried over when a profile is saved back to itself.
+Save contains parameters only, never the test recording. **Delete** in the main
+window removes the selected profile after confirming; built-ins cannot be deleted.
+Start routing to use the new profile live.
 
 ## Built-in starter tuning
 
@@ -142,10 +150,26 @@ Starters have stable reserved UUIDs and are loaded from the application, without
 creating files in AppData. Save voice always creates a new local UUID copy; imports
 cannot overwrite or shadow a starter. The original starters remain available.
 
+The device row at the top of the routing column holds three peer dropdowns: normal
+mic, modified voice and virtual cable output. The modified-voice dropdown only names
+the *kind* of source. Its settings live in a full-width panel directly below, which is
+absent for **None**, holds the device picker for **External microphone / Voicemod**,
+and holds the profile picker, **Create a voice**, **Delete** and the voice volume for
+**Local voice profile**. Keeping the settings out of the device row is what stops one
+column from growing several rows taller than the two beside it.
+
 The main voice volume slider occupies its own full-width row. The old alternate
 analysis-window checkbox is hidden unless the selected profile actually supplies
 an alternate. For a longer alternate it reads **Smoother processing (more delay)**;
-its tooltip explains the quality/latency tradeoff. The two starters do not need this option.
+its tooltip explains the quality/latency tradeoff. The two starters do not need this
+option, and nothing in the app writes an alternate, so in practice the checkbox only
+appears for profiles migrated from an earlier layout.
+
+On a first run no profile has been chosen yet, so the main window selects the first
+starter rather than leaving an empty box that only reports the problem once Enable
+has already failed. While routing is active the profile list, **Create a voice** and
+**Delete** are disabled with a tooltip that says why, instead of accepting the click
+and refusing afterwards.
 
 ## Time-domain pitch engine (format 2)
 

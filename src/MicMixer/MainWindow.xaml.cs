@@ -520,7 +520,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ApplySecondaryOutputConfig();
 
         _isStartingRouting = true;
-        VoiceProfileCombo.IsEnabled = false;
+        ApplyModdedMicUiState();
         ToggleBtn.IsEnabled = false;
         StatusText.Text = "Starting routing...";
 
@@ -547,7 +547,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         finally
         {
             _isStartingRouting = false;
-            VoiceProfileCombo.IsEnabled = !_router.IsRouting;
+            ApplyModdedMicUiState();
             ToggleBtn.IsEnabled = true;
         }
 
@@ -642,12 +642,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
             DryInputCombo.IsEnabled = true;
             ModdedInputCombo.IsEnabled = true;
             ExternalModdedInputCombo.IsEnabled = true;
-            VoiceProfileCombo.IsEnabled = CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile;
-            LongerAnalysisWindowCheck.IsEnabled = true;
             OutputDeviceCombo.IsEnabled = true;
             SecondaryOutputCombo.IsEnabled = true;
         }
 
+        ApplyModdedMicUiState();
         SecondaryOutputEnabledCheck.IsEnabled = true;
         UpdateSecondaryOutputStatus();
         UpdateStatusText();
@@ -912,11 +911,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
         });
     }
 
+    private static readonly System.Windows.Media.Brush MutedTextBrush = CreateFrozenBrush(0x47, 0x55, 0x69);
+    private static readonly System.Windows.Media.Brush ProblemTextBrush = CreateFrozenBrush(0xB9, 0x1C, 0x1C);
+
+    private List<string> _voiceProfileProblems = [];
+
     private static readonly ModifiedVoiceOption[] ModifiedVoiceOptions =
     [
         new(ModifiedVoiceMode.None, "None"),
         new(ModifiedVoiceMode.ExternalMicrophone, "External microphone / Voicemod"),
-        new(ModifiedVoiceMode.LocalProfile, "Local voice profile (experimental)")
+        new(ModifiedVoiceMode.LocalProfile, "Local voice profile")
     ];
 
     private ModifiedVoiceMode CurrentModifiedVoiceMode =>
@@ -935,15 +939,28 @@ public partial class MainWindow : Window, IMicMixerControlHost
         bool external = mode == ModifiedVoiceMode.ExternalMicrophone;
         bool builtIn = mode == ModifiedVoiceMode.LocalProfile;
 
-        VoiceProfileCombo.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
-        CreateVoiceButton.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
-        VoiceProfileMessage.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
-        VoiceProfileCombo.IsEnabled = builtIn && !_router.IsRouting && !_isStartingRouting;
+        // "None" has nothing to configure, so the panel is absent rather than empty.
+        ModifiedVoicePanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
+        ModifiedVoiceTitle.Text = builtIn ? "Local voice profile · experimental" : "External modified microphone";
+
+        var localControls = builtIn ? Visibility.Visible : Visibility.Collapsed;
+        VoiceProfileCombo.Visibility = localControls;
+        DeleteVoiceButton.Visibility = localControls;
+        CreateVoiceButton.Visibility = localControls;
+        ProcessedVoiceVolumePanel.Visibility = localControls;
         ExternalModdedInputCombo.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
-        UpdateVoiceWindowLabel();
-        ProcessedVoiceVolumePanel.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+
+        bool idle = !_router.IsRouting && !_isStartingRouting;
+        VoiceProfileCombo.IsEnabled = builtIn && idle;
+        CreateVoiceButton.IsEnabled = idle;
+        CreateVoiceButton.ToolTip = idle
+            ? "Record a sample, shape a voice and save it as a local profile."
+            : "Stop routing to open the voice designer.";
         ExternalModdedInputCombo.IsEnabled = external && !_router.IsRouting && !_isDevicesLoading;
         LongerAnalysisWindowCheck.IsEnabled = builtIn && !_router.IsRouting;
+        UpdateVoiceWindowLabel();
+        UpdateDeleteButton();
+        ShowModifiedVoiceStatus();
 
         // The hotkey still matters without a modded mic when push-to-talk gates the mix.
         bool hotkeyRelevant = !skip || IsPushToTalk;
@@ -956,23 +973,79 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void LoadVoiceProfiles()
     {
         var result = new VoiceProfileStore().List();
+        _voiceProfileProblems = result.Errors;
         VoiceProfileCombo.ItemsSource = result.Profiles;
         VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
-        VoiceProfileMessage.Text = result.Errors.Count > 0 ? string.Join("\n", result.Errors)
-            : result.Profiles.Count == 0 ? "No voices yet. Choose Create a voice to record, preview and save your own."
-            : "Select a local voice profile.";
-        if (_settings.SelectedVoiceProfileId != null && VoiceProfileCombo.SelectedItem == null)
-            VoiceProfileMessage.Text = "The selected profile is missing or invalid. Restore it or explicitly choose another profile.";
+        // A first run has no stored choice. Land on a starter rather than an empty
+        // combo that only reports its emptiness once Enable has already failed.
+        if (VoiceProfileCombo.SelectedItem == null && _settings.SelectedVoiceProfileId == null)
+        {
+            VoiceProfileCombo.SelectedItem = result.Profiles.FirstOrDefault();
+            _settings.SelectedVoiceProfileId = (VoiceProfileCombo.SelectedItem as VoiceProfile)?.Id;
+        }
+        ShowModifiedVoiceStatus();
         UpdateVoiceWindowLabel();
+    }
+
+    private void ShowModifiedVoiceStatus()
+    {
+        if (CurrentModifiedVoiceMode != ModifiedVoiceMode.LocalProfile)
+        {
+            SetModifiedVoiceMessage("Pick the device your voice changer outputs to. Hold the hotkey to send it instead of your normal mic.");
+        }
+        else if (_voiceProfileProblems.Count > 0)
+        {
+            SetModifiedVoiceMessage(string.Join("\n", _voiceProfileProblems), problem: true);
+        }
+        else if (VoiceProfileCombo.SelectedItem is not VoiceProfile selected)
+        {
+            SetModifiedVoiceMessage("The selected profile is missing or invalid. Choose another one.", problem: true);
+        }
+        else
+        {
+            SetModifiedVoiceMessage(BuiltInVoiceProfiles.Find(selected.Id) != null
+                ? "A built-in starting point. Create a voice to make it your own."
+                : "One of your own voices. Create a voice to edit or copy it.");
+        }
+    }
+
+    private void SetModifiedVoiceMessage(string text, bool problem = false)
+    {
+        ModifiedVoiceMessage.Text = text;
+        ModifiedVoiceMessage.Foreground = problem ? ProblemTextBrush : MutedTextBrush;
+    }
+
+    private void UpdateDeleteButton()
+    {
+        bool own = VoiceProfileCombo.SelectedItem is VoiceProfile profile && BuiltInVoiceProfiles.Find(profile.Id) == null;
+        bool idle = !_router.IsRouting && !_isStartingRouting;
+        DeleteVoiceButton.IsEnabled = own && idle;
+        DeleteVoiceButton.ToolTip = !own ? "Built-in starting points cannot be deleted."
+            : idle ? "Permanently deletes the selected voice from this computer."
+            : "Stop routing to delete a voice.";
+    }
+
+    private void OnDeleteVoice(object sender, RoutedEventArgs e)
+    {
+        if (VoiceProfileCombo.SelectedItem is not VoiceProfile profile || _router.IsRouting || _isStartingRouting) return;
+        var answer = System.Windows.MessageBox.Show(this, $"Delete '{profile.DisplayName}' permanently? This cannot be undone.",
+            "Delete voice", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.OK) return;
+        try
+        {
+            new VoiceProfileStore().Delete(profile.Id);
+            _settings.SelectedVoiceProfileId = null;
+            LoadVoiceProfiles();
+            _settingsStore.Save(_settings);
+            SetModifiedVoiceMessage($"Deleted '{profile.DisplayName}'.");
+        }
+        catch (Exception ex) { SetModifiedVoiceMessage("Could not delete the voice: " + ex.Message, problem: true); }
+        UpdateDeleteButton();
     }
 
     private void OnCreateVoice(object sender, RoutedEventArgs e)
     {
-        if (_router.IsRouting || _isStartingRouting)
-        {
-            VoiceProfileMessage.Text = "Stop routing before opening the voice designer.";
-            return;
-        }
+        if (_router.IsRouting || _isStartingRouting) return;
         try
         {
             var input = DryInputCombo.SelectedItem as AudioDeviceOption;
@@ -986,9 +1059,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 LongerAnalysisWindowCheck.IsChecked = false;
                 LoadVoiceProfiles();
                 _settingsStore.Save(_settings);
+                SetModifiedVoiceMessage($"Saved '{profile.DisplayName}' and selected it.");
             }
         }
-        catch (Exception ex) { VoiceProfileMessage.Text = "Could not open the voice designer: " + ex.Message; }
+        catch (Exception ex) { SetModifiedVoiceMessage("Could not open the voice designer: " + ex.Message, problem: true); }
     }
 
     private void UpdateVoiceWindowLabel()
@@ -1009,9 +1083,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _settings.SelectedVoiceProfileId = profile.Id;
             LongerAnalysisWindowCheck.IsChecked = false;
             _settings.LongerAnalysisWindow = false;
-            VoiceProfileMessage.Text = BuiltInVoiceProfiles.Find(profile.Id) != null
-                ? "Built-in starting point. Create a voice to customize a copy." : "Create a voice to customize a copy.";
+            ShowModifiedVoiceStatus();
             UpdateVoiceWindowLabel();
+            UpdateDeleteButton();
             _settingsStore.Save(_settings);
         }
     }

@@ -87,13 +87,16 @@ public sealed class VoiceProfileStore
 
     public VoiceProfile Load(string? id)
     {
-        if (!Guid.TryParseExact(id, "D", out _))
-            throw new InvalidDataException("No valid local voice profile is selected. Select or import a profile before enabling routing.");
         if (BuiltInVoiceProfiles.Find(id) is { } builtIn) return builtIn;
-        var profile = ReadFile(Path.Combine(DirectoryPath, id + ".json"));
+        var profile = ReadFile(FilePath(id));
         if (profile.Id != id) throw new InvalidDataException("Voice profile ID does not match its filename.");
         return profile;
     }
+
+    /// <summary>Rejects ids that are not UUIDs, so an id can never escape the store directory.</summary>
+    private string FilePath(string? id) => Guid.TryParseExact(id, "D", out _)
+        ? Path.Combine(DirectoryPath, id + ".json")
+        : throw new InvalidDataException("No valid local voice profile is selected. Select or import a profile before enabling routing.");
 
     public (List<VoiceProfile> Profiles, List<string> Errors) List()
     {
@@ -119,19 +122,35 @@ public sealed class VoiceProfileStore
     }
 
     /// <summary>Import/save-as never overwrites an existing or user-edited profile.</summary>
-    public void Import(VoiceProfile profile)
+    public void Import(VoiceProfile profile) => Write(profile, overwrite: false);
+
+    /// <summary>Saves edits back to a profile the user already owns.</summary>
+    public void Replace(VoiceProfile profile) => Write(profile, overwrite: true);
+
+    public void Delete(string? id)
+    {
+        RequireEditable(id);
+        File.Delete(FilePath(id));
+    }
+
+    private void Write(VoiceProfile profile, bool overwrite)
     {
         profile.Validate();
-        if (BuiltInVoiceProfiles.Find(profile.Id) != null)
-            throw new InvalidDataException("Built-in voices cannot be overwritten. Save a copy with a new ID.");
+        RequireEditable(profile.Id);
         Directory.CreateDirectory(DirectoryPath);
-        string destination = Path.Combine(DirectoryPath, profile.Id + ".json");
+        string destination = FilePath(profile.Id);
         string temporary = Path.Combine(DirectoryPath, Guid.NewGuid() + ".tmp");
         try
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(profile, JsonOptions));
-            File.Move(temporary, destination, overwrite: false);
+            File.Move(temporary, destination, overwrite);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static void RequireEditable(string? id)
+    {
+        if (BuiltInVoiceProfiles.Find(id) != null)
+            throw new InvalidDataException("Built-in voices cannot be overwritten. Save a copy with a new ID.");
     }
 }

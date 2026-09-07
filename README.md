@@ -152,7 +152,7 @@ button that should select the modified mic while routing is active:
 - Release delay above `0 ms`: the modified mic remains active until the delay ends.
 - **None**: the hotkey is disabled unless push-to-talk is enabled.
 - **External microphone / Voicemod**: select the existing voice-changer output device.
-- **Local voice profile**: processes the physical microphone using a private local profile. Select a profile and optionally its alternate analysis window. **Processed voice volume** adjusts the wet output from 0–100% while routing is active.
+- **Local voice profile** (experimental): processes the physical microphone using a private local profile. Select a profile, create or edit one in the voice designer, or delete one you no longer want. **Processed voice volume** adjusts the wet output from 0–100% while routing is active.
 
 Push-to-talk reverses the idle behavior: while the hotkey is not held, the virtual
 cable receives silence. Neither microphone audio nor music is sent.

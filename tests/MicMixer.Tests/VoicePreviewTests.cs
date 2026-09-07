@@ -39,6 +39,21 @@ public sealed class VoicePreviewTests
         Assert.Equal(0, source.Read(output));
     }
 
+    [Fact]
+    public void ReRenderingWhilePlaying_SwapsTheAudio_ButKeepsThePlayhead()
+    {
+        var source = new VoicePreview.PreviewSamples([.1f, .2f, .3f, .4f], 1, false);
+        var output = new float[2];
+        Assert.Equal(2, source.Read(output));
+        Assert.Equal(new[] { .1f, .2f }, output);
+        // A slider moved mid-playback re-renders the same take; playback continues
+        // from where it was rather than restarting.
+        source.Replace([.5f, .6f, .7f, .8f]);
+        Assert.Equal(2, source.Read(output));
+        Assert.Equal(new[] { .7f, .8f }, output);
+        Assert.Equal(0, source.Read(output));
+    }
+
     [Theory]
     [InlineData(BuiltInVoiceProfiles.FeminineId, 130, 173.53)]
     [InlineData(BuiltInVoiceProfiles.MasculineId, 210, 157.32)]
