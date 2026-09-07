@@ -24,6 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MicMixer.VoiceProcessing\MicMixer.VoiceProcessing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The stream overlay page ships inside the assembly so the local overlay
          server never depends on loose files next to the exe. -->
     <EmbeddedResource Include="Overlay\ObsOverlay.html" />

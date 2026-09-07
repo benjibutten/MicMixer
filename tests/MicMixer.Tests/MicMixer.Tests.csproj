@@ -17,7 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/MicMixer.VoiceProcessing/MicMixer.VoiceProcessing.csproj" />
     <ProjectReference Include="../../src/MicMixer/MicMixer.csproj" />
-  </ItemGroup>
+</ItemGroup>
 
 </Project>

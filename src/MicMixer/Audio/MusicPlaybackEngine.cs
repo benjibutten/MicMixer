@@ -43,6 +43,7 @@ public sealed class MusicPlaybackEngine : IDisposable
     private readonly ISampleProvider _mixBufferReader;
     private byte[] _mixTrimBuffer = Array.Empty<byte>();
     private long _nextMixTrimLogTicks;
+    private long _lastMixReadTicks;
 
     private AudioFileReader? _reader;
     private ISampleProvider? _playbackChain;
@@ -339,6 +340,9 @@ public sealed class MusicPlaybackEngine : IDisposable
         lock (_syncRoot)
         {
             _mixBuffer.ClearBuffer();
+            // Keep the monitor-to-mix tee live while the newly created routing
+            // pipeline is starting, before its first render callback arrives.
+            Volatile.Write(ref _lastMixReadTicks, Environment.TickCount64);
             var head = new MixHeadProvider(this);
             _mixVolumeProvider = new VolumeSampleProvider(head) { Volume = _musicVolume };
             return FormatNormalizer.Normalize(_mixVolumeProvider, targetFormat);
@@ -552,6 +556,23 @@ public sealed class MusicPlaybackEngine : IDisposable
 
     private void PushToMixBuffer(byte[] scratch, ReadOnlySpan<float> buffer)
     {
+        long now = Environment.TickCount64;
+        long lastMixRead = Volatile.Read(ref _lastMixReadTicks);
+
+        // The monitor can remain active while microphone routing is stopped. In
+        // that state there is no mix consumer, and retaining/continually trimming
+        // monitor blocks only creates work and misleading latency warnings. A new
+        // mix tap clears the buffer and marks itself active before routing starts.
+        if (lastMixRead == 0 || now - lastMixRead > MixHighWatermarkSeconds * 1_000)
+        {
+            if (_mixBuffer.BufferedBytes > 0)
+            {
+                _mixBuffer.ClearBuffer();
+            }
+
+            return;
+        }
+
         int byteCount = buffer.Length * sizeof(float);
 
         if (_mixBuffer.BufferedBytes + byteCount > MixHighWatermarkBytes)
@@ -570,7 +591,6 @@ public sealed class MusicPlaybackEngine : IDisposable
                 // running and nothing draining the mix side, this trims every few
                 // hundred milliseconds indefinitely. The file sink is shared, so
                 // each line is a synchronous flush — on the monitor render thread.
-                long now = Environment.TickCount64;
                 if (now >= _nextMixTrimLogTicks)
                 {
                     _nextMixTrimLogTicks = now + MixTrimLogThrottleMilliseconds;
@@ -588,6 +608,7 @@ public sealed class MusicPlaybackEngine : IDisposable
         if (Volatile.Read(ref _monitorPumpActive))
         {
             // Monitor output is the clock; drain what it teed into the buffer.
+            Volatile.Write(ref _lastMixReadTicks, Environment.TickCount64);
             return _mixBufferReader.Read(buffer);
         }
 

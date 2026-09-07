@@ -1,0 +1,70 @@
+<Window x:Class="MicMixer.UI.VoiceDesignerDialog" x:ClassModifier="internal"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="Create a voice" Width="850" Height="860" MinWidth="700" MinHeight="700"
+ WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="#F3F5F7" Foreground="#10233A">
+ <Window.Resources>
+  <Style TargetType="Button"><Setter Property="Padding" Value="12,7"/><Setter Property="Margin" Value="0,0,8,0"/><Setter Property="Cursor" Value="Hand"/></Style>
+  <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+  <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="White"/><Setter Property="CornerRadius" Value="10"/><Setter Property="Padding" Value="16"/><Setter Property="Margin" Value="0,0,0,12"/><Setter Property="BorderBrush" Value="#DFE5EC"/><Setter Property="BorderThickness" Value="1"/></Style>
+ </Window.Resources>
+ <Grid Margin="22">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel Margin="0,0,0,12">
+   <TextBlock Text="Create a voice" FontSize="24" FontWeight="SemiBold"/>
+   <Grid Margin="0,12,0,0">
+    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="170"/></Grid.ColumnDefinitions>
+    <StackPanel Margin="0,0,12,0"><TextBlock Text="Start from"/><ComboBox x:Name="StartingPoint" Margin="0,4,0,0" MinHeight="30" DisplayMemberPath="DisplayName" SelectionChanged="OnStartingPointChanged" AutomationProperties.Name="Starting profile"/></StackPanel>
+    <StackPanel Grid.Column="1" Margin="0,0,12,0"><TextBlock Text="Name your voice"/><TextBox x:Name="VoiceName" MaxLength="100" Padding="6" Margin="0,4,0,0" TextChanged="OnNameChanged" AutomationProperties.Name="Voice name"/></StackPanel>
+    <StackPanel Grid.Column="2"><TextBlock Text="Pitch engine"/><ComboBox x:Name="EngineSelector" Margin="0,4,0,0" MinHeight="30" DisplayMemberPath="Name" SelectionChanged="OnEngineChanged" AutomationProperties.Name="Pitch engine"/></StackPanel>
+   </Grid>
+   <TextBlock x:Name="StartingHint" Foreground="#526173" FontSize="11" Margin="0,6,0,0"/>
+   <TextBlock x:Name="EngineHint" Foreground="#526173" FontSize="11" Margin="0,4,0,0"/>
+  </StackPanel>
+  <Border Grid.Row="1" Style="{StaticResource Card}"><StackPanel>
+   <TextBlock Text="Your test sample · record, listen, compare" FontSize="15" FontWeight="SemiBold"/>
+   <TextBlock x:Name="InputLabel" Foreground="#526173" FontSize="11" Margin="0,5,0,8"/>
+   <DockPanel LastChildFill="True">
+    <Button x:Name="RecordButton" Content="● Record sample" Click="OnRecord" ToolTip="Speak naturally for 5–10 seconds. The sample stays in memory until you close this window."/>
+    <Button x:Name="StopRecordButton" Content="Stop recording" Click="OnStopRecording" IsEnabled="False"/>
+    <TextBlock Text="Input level" DockPanel.Dock="Left" VerticalAlignment="Center" FontSize="11" Foreground="#526173" Margin="4,0,8,0"/>
+    <ProgressBar x:Name="RecordLevel" Minimum="0" Maximum="1" Height="8" VerticalAlignment="Center"
+                 AutomationProperties.Name="Microphone input level"
+                 ToolTip="Speak at your normal volume. The bar should move around the middle — barely moving is too quiet, pinned to the right is too loud."/>
+   </DockPanel>
+   <TextBlock x:Name="SampleStatus" Text="Record 5–10 seconds of natural speech (max. 15 s). Nothing is saved or uploaded." FontSize="11" Foreground="#526173" Margin="0,6,0,12"/>
+   <WrapPanel>
+    <Button x:Name="OriginalButton" Content="▶ Play original" Click="OnOriginal" IsEnabled="False"/>
+    <Button x:Name="PreviewButton" Content="▶ Play voice" Click="OnPreview" IsEnabled="False" Background="#7C3AED" Foreground="White"/>
+    <Button x:Name="StopPreviewButton" Content="■ Stop" Click="OnStop" IsEnabled="False" ToolTip="Stop and return to the beginning"/>
+    <CheckBox x:Name="Loop" Content="Loop sample" IsChecked="True" VerticalAlignment="Center" Checked="OnPreviewSettingChanged" Unchecked="OnPreviewSettingChanged"/>
+   </WrapPanel>
+   <Grid Margin="0,10,0,0">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
+    <TextBlock Text="Listen on" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
+    <ComboBox x:Name="OutputDevice" Grid.Column="1" DisplayMemberPath="Name" SelectionChanged="OnPreviewOptionChanged" AutomationProperties.Name="Preview output device" ToolTip="Choose headphones. The selected virtual cable is excluded."/>
+    <TextBlock Text="Volume" Grid.Column="2" VerticalAlignment="Center" Margin="12,0,6,0" FontSize="11"/>
+    <Slider x:Name="ListenVolume" Grid.Column="3" Minimum="0" Maximum="1" Value="0.5" VerticalAlignment="Center" ValueChanged="OnListenVolumeChanged" AutomationProperties.Name="Preview volume" ToolTip="Listening volume only; not saved in the voice profile"/>
+   </Grid>
+   <TextBlock x:Name="Status" Text="Record a sample to start comparing." Foreground="#526173" FontSize="11" Margin="0,8,0,0"/>
+  </StackPanel></Border>
+  <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+   <Border Style="{StaticResource Card}" Margin="0,0,8,0"><StackPanel>
+    <TextBlock Text="Shape the voice" FontSize="15" FontWeight="SemiBold"/>
+    <TextBlock Text="Play the sample on loop and drag a slider — the preview re-renders as you go, without stopping." Foreground="#526173" FontSize="11" Margin="0,6,0,10"/>
+    <StackPanel x:Name="MainParameters"/>
+    <Expander x:Name="AdvancedSection" Header="Advanced · tone, compression and processing quality" Margin="0,12,0,0"><StackPanel x:Name="AdvancedParameters" Margin="0,12,0,0"/></Expander>
+    <Button Content="Reset to starting point" Click="OnReset" HorizontalAlignment="Left" Margin="0,12,0,0"/>
+   </StackPanel></Border>
+  </ScrollViewer>
+  <Grid Grid.Row="3" Margin="0,14,0,0">
+   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <TextBlock x:Name="SaveHint" FontSize="11" Foreground="#526173" VerticalAlignment="Center" Margin="0,0,12,0"/>
+   <StackPanel Grid.Column="1" Orientation="Horizontal">
+    <Button Content="Cancel" IsCancel="True"/>
+    <Button x:Name="SaveCopyButton" Content="Save as copy" Click="OnSaveCopy" Visibility="Collapsed" ToolTip="Keeps the original profile and stores these settings under a new name."/>
+    <Button x:Name="SaveButton" Content="Save voice" Background="#7C3AED" Foreground="White" Click="OnSave" Margin="0"/>
+   </StackPanel>
+  </Grid>
+ </Grid>
+</Window>

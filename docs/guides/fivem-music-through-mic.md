@@ -27,7 +27,7 @@ continuously.
 1. Install VB-CABLE and reboot if the installer asks.
 2. In MicMixer, set **Normal mic** to your real microphone and **Virtual cable
    output** to *CABLE Input (VB-Audio Virtual Cable)*. If you don't use a voice
-   changer, choose **No modded mic**.
+   changer, choose **None**.
 3. In FiveM's voice settings, set **Input Device** to **CABLE Output**. FiveM
    exposes both an input-device setting and a voice-chat mode; a server resource
    may replace or override either one. Both settings are listed in the official

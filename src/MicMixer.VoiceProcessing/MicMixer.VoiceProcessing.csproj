@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MicMixer.Dsp</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Provides Signalsmith Stretch through a small native C ABI.
+         MicMixer owns the managed abstraction below. -->
+    <PackageReference Include="SignalsmithStretch-CS" Version="1.1.2" />
+  </ItemGroup>
+
+</Project>

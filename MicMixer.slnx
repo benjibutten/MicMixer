@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/MicMixer.VoiceProcessing/MicMixer.VoiceProcessing.csproj" />
+    <Project Path="src/MicMixer.DspTest/MicMixer.DspTest.csproj" />
     <Project Path="src/MicMixer/MicMixer.csproj" />
   </Folder>
   <Folder Name="/tests/">
