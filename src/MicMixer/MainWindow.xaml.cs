@@ -182,6 +182,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.LongerAnalysisWindow = _settings.LongerAnalysisWindow && alternateWindowAvailable;
         _savedSettings = _settings.Clone();
         ApplyConfiguration();
+        ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
+        RenderVoiceChoice();
         SyncStartWithWindows();
 
         // Migrate the legacy single-folder setting into the folder list.
@@ -325,14 +327,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
                     _settings.ModdedInputDeviceId,
                     AudioDevices.LooksLikeVoiceModDevice,
                     drySelection?.Id);
-
-                // A guess never aliases the modified mic to the normal one. A deliberate
-                // choice of the same device (Enable warns about it) is kept.
-                if (moddedSelection?.Id == drySelection?.Id && _settings.ModdedInputDeviceId != drySelection?.Id)
-                {
-                    moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection?.Id);
-                }
-
+                // Excluding the normal mic means a guess never aliases it; only a deliberate
+                // choice of the same device (Enable warns about it) can.
                 ExternalModdedInputCombo.SelectedItem = moddedSelection;
 
                 OutputDeviceCombo.SelectedItem = AudioDevices.SelectCableOutput(outputs, _settings.OutputDeviceId);
@@ -408,6 +404,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        await StartRoutingAsync();
+    }
+
+    private async Task StartRoutingAsync()
+    {
         if (_isStartingRouting)
         {
             return;
@@ -436,8 +437,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             (modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone && moddedInput == null))
         {
             StatusText.Text = modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone
-                ? "Select a normal mic, external modified mic, and virtual cable."
-                : "Select a normal mic and virtual cable.";
+                ? "Select a normal mic, the voice changer app's microphone and a virtual cable in Settings › Devices."
+                : "Select a normal mic and a virtual cable in Settings › Devices.";
             return;
         }
 
@@ -449,7 +450,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             && _acknowledgedSameMicId != dryInput.Id)
         {
             _acknowledgedSameMicId = dryInput.Id;
-            StatusText.Text = "The normal and external modified mic are the same device — the hotkey will make no audible difference. Did you mean 'None'? Click Enable again to start anyway.";
+            StatusText.Text = "The normal mic and the voice changer app's microphone are the same device — the hotkey will make no audible difference. Did you mean Off? Click Enable again to start anyway.";
             return;
         }
 
@@ -474,7 +475,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // sum both copies of the mix on the cable.
             if (secondaryDevice.Id == output.Id)
             {
-                StatusText.Text = "The secondary output and virtual cable output are the same device — the mix would play twice. Select a different device for the secondary output.";
+                StatusText.Text = "The secondary output and the virtual cable are the same device — the mix would play twice. Select a different device for the secondary output.";
                 return;
             }
         }
@@ -524,8 +525,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ApplyEffectiveRoutingStates();
             ToggleBtnText.Text = "Stop";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
+            // Devices are opened for the whole route. The voice changer choice stays
+            // switchable: ChangeVoiceAsync restarts the route instead.
             DryInputCombo.IsEnabled = false;
-            ModdedInputCombo.IsEnabled = false;
             ExternalModdedInputCombo.IsEnabled = false;
             LongerAnalysisWindowCheck.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
@@ -703,12 +705,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         else if (ReferenceEquals(sender, ModdedInputCombo)
             && ModdedInputCombo.SelectedItem is ModifiedVoiceOption modifiedVoice)
         {
-            _settings.ModifiedVoiceMode = modifiedVoice.Mode;
-            _settings.SkipModdedMic = modifiedVoice.Mode == ModifiedVoiceMode.None;
-            if (modifiedVoice.Mode == ModifiedVoiceMode.ExternalMicrophone)
-            {
-                _settings.ModdedInputDeviceId ??= (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-            }
+            _ = ChangeVoiceAsync(modifiedVoice.Mode, _settings.SelectedVoiceProfileId);
+            return;
         }
         else if (ReferenceEquals(sender, ExternalModdedInputCombo)
             && ExternalModdedInputCombo.SelectedItem is AudioDeviceOption moddedInput)
@@ -822,7 +820,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if ((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id == secondary.Id)
         {
             SecondaryOutputWarningText.Text =
-                "⚠ Same device as the virtual cable output — the mix would play twice. Select a different device.";
+                "⚠ Same device as the virtual cable — the mix would play twice. Select a different device.";
             SecondaryOutputWarningText.Visibility = Visibility.Visible;
             return;
         }
@@ -877,13 +875,111 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private static readonly ModifiedVoiceOption[] ModifiedVoiceOptions =
     [
-        new(ModifiedVoiceMode.None, "None"),
-        new(ModifiedVoiceMode.ExternalMicrophone, "External microphone / Voicemod"),
-        new(ModifiedVoiceMode.LocalProfile, "Local voice profile")
+        new(ModifiedVoiceMode.None, "Off"),
+        new(ModifiedVoiceMode.ExternalMicrophone, "Voice changer app (Voicemod or similar)"),
+        new(ModifiedVoiceMode.LocalProfile, "MicMixer voices (built in, experimental)")
     ];
 
     private ModifiedVoiceMode CurrentModifiedVoiceMode =>
         (ModdedInputCombo.SelectedItem as ModifiedVoiceOption)?.Mode ?? _settings.ModifiedVoiceMode;
+
+    private void OnVoiceSwitchChecked(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        ModifiedVoiceMode mode = ReferenceEquals(sender, VoiceAppRadio) ? ModifiedVoiceMode.ExternalMicrophone
+            : ReferenceEquals(sender, VoiceMicMixerRadio) ? ModifiedVoiceMode.LocalProfile
+            : ModifiedVoiceMode.None;
+        _ = ChangeVoiceAsync(mode, _settings.SelectedVoiceProfileId);
+    }
+
+    /// <summary>Both voice lists (main window and settings) end up here.</summary>
+    private void OnVoiceProfileChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || _router == null)
+        {
+            return;
+        }
+
+        if (((System.Windows.Controls.ComboBox)sender).SelectedItem is VoiceProfile profile)
+        {
+            _ = ChangeVoiceAsync(CurrentModifiedVoiceMode, profile.Id);
+        }
+    }
+
+    /// <summary>
+    /// Switches the voice changer or its voice. Both are built into the route when it
+    /// starts, so a running route restarts with the new choice (a short gap in the audio).
+    /// Saved at once: this is switched during a session, not set up once.
+    /// </summary>
+    private async Task ChangeVoiceAsync(ModifiedVoiceMode mode, string? profileId)
+    {
+        if (_isStartingRouting)
+        {
+            // The start in flight already took the old choice; show that one again.
+            RenderVoiceChoice();
+            return;
+        }
+
+        if (mode == _settings.ModifiedVoiceMode && profileId == _settings.SelectedVoiceProfileId)
+        {
+            return;
+        }
+
+        bool restart = _router.IsRouting;
+        if (restart)
+        {
+            StopRouting();
+        }
+
+        if (profileId != _settings.SelectedVoiceProfileId)
+        {
+            // The alternate analysis window belongs to one profile.
+            _settings.LongerAnalysisWindow = false;
+        }
+
+        _settings.ModifiedVoiceMode = mode;
+        _settings.SkipModdedMic = mode == ModifiedVoiceMode.None;
+        _settings.SelectedVoiceProfileId = profileId;
+        if (mode == ModifiedVoiceMode.ExternalMicrophone)
+        {
+            _settings.ModdedInputDeviceId ??= SelectedDeviceId(ExternalModdedInputCombo);
+        }
+
+        SaveSettings();
+        RenderVoiceChoice();
+        ApplyModdedMicUiState();
+        OnConfigurationChanged();
+
+        if (restart)
+        {
+            await StartRoutingAsync();
+        }
+    }
+
+    /// <summary>Shows the voice changer choice in both windows' controls.</summary>
+    private void RenderVoiceChoice()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            ModdedInputCombo.SelectedItem = ModifiedVoiceOptions.First(option => option.Mode == _settings.ModifiedVoiceMode);
+            VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+            QuickVoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+            LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
+            VoiceOffRadio.IsChecked = _settings.ModifiedVoiceMode == ModifiedVoiceMode.None;
+            VoiceAppRadio.IsChecked = _settings.ModifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone;
+            VoiceMicMixerRadio.IsChecked = _settings.ModifiedVoiceMode == ModifiedVoiceMode.LocalProfile;
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
 
     private bool IsModdedMicSkipped => CurrentModifiedVoiceMode == ModifiedVoiceMode.None;
 
@@ -900,7 +996,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         // "None" has nothing to configure, so the panel is absent rather than empty.
         ModifiedVoicePanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
-        ModifiedVoiceTitle.Text = builtIn ? "Local voice profile · experimental" : "External modified microphone";
+        ModifiedVoiceTitle.Text = builtIn ? "MicMixer voices · experimental" : "The microphone device your voice changer app creates";
 
         var localControls = builtIn ? Visibility.Visible : Visibility.Collapsed;
         VoiceProfileCombo.Visibility = localControls;
@@ -912,7 +1008,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ExternalModdedInputCombo.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
 
         bool idle = !_router.IsRouting && !_isStartingRouting;
-        VoiceProfileCombo.IsEnabled = builtIn && idle;
+        VoiceProfileCombo.IsEnabled = builtIn && !_isStartingRouting;
+        VoiceSwitchPanel.IsEnabled = !_isStartingRouting;
+        QuickVoiceProfileCombo.Visibility = localControls;
+        string? appDevice = (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName;
+        VoiceSwitchHint.Text = !external ? string.Empty
+            : appDevice != null ? $"from {appDevice}"
+            : "choose the app's microphone in Settings › Devices";
         CreateVoiceButton.IsEnabled = idle;
         CreateVoiceButton.ToolTip = idle
             ? "Record a sample, shape a voice and save it as a local profile."
@@ -935,13 +1037,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
         var result = new VoiceProfileStore().List();
         _voiceProfileProblems = result.Errors;
         VoiceProfileCombo.ItemsSource = result.Profiles;
+        QuickVoiceProfileCombo.ItemsSource = result.Profiles;
         VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+        QuickVoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
         // A first run has no stored choice. Land on a starter rather than an empty
         // combo that only reports its emptiness once Enable has already failed.
         if (VoiceProfileCombo.SelectedItem == null && _settings.SelectedVoiceProfileId == null)
         {
             VoiceProfileCombo.SelectedItem = result.Profiles.FirstOrDefault();
             _settings.SelectedVoiceProfileId = (VoiceProfileCombo.SelectedItem as VoiceProfile)?.Id;
+            QuickVoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
         }
         ShowModifiedVoiceStatus();
         UpdateVoiceWindowLabel();
@@ -996,7 +1101,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             new VoiceProfileStore().Delete(profile.Id);
             _settings.SelectedVoiceProfileId = null;
             LoadVoiceProfiles();
-            OnConfigurationChanged();
+            SaveSettings();
+            UpdateStatusText();
             SetModifiedVoiceMessage($"Deleted '{profile.DisplayName}'.");
         }
         catch (Exception ex) { SetModifiedVoiceMessage("Could not delete the voice: " + ex.Message, problem: true); }
@@ -1018,7 +1124,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 _settings.LongerAnalysisWindow = false;
                 LongerAnalysisWindowCheck.IsChecked = false;
                 LoadVoiceProfiles();
-                OnConfigurationChanged();
+                SaveSettings();
+                UpdateStatusText();
                 SetModifiedVoiceMessage($"Saved '{profile.DisplayName}' and selected it.");
             }
         }
@@ -1033,21 +1140,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (VoiceProfileCombo.SelectedItem is VoiceProfile { AlternateBlockMilliseconds: float alternate } profile)
             AlternateWindowLabel.Text = alternate > profile.Parameters.BlockMilliseconds
                 ? "Smoother processing (more delay)" : "Alternate processing quality";
-    }
-
-    private void OnVoiceProfileChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_isUpdatingUi || _router == null || _router.IsRouting || _isStartingRouting) return;
-        if (VoiceProfileCombo.SelectedItem is VoiceProfile profile)
-        {
-            _settings.SelectedVoiceProfileId = profile.Id;
-            LongerAnalysisWindowCheck.IsChecked = false;
-            _settings.LongerAnalysisWindow = false;
-            ShowModifiedVoiceStatus();
-            UpdateVoiceWindowLabel();
-            UpdateDeleteButton();
-            OnConfigurationChanged();
-        }
     }
 
     private void OnProcessedVoiceVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1136,7 +1228,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         _settings.LongerAnalysisWindow = LongerAnalysisWindowCheck.IsChecked == true;
-        OnConfigurationChanged();
+        SaveSettings();
     }
 
     private bool IsPushToTalk => _settings.PushToTalkMode;
@@ -1595,6 +1687,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => ShowSettings(null);
 
+    private void OnStopRoutingClick(object sender, RoutedEventArgs e) => StopRouting();
+
     /// <summary>Opens the settings window, on <paramref name="page"/> or where it was left.</summary>
     private void ShowSettings(TabItem? page)
     {
@@ -1697,6 +1791,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }.OfType<string>());
 
         OverviewText.Text = DescribeRoute();
+        RoutingLockBanner.Visibility = _router.IsRouting ? Visibility.Visible : Visibility.Collapsed;
         UpdateProblems();
         UpdateTrayIcon();
     }
@@ -1725,8 +1820,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     }
 
     private string DescribeModifiedVoice() => CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile
-        ? (VoiceProfileCombo.SelectedItem as VoiceProfile)?.DisplayName ?? "Voice profile"
-        : (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "Modified mic";
+        ? (VoiceProfileCombo.SelectedItem as VoiceProfile)?.DisplayName ?? "MicMixer voice"
+        : (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "Voice changer app";
 
     /// <summary>Where the mix goes and what else is on, as one line.</summary>
     private string DescribeRoute()
@@ -1801,7 +1896,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile && VoiceProfileCombo.SelectedItem is not VoiceProfile)
         {
             problems.Add(new Problem(
-                "The selected voice profile is missing or invalid, so routing cannot start with it.",
+                "The selected MicMixer voice is missing or invalid, so routing cannot start with it.",
                 "Devices…", DevicesPage));
         }
 
@@ -1842,7 +1937,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             && SelectedDeviceId(ExternalModdedInputCombo) != _settings.ModdedInputDeviceId)
         {
             problems.Add(new Problem(
-                $"The device for your modified voice is not connected.{UsingInstead(ExternalModdedInputCombo)}",
+                $"The voice changer app's microphone is not connected.{UsingInstead(ExternalModdedInputCombo)}",
                 "Devices…", DevicesPage));
         }
 
@@ -4233,7 +4328,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _trayIcon.Text = newStatus switch
             {
                 MicStatus.Live => "MicMixer — Normal mic is live",
-                MicStatus.Modded => "MicMixer — Modded mic is live",
+                MicStatus.Modded => "MicMixer — Modified voice is live",
                 MicStatus.Muted => "MicMixer — Muted (push-to-talk)",
                 _ => "MicMixer — Routing stopped"
             };
