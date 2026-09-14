@@ -1,0 +1,382 @@
+<Window x:Class="MicMixer.UI.SetupGuideWindow" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:MicMixer.UI"
+        Title="MicMixer setup" Width="660" Height="640" MinWidth="560" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="#F3F5F7" Foreground="#10233A"
+        PreviewKeyDown="OnPreviewKeyDown" PreviewMouseDown="OnPreviewMouseDown">
+    <Window.Resources>
+        <Style x:Key="Title" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="Heading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,16,0,4"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="Body" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="LineHeight" Value="19"/>
+            <Setter Property="Foreground" Value="#334155"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="Small" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="LineHeight" Value="17"/>
+            <Setter Property="Foreground" Value="#6B7280"/>
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D7DEE7"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14,12"/>
+            <Setter Property="Margin" Value="0,6,0,6"/>
+        </Style>
+        <Style x:Key="FlowStep" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D7DEE7"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="0,3"/>
+        </Style>
+        <Style x:Key="FlowArrow" TargetType="TextBlock">
+            <Setter Property="Text" Value="→"/>
+            <Setter Property="Foreground" Value="#9CA3AF"/>
+            <Setter Property="Margin" Value="6,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- Numbered install step -->
+        <Style x:Key="StepNumber" TargetType="Border">
+            <Setter Property="Width" Value="22"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Background" Value="#10233A"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Margin" Value="0,2,0,4"/>
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Progress -->
+        <Grid Margin="28,18,28,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <ProgressBar x:Name="StepProgress" Height="4" Minimum="0" VerticalAlignment="Center"
+                         Foreground="#7C3AED" Background="#E2E8F0" BorderThickness="0"/>
+            <TextBlock x:Name="StepCounterText" Grid.Column="1" Margin="12,0,0,0" FontSize="11.5" Foreground="#6B7280"/>
+        </Grid>
+
+        <ScrollViewer x:Name="PageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="28,16,28,12" Focusable="False">
+            <Grid>
+                <!-- 1. Welcome -->
+                <StackPanel x:Name="WelcomePage">
+                    <TextBlock Style="{StaticResource Title}" Text="Welcome to MicMixer"/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="Games and voice chats can listen to only one microphone. MicMixer turns your mic, an optional voice changer and music into one mix, and hands that mix to the game as if it were an ordinary microphone."/>
+                    <WrapPanel Margin="0,4,0,10">
+                        <Border Style="{StaticResource FlowStep}"><TextBlock Text="Your mic" FontSize="12.5"/></Border>
+                        <TextBlock Style="{StaticResource FlowArrow}" Text="+"/>
+                        <Border Style="{StaticResource FlowStep}"><TextBlock Text="Music" FontSize="12.5"/></Border>
+                        <TextBlock Style="{StaticResource FlowArrow}"/>
+                        <Border Style="{StaticResource FlowStep}" BorderBrush="#C4B5FD"><TextBlock Text="MicMixer" FontSize="12.5" FontWeight="SemiBold" Foreground="#6D28D9"/></Border>
+                        <TextBlock Style="{StaticResource FlowArrow}"/>
+                        <Border Style="{StaticResource FlowStep}"><TextBlock Text="Virtual cable" FontSize="12.5"/></Border>
+                        <TextBlock Style="{StaticResource FlowArrow}"/>
+                        <Border Style="{StaticResource FlowStep}"><TextBlock Text="Game or chat" FontSize="12.5"/></Border>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Heading}" Text="What you can do with it"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Body}">
+                                <Run FontWeight="SemiBold" Text="Talk on a key."/>
+                                <Run Text="Hold a hotkey to switch to a modified voice, or use push-to-talk so you are only heard while you hold it."/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource Body}">
+                                <Run FontWeight="SemiBold" Text="Play music into the mic."/>
+                                <Run Text="From your own MP3s, a YouTube link or a music app, with its own volume, and heard by others even while your voice is muted if you want."/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource Body}" Margin="0">
+                                <Run FontWeight="SemiBold" Text="See whether you are heard."/>
+                                <Run Text="The main window shows your state at a glance and tells you when something is not as you set it up."/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Style="{StaticResource Small}" Margin="0,10,0,0"
+                               Text="This guide sets up the essentials in a few minutes. Your choices are only saved when you click Finish. You can open the guide again from Settings › General, and change everything later in Settings."/>
+                </StackPanel>
+
+                <!-- 2. Virtual cable -->
+                <StackPanel x:Name="CablePage" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource Title}" Text="The virtual cable"/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="MicMixer reaches the game through a virtual audio cable. It is a pipe with two ends, and Windows shows each end as a device:"/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Playback end" FontSize="12" Foreground="#6B7280" Margin="0,0,14,6"/>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Body}" Margin="0,0,0,6">
+                                <Run x:Name="PlaybackEndRun" Text="CABLE Input" FontWeight="SemiBold" Foreground="#4338CA"/>
+                                <Run Text="— listed with your speakers. MicMixer plays the mix into it."/>
+                            </TextBlock>
+                            <TextBlock Grid.Row="1" Text="Recording end" FontSize="12" Foreground="#6B7280" Margin="0,0,14,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Body}" Margin="0">
+                                <Run x:Name="RecordingEndRun" Text="CABLE Output" FontWeight="SemiBold" Foreground="#4338CA"/>
+                                <Run Text="— listed with your microphones. The game picks it as its mic."/>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+                    <TextBlock Style="{StaticResource Small}"
+                               Text="Whatever goes into one end comes out of the other, unchanged. The names describe the cable, not MicMixer, which is why MicMixer uses the Input end while the game uses the Output end."/>
+
+                    <!-- Detection result -->
+                    <Border x:Name="CableFoundCard" Style="{StaticResource Card}" Background="#F0FDF4" BorderBrush="#86EFAC" Margin="0,10,0,0">
+                        <StackPanel>
+                            <TextBlock Text="✓ A virtual cable is installed" FontSize="13.5" FontWeight="SemiBold" Foreground="#166534"/>
+                            <TextBlock x:Name="CableFoundText" Style="{StaticResource Body}" Margin="0,4,0,0" Foreground="#166534"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel x:Name="CableMissingPanel" Margin="0,10,0,0">
+                        <Border Style="{StaticResource Card}" Background="#FFF7ED" BorderBrush="#FDBA74" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="No virtual cable found" FontSize="13.5" FontWeight="SemiBold" Foreground="#9A3412"/>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,4,0,0" Foreground="#9A3412"
+                                           Text="Install one before you continue. VB-CABLE is free and takes a couple of minutes:"/>
+                            </StackPanel>
+                        </Border>
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="1" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Style="{StaticResource Body}" Margin="0,1,0,6" Text="Download VB-CABLE from the VB-Audio website."/>
+                                <Button Content="Open vb-audio.com/Cable" Click="OnOpenVbCableClick" HorizontalAlignment="Left" Padding="10,4"
+                                        Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="2" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Body}" Margin="0,1,0,0" Text="Extract the downloaded zip file to a folder."/>
+                        </Grid>
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="3" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Body}" Margin="0,1,0,0">
+                                <Run Text="Right-click"/> <Run Text="VBCABLE_Setup_x64.exe" FontWeight="SemiBold"/><Run Text=", choose"/>
+                                <Run Text="Run as administrator" FontWeight="SemiBold"/><Run Text=", then click"/> <Run Text="Install Driver" FontWeight="SemiBold"/><Run Text="."/>
+                            </TextBlock>
+                        </Grid>
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="4" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Body}" Margin="0,1,0,0"
+                                       Text="Restart Windows if the installer asks you to. When MicMixer starts again, this guide opens again. Afterwards, check that your normal speakers are still the default output in Windows' sound settings."/>
+                        </Grid>
+                        <Grid Margin="0,4,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource StepNumber}"><TextBlock Text="5" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Style="{StaticResource Body}" Margin="0,1,0,6" Text="If you did not have to restart, look for the cable again."/>
+                                <Button Content="Check again" Click="OnCheckAgainClick" HorizontalAlignment="Left" Padding="10,4"
+                                        Background="#10233A" Foreground="White" BorderThickness="0"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource Small}" Margin="0,8,0,0"
+                                   Text="Using a different virtual cable that was not recognized? Continue, and choose it yourself on the next pages."/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 3. Microphone and modified voice -->
+                <StackPanel x:Name="MicPage" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource Title}" Text="Your microphone"/>
+                    <TextBlock Style="{StaticResource Body}" Text="Choose the microphone you actually speak into, for example your headset."/>
+                    <ComboBox x:Name="MicCombo" DisplayMemberPath="FriendlyName" AutomationProperties.Name="Microphone"/>
+                    <TextBlock x:Name="NoMicText" Style="{StaticResource Small}" Foreground="#B91C1C" Visibility="Collapsed"
+                               Text="Windows reports no microphone. Connect one, then come back to this page."/>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="A different voice while you hold the hotkey?"/>
+                    <TextBlock Style="{StaticResource Small}" Text="MicMixer can send a modified voice instead of your normal mic while you hold a key. You can change this later."/>
+                    <RadioButton x:Name="VoiceNoneRadio" GroupName="Voice" Checked="OnVoiceModeChanged">
+                        <TextBlock TextWrapping="Wrap"><Run Text="No, just my normal mic" FontWeight="SemiBold"/><Run Text=" — the right choice for most people starting out"/></TextBlock>
+                    </RadioButton>
+                    <RadioButton x:Name="VoiceExternalRadio" GroupName="Voice" Checked="OnVoiceModeChanged">
+                        <TextBlock TextWrapping="Wrap"><Run Text="Yes, from a voice changer app" FontWeight="SemiBold"/><Run Text=" that has its own microphone device, such as Voicemod"/></TextBlock>
+                    </RadioButton>
+                    <ComboBox x:Name="ExternalMicCombo" DisplayMemberPath="FriendlyName" Margin="24,6,0,0"
+                              AutomationProperties.Name="Voice changer microphone"/>
+                    <RadioButton x:Name="VoiceLocalRadio" GroupName="Voice" Checked="OnVoiceModeChanged">
+                        <TextBlock TextWrapping="Wrap"><Run Text="Yes, with MicMixer's own voice profiles" FontWeight="SemiBold"/><Run Text=" — experimental, runs on your processor"/></TextBlock>
+                    </RadioButton>
+                </StackPanel>
+
+                <!-- 4. Where the mix goes -->
+                <StackPanel x:Name="OutputPage" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource Title}" Text="Where the mix goes"/>
+                    <TextBlock Style="{StaticResource Body}" Text="Choose the playback end of the virtual cable. MicMixer plays your finished mix into it."/>
+                    <TextBlock Text="Send the mix to" FontSize="12" Foreground="#6B7280" Margin="0,4,0,0"/>
+                    <ComboBox x:Name="OutputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnOutputChanged"
+                              AutomationProperties.Name="Send the mix to"/>
+                    <TextBlock x:Name="OutputCheckText" Style="{StaticResource Small}"/>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Where you hear the music"/>
+                    <TextBlock Style="{StaticResource Small}"
+                               Text="With Monitoring on in the music card, music also plays here so you hear it yourself. Choose your headphones or speakers, never the virtual cable, or the music reaches the game twice."/>
+                    <ComboBox x:Name="MonitorCombo" DisplayMemberPath="FriendlyName" AutomationProperties.Name="Monitoring device"/>
+                </StackPanel>
+
+                <!-- 5. The game or chat -->
+                <StackPanel x:Name="AppPage" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource Title}" Text="Tell your game or chat"/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="Open the voice or audio settings of the app that should hear you, and set its microphone (sometimes called input device) to:"/>
+                    <Border Style="{StaticResource Card}" BorderBrush="#A5B4FC" HorizontalAlignment="Left">
+                        <TextBlock x:Name="RecordingEndText" FontSize="15" FontWeight="SemiBold" Foreground="#4338CA" TextWrapping="Wrap"/>
+                    </Border>
+                    <TextBlock Style="{StaticResource Heading}" Text="Where to find it"/>
+                    <TextBlock Style="{StaticResource Body}">
+                        <Run Text="Discord:" FontWeight="SemiBold"/> <Run Text="User Settings › Voice &amp; Video › Input Device."/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource Body}">
+                        <Run Text="Games:" FontWeight="SemiBold"/> <Run Text="look for voice chat, microphone or input device in the audio settings."/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource Heading}" Text="Good to know"/>
+                    <TextBlock Style="{StaticResource Body}" Text="• Leave the app's speakers or output as they are, so you still hear the game."/>
+                    <TextBlock Style="{StaticResource Body}" Text="• If music sounds muffled or dips when you talk, turn off noise suppression and automatic gain control in that app."/>
+                    <TextBlock Style="{StaticResource Body}" Text="• Rule of thumb: MicMixer uses the cable's Input. Everything else uses its Output."/>
+                </StackPanel>
+
+                <!-- 6. Hotkey and push-to-talk -->
+                <StackPanel x:Name="HotkeyPage" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource Title}" Text="Hotkey and push-to-talk"/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="One keyboard key or mouse button controls your voice. It works everywhere, also while a game has focus."/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                        <Border Padding="10,6" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="120">
+                            <TextBlock x:Name="HotkeyText" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Center"/>
+                        </Border>
+                        <Button x:Name="ChangeHotkeyButton" Content="Change" Click="OnChangeHotkeyClick" Margin="8,0,0,0" Padding="12,0"
+                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                    </StackPanel>
+                    <TextBlock x:Name="HotkeyHintText" Style="{StaticResource Small}"/>
+
+                    <CheckBox x:Name="PushToTalkCheck" Margin="0,12,0,0" FontSize="13" Checked="OnPushToTalkChanged" Unchecked="OnPushToTalkChanged">
+                        <TextBlock Text="Push-to-talk: nobody hears me until I hold the hotkey" TextWrapping="Wrap"/>
+                    </CheckBox>
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <TextBlock x:Name="HotkeyEffectText" Style="{StaticResource Body}" Margin="0"/>
+                    </Border>
+                    <TextBlock Style="{StaticResource Small}" Margin="0,8,0,0"
+                               Text="Use one push-to-talk, not two: if MicMixer does it, set the game or chat to open mic or voice activity."/>
+                </StackPanel>
+
+                <!-- 7. Done -->
+                <StackPanel x:Name="DonePage" Visibility="Collapsed">
+                    <TextBlock Style="{StaticResource Title}" Text="Ready"/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="Finish saves your choices. From then on, the main window answers two questions at a glance."/>
+                    <TextBlock Style="{StaticResource Heading}" Text="Am I heard? Look at the pill on the status card."/>
+                    <Border Style="{StaticResource Card}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Ellipse Width="10" Height="10" Fill="{x:Static ui:StatusTheme.StoppedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="Stopped" FontWeight="SemiBold" Margin="8,3,14,3"/>
+                            <TextBlock Grid.Column="2" Text="Routing is off. Nothing reaches the cable." Foreground="#334155" Margin="0,3" TextWrapping="Wrap"/>
+                            <Ellipse Grid.Row="1" Width="10" Height="10" Fill="{x:Static ui:StatusTheme.LiveBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Live" FontWeight="SemiBold" Margin="8,3,14,3"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Your normal mic is heard." Foreground="#334155" Margin="0,3" TextWrapping="Wrap"/>
+                            <Ellipse Grid.Row="2" Width="10" Height="10" Fill="{x:Static ui:StatusTheme.ModdedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Modified voice" FontWeight="SemiBold" Margin="8,3,14,3"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="The modified voice is heard while you hold the hotkey." Foreground="#334155" Margin="0,3" TextWrapping="Wrap"/>
+                            <Ellipse Grid.Row="3" Width="10" Height="10" Fill="{x:Static ui:StatusTheme.MutedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Muted" FontWeight="SemiBold" Margin="8,3,14,3"/>
+                            <TextBlock Grid.Row="3" Grid.Column="2" Text="Push-to-talk keeps the cable silent." Foreground="#334155" Margin="0,3" TextWrapping="Wrap"/>
+                        </Grid>
+                    </Border>
+                    <TextBlock Style="{StaticResource Heading}" Text="Is something wrong? Look for orange cards."/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="They appear under the status card only when something differs from what you set up, for example an unplugged headset, and each has a button that takes you to the fix. No cards means all is well."/>
+                    <TextBlock Style="{StaticResource Body}"
+                               Text="Noise gate, overlay, a second output for streaming and the rest are in Settings, whenever you want them."/>
+                    <CheckBox x:Name="StartRoutingCheck" IsChecked="True" Margin="0,10,0,0" FontSize="13">
+                        <TextBlock TextWrapping="Wrap"><Run Text="Start routing when I click Finish" FontWeight="SemiBold"/><Run Text=", so I can speak and watch the microphone meter in my game or chat move"/></TextBlock>
+                    </CheckBox>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Navigation -->
+        <Border Grid.Row="2" Padding="28,12" Background="White" BorderBrush="#E5EAF0" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button Content="Skip for now" Click="OnSkipClick" Padding="10,0" Height="32"
+                        Background="Transparent" Foreground="#6B7280" BorderThickness="0" Cursor="Hand"
+                        ToolTip="Close the guide. You can open it again from Settings › General."/>
+                <Button x:Name="BackButton" Grid.Column="2" Content="Back" Click="OnBackClick" Height="32" Padding="16,0"
+                        Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                <Button x:Name="NextButton" Grid.Column="3" Content="Next" Click="OnNextClick" Height="32" Padding="20,0" Margin="8,0,0,0"
+                        FontWeight="SemiBold" Background="#10233A" Foreground="White" BorderThickness="0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
