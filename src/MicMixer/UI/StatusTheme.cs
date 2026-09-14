@@ -56,7 +56,7 @@ public static class StatusTheme
     public static readonly Brush ModdedInkBrush = CreateFrozenBrush(Color.FromRgb(0x1D, 0x4E, 0xD8));
     public static readonly Brush MutedInkBrush = CreateFrozenBrush(Color.FromRgb(0xB9, 0x1C, 0x1C));
 
-    // Same MDI glyphs as the MicIcon / ModdedMicIcon / MicOffIcon window resources.
+    // Same MDI glyphs as the MicIcon / ModdedMicIcon window resources (the mic-off glyph lives only here).
     public static readonly Geometry MicGlyph = CreateGlyph(
         "M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z");
     public static readonly Geometry ModdedMicGlyph = CreateGlyph(
@@ -85,6 +85,20 @@ public static class StatusTheme
         MicStatus.Modded => ModdedInkBrush,
         MicStatus.Muted => MutedInkBrush,
         _ => StoppedInkBrush
+    };
+
+    // Tint colors: light backgrounds behind ink text, for the main window's state pill.
+    private static readonly Brush StoppedTintBrush = CreateFrozenBrush(Color.FromRgb(0xE5, 0xE7, 0xEB));
+    private static readonly Brush LiveTintBrush = CreateFrozenBrush(Color.FromRgb(0xDC, 0xFC, 0xE7));
+    private static readonly Brush ModdedTintBrush = CreateFrozenBrush(Color.FromRgb(0xDB, 0xEA, 0xFE));
+    private static readonly Brush MutedTintBrush = CreateFrozenBrush(Color.FromRgb(0xFE, 0xE2, 0xE2));
+
+    public static Brush TintFor(MicStatus status) => status switch
+    {
+        MicStatus.Live => LiveTintBrush,
+        MicStatus.Modded => ModdedTintBrush,
+        MicStatus.Muted => MutedTintBrush,
+        _ => StoppedTintBrush
     };
 
     public static Geometry GlyphFor(MicStatus status) => status switch
