@@ -86,7 +86,8 @@ through the steps below. Run it again from Settings > General. By hand:
 
 1. Click "Settings" and open "Devices".
 2. Select your physical microphone under "Normal mic".
-3. Select your voice-modified microphone under "Modified voice", or choose "None".
+3. Under "Voice changer", choose "Off", "Voice changer app" (and its microphone),
+   or "MicMixer voices".
 4. Set "Send the mix to" to your virtual cable, then click "Save".
 5. Click "Enable" in the main window to start routing.
 6. If you use a modified microphone, choose a hotkey in Settings > Hotkey.

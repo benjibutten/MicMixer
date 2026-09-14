@@ -150,8 +150,8 @@ To set up by hand instead:
    installer asks.
 2. In MicMixer, open **Settings › Devices**.
 3. Select your physical microphone under **Normal mic**.
-4. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
-   choose **None**.
+4. Under **Voice changer**, choose **Off**, **Voice changer app** (then select its
+   microphone, such as **Voicemod Virtual Audio Device**), or **MicMixer voices**.
 5. Under **Virtual cable**, set **Send the mix to** to **CABLE Input (VB-Audio Virtual Cable)**.
 6. Click **Save**.
 7. In your voice chat, game, or streaming app, select **CABLE Output** as the microphone.
@@ -178,6 +178,9 @@ Secondary output, Music folders and General.
   goes.
 - Settings changes apply immediately, but are kept for the next start only after
   **Save**. **Discard changes** returns to the saved settings.
+- While routing is on, the microphones, the virtual cable and the secondary output
+  are locked because they are in use; a banner at the top of the settings window
+  says so and offers **Stop routing**.
 - The saved settings are the reference for the problem cards. When a saved
   device is not connected, the secondary output is misconfigured or fails, or
   settings are changed but not saved, the main window shows one card per problem
@@ -185,7 +188,8 @@ Secondary output, Music folders and General.
   MicMixer never replaces a saved device with a stand-in without saying so, and
   starting routing never overwrites the saved devices.
 - Music card controls (volumes, monitoring on/off, the music routing toggles,
-  source mode) and music folders are saved as they change.
+  source mode), the voice changer and its voice, and music folders are saved as
+  they change.
 
 ## Hotkey and push-to-talk
 
@@ -195,9 +199,17 @@ button that should select the modified mic while routing is active:
 - Hotkey held: the modified mic is routed.
 - Hotkey released: the normal mic is routed.
 - Release delay above `0 ms`: the modified mic remains active until the delay ends.
-- **None**: the hotkey is disabled unless push-to-talk is enabled.
-- **External microphone / Voicemod**: select the existing voice-changer output device.
-- **Local voice profile** (experimental): processes the physical microphone using a private local profile. Select a profile, create or edit one in the voice designer, or delete one you no longer want. Its **Volume** slider (under the modified-voice picker in Settings › Devices) adjusts the processed voice only, from 0 to 200%, while routing is active.
+The **Voice changer** decides what the hotkey switches to. Switch it from the row
+under the status card in the main window, or in **Settings › Devices**. It takes
+effect immediately; if routing is on, routing restarts for a moment.
+
+- **Off**: the hotkey is disabled unless push-to-talk is enabled.
+- **Voice changer app**: for apps such as Voicemod that create their own microphone
+  device. Select that device in **Settings › Devices**.
+- **MicMixer voices** (experimental): MicMixer changes your voice itself, from your
+  physical microphone, with no other app. Pick a voice next to the switch, or create,
+  edit and delete your own voices in **Settings › Devices**. Its **Volume** slider there
+  adjusts the processed voice only, from 0 to 200%, while routing is active.
 - **Volume** under the normal mic adjusts only the normal mic, on the same 0–200%
   scale. 100% sends it exactly as captured. MicMixer never lowers the normal mic
   on its own; raise this if it sounds quieter than your modified voice, or lower
@@ -206,7 +218,7 @@ button that should select the modified mic while routing is active:
 Push-to-talk reverses the idle behavior: while the hotkey is not held, the virtual
 cable receives silence. Neither microphone audio nor music is sent.
 
-- It also works with **None**, in which case the hotkey gates the normal mic.
+- It also works with the voice changer **Off**, in which case the hotkey gates the normal mic.
 - With a modified mic selected, holding the hotkey both opens the gate and selects it.
 - The release delay applies to push-to-talk as well.
 - Local music monitoring is not muted by push-to-talk.

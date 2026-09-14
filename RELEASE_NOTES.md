@@ -21,6 +21,13 @@
   steps when none is found), and walks through the microphone, the cable, the
   game's microphone setting and the hotkey. Run it again from
   **Settings › General**.
+- **Switch the voice changer from the main window**: Off, Voice changer app or
+  MicMixer voices, plus the voice to use, right under the status card. It works
+  while routing is on; routing restarts for a moment with the new choice.
+- **Local voice profile is now MicMixer voices**, and the modified-voice setting
+  is called **Voice changer**.
+- The settings window now explains why some settings are locked while routing is
+  on, with a **Stop routing** button.
 - **Virtual cable output** is now called **Send the mix to**, with a short
   explanation of which end of the cable MicMixer uses and which one the game
   uses.
