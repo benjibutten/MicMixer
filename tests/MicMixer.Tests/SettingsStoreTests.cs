@@ -126,6 +126,33 @@ public sealed class SettingsStoreTests : IDisposable
         reloaded.MusicVolume.Should().Be(0.8f);
     }
 
+    [Fact]
+    public void ConfigurationEquals_ShouldIgnoreValuesSavedOutsideTheSettingsWindow()
+    {
+        var saved = new AppSettings { OutputDeviceId = "cable", MusicVolume = 0.2f, WindowWidth = 900 };
+        AppSettings live = saved.Clone();
+        live.MusicVolume = 0.9f;
+        live.WindowWidth = 1200;
+        live.MusicFolderPaths = [@"D:\Music"];
+
+        live.ConfigurationEquals(saved).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurationEquals_ShouldDetectAChangedSetting_AndCopyConfigurationFromShouldUndoIt()
+    {
+        var saved = new AppSettings { OutputDeviceId = "cable", PushToTalkMode = true };
+        AppSettings live = saved.Clone();
+        live.OutputDeviceId = "speakers";
+        live.PushToTalkMode = false;
+
+        live.ConfigurationEquals(saved).Should().BeFalse();
+
+        live.CopyConfigurationFrom(saved);
+        live.ConfigurationEquals(saved).Should().BeTrue();
+        live.OutputDeviceId.Should().Be("cable");
+    }
+
     [Theory]
     [InlineData(ModifiedVoiceMode.None)]
     [InlineData(ModifiedVoiceMode.ExternalMicrophone)]

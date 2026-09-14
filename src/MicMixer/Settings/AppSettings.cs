@@ -1,7 +1,56 @@
+using System.Text.Json;
+
 namespace MicMixer.Settings;
 
 public sealed class AppSettings
 {
+    public AppSettings Clone() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this))!;
+
+    /// <summary>
+    /// Copies the settings edited in the settings window. They apply live but are
+    /// written to disk only by its Save button, so the saved values stay a reliable
+    /// reference for "is the app running the way I set it up?". Everything else
+    /// (music card, music folders, window size) is saved as it changes, because the
+    /// remote-control API changes those too.
+    /// </summary>
+    public void CopyConfigurationFrom(AppSettings source)
+    {
+        StartWithWindows = source.StartWithWindows;
+        NormalInputDeviceId = source.NormalInputDeviceId;
+        ModdedInputDeviceId = source.ModdedInputDeviceId;
+        NormalMicVolume = source.NormalMicVolume;
+        NoiseGateEnabled = source.NoiseGateEnabled;
+        NoiseGateThresholdDb = source.NoiseGateThresholdDb;
+        ModifiedVoiceMode = source.ModifiedVoiceMode;
+        SelectedVoiceProfileId = source.SelectedVoiceProfileId;
+        LongerAnalysisWindow = source.LongerAnalysisWindow;
+        ProcessedVoiceVolume = source.ProcessedVoiceVolume;
+        OutputDeviceId = source.OutputDeviceId;
+        HotkeyId = source.HotkeyId;
+        ReleaseDelayMilliseconds = source.ReleaseDelayMilliseconds;
+        PushToTalkMode = source.PushToTalkMode;
+        MusicMonitorDeviceId = source.MusicMonitorDeviceId;
+        SecondaryOutputEnabled = source.SecondaryOutputEnabled;
+        SecondaryOutputDeviceId = source.SecondaryOutputDeviceId;
+        SecondaryOutputVolume = source.SecondaryOutputVolume;
+        SecondaryOutputIgnorePushToTalk = source.SecondaryOutputIgnorePushToTalk;
+        OverlayIndicatorEnabled = source.OverlayIndicatorEnabled;
+        OverlayVolumeMeterEnabled = source.OverlayVolumeMeterEnabled;
+        MeterSensitivityDb = source.MeterSensitivityDb;
+        ObsOverlayEnabled = source.ObsOverlayEnabled;
+        ObsOverlayPort = source.ObsOverlayPort;
+    }
+
+    /// <summary>True when <paramref name="other"/> has the same settings-window values.</summary>
+    public bool ConfigurationEquals(AppSettings other)
+    {
+        // Copying our configuration onto a clone of other changes nothing exactly
+        // when the two agree, which keeps the field list in one place.
+        AppSettings probe = other.Clone();
+        probe.CopyConfigurationFrom(this);
+        return JsonSerializer.Serialize(probe) == JsonSerializer.Serialize(other);
+    }
+
     public bool StartWithWindows { get; set; }
 
     public string? NormalInputDeviceId { get; set; }
@@ -97,6 +146,9 @@ public sealed class AppSettings
     public int ObsOverlayPort { get; set; } = Overlay.ObsOverlayServer.DefaultPort;
 
     public string? ExternalAppName { get; set; }
+
+    /// <summary>The first-run setup guide was skipped; don't open it on its own again.</summary>
+    public bool SetupGuideDismissed { get; set; }
 
     /// <summary>Last window size; 0 means never saved, so the XAML default is used.</summary>
     public double WindowWidth { get; set; }
