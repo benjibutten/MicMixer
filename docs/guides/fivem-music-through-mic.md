@@ -51,9 +51,9 @@ remove that requirement.
 Because the game listens to an always-open cable, MicMixer has to be the thing
 that gates your voice — otherwise your mic is live all the time.
 
-1. Set a **Global hotkey** in MicMixer (for example a mouse side button or the
-   key that feels natural for speaking).
-2. Enable **push-to-talk**. Now, while the hotkey is *not* held, MicMixer sends
+1. Open **Settings › Hotkey** in MicMixer and set a **Hotkey** (for example a
+   mouse side button or the key that feels natural for speaking).
+2. Enable **push-to-talk** on the same page and click **Save**. Now, while the hotkey is *not* held, MicMixer sends
    silence for your voice; while it is held, your voice goes through.
 
 At this point MicMixer is the only push-to-talk gate in the supported setup, so
@@ -95,7 +95,7 @@ else hears it, then turn it off to send it.
 - **Your character keeps "talking" after you stop.** FiveM decides who is
   talking from the signal on the cable, with no hold time of its own. While the
   MicMixer hotkey is held, room noise alone is enough to keep its
-  voice detection triggered. Enable **Noise gate** under push-to-talk and set
+  voice detection triggered. Enable the noise gate in **Settings › Noise gate** and set
   the threshold so the level bar passes the knob while you talk and stays below
   it while you are quiet; the cable then carries true silence between phrases. Also keep **Release delay** at 0
   when you use push-to-talk, and lower FiveM's **Microphone Sensitivity** if

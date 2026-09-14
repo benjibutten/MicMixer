@@ -10,7 +10,7 @@ can switch live, mid-session.
 [**Download for Windows**](https://github.com/benjibutten/MicMixer/releases/latest)
 · Windows 10/11 x64 · self-contained, no .NET install · Apache-2.0
 
-![The MicMixer main window: device selection, global hotkey, push-to-talk, secondary output, and the built-in music player.](docs/assets/micmixer-main.png)
+![The MicMixer main window: a status card that shows whether you are heard and where the mix goes, and the built-in music player.](docs/assets/micmixer-main.png)
 
 ## What it's for
 
@@ -30,7 +30,8 @@ can switch live, mid-session.
 ## Quick setup
 
 1. Install a virtual audio cable such as [VB-CABLE](https://vb-audio.com/Cable/).
-2. In MicMixer, select your real mic and **CABLE Input** as the virtual output.
+2. Start MicMixer and follow the setup guide that opens, or in **Settings › Devices**
+   select your real mic, set **Send the mix to** to **CABLE Input**, and click **Save**.
 3. In FiveM, Discord, or your chat app, select **CABLE Output** as its microphone.
 4. Click **Enable**. Use the linked guides below for push-to-talk and music rules.
 
@@ -75,7 +76,11 @@ The rest of this document is the detailed reference.
   optional outgoing level meter.
 - Serves the same overlay as a local web page for streaming software with browser
   source support, so viewers see the mic and music status even when only the game is captured.
-- Uses a responsive, resizable window layout and remembers its size and state.
+- Includes a built-in setup guide that recognizes an installed virtual cable and
+  walks first-time users through devices and the hotkey.
+- Shows a problem card in the main window whenever a saved device is missing or
+  something else differs from the saved setup.
+- Uses a resizable window layout and remembers its size and state.
 - Runs in the system tray and redirects additional launches to the existing instance.
 - Can start automatically with Windows, hidden in the system tray.
 - Writes rotating logs for troubleshooting.
@@ -132,23 +137,59 @@ and logs are covered by the [privacy policy](https://benjibutten.github.io/MicMi
 
 ## Basic setup
 
-1. Install [VB-CABLE](https://vb-audio.com/Cable/).
-2. Restart Windows if requested by the VB-CABLE installer.
-3. Start `MicMixer.exe`.
-4. Select your physical microphone under **Normal mic**.
-5. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
+Start `MicMixer.exe`. On the first start, a **setup guide** opens inside the app.
+It explains what MicMixer does and how a virtual cable works, recognizes an
+installed VB-CABLE, Virtual Audio Cable or Voicemeeter (or walks you through
+installing VB-CABLE if none is found), and helps you pick your microphone, the
+cable, your monitoring device and the hotkey. **Finish** saves the choices and
+can start routing right away. Run it again any time from **Settings › General**.
+
+To set up by hand instead:
+
+1. Install [VB-CABLE](https://vb-audio.com/Cable/) and restart Windows if the
+   installer asks.
+2. In MicMixer, open **Settings › Devices**.
+3. Select your physical microphone under **Normal mic**.
+4. Select a modified microphone, such as **Voicemod Virtual Audio Device**, or
    choose **None**.
-6. Select **CABLE Input (VB-Audio Virtual Cable)** under **Virtual cable output**.
+5. Under **Virtual cable**, set **Send the mix to** to **CABLE Input (VB-Audio Virtual Cable)**.
+6. Click **Save**.
 7. In your voice chat, game, or streaming app, select **CABLE Output** as the microphone.
-8. Click **Enable**.
+8. Click **Enable** in the main window.
+
+A virtual cable is a pipe with two ends: MicMixer plays the mix into CABLE
+*Input*, and every other app picks CABLE *Output* as its microphone.
 
 If the selected output does not look like a virtual cable, MicMixer displays a
 warning. Click **Enable** again to continue with another cable driver or an
 intentional non-cable output.
 
+## Main window and settings
+
+The main window holds what you use during a session: a status card, the music
+player, and orange problem cards. Everything you set up once lives in a separate
+**Settings** window with the pages Devices, Hotkey, Noise gate, Overlay,
+Secondary output, Music folders and General.
+
+![MicMixer settings, Devices page: where your sound goes, normal mic, modified voice and the virtual cable.](docs/assets/micmixer-settings.png)
+
+- The status card shows whether you are heard (gray Stopped, green Live, blue
+  Modified voice, red Muted), what the hotkey does right now, and where the mix
+  goes.
+- Settings changes apply immediately, but are kept for the next start only after
+  **Save**. **Discard changes** returns to the saved settings.
+- The saved settings are the reference for the problem cards. When a saved
+  device is not connected, the secondary output is misconfigured or fails, or
+  settings are changed but not saved, the main window shows one card per problem
+  with a button to the settings page that fixes it.
+  MicMixer never replaces a saved device with a stand-in without saying so, and
+  starting routing never overwrites the saved devices.
+- Music card controls (volumes, monitoring on/off, the music routing toggles,
+  source mode) and music folders are saved as they change.
+
 ## Hotkey and push-to-talk
 
-Click **Change** under **Global hotkey**, then press the keyboard key or mouse
+In **Settings › Hotkey**, click **Change**, then press the keyboard key or mouse
 button that should select the modified mic while routing is active:
 
 - Hotkey held: the modified mic is routed.
@@ -156,7 +197,7 @@ button that should select the modified mic while routing is active:
 - Release delay above `0 ms`: the modified mic remains active until the delay ends.
 - **None**: the hotkey is disabled unless push-to-talk is enabled.
 - **External microphone / Voicemod**: select the existing voice-changer output device.
-- **Local voice profile** (experimental): processes the physical microphone using a private local profile. Select a profile, create or edit one in the voice designer, or delete one you no longer want. Its **Volume** slider (under the modified-voice picker) adjusts the processed voice only, from 0 to 200%, while routing is active.
+- **Local voice profile** (experimental): processes the physical microphone using a private local profile. Select a profile, create or edit one in the voice designer, or delete one you no longer want. Its **Volume** slider (under the modified-voice picker in Settings › Devices) adjusts the processed voice only, from 0 to 200%, while routing is active.
 - **Volume** under the normal mic adjusts only the normal mic, on the same 0–200%
   scale. 100% sends it exactly as captured. MicMixer never lowers the normal mic
   on its own; raise this if it sounds quieter than your modified voice, or lower
@@ -217,8 +258,8 @@ When multiple folders are configured:
 - Each track has a colored folder badge; hover over it to see the full path.
 - Folder chips beside the search field filter the visible tracks.
 - The download destination can be selected separately.
-- Folders can be added or removed from the folder menu; at least one folder remains
-  configured.
+- Folders are added or removed in **Settings › Music folders**; at least one folder
+  remains configured.
 
 Music can play while routing or local monitoring provides an audio clock. If neither
 is active, playback pauses instead of appearing to play without advancing.
@@ -258,9 +299,10 @@ in external capture mode as well.
   amber hint below the toggle states exactly where the music goes while the mode
   is active. Monitor-only overrides the ignore-push-to-talk toggle.
 
-The status panel and the overlay always reflect the outcome: when push-to-talk
-mutes the mic while music still flows, the status reads "Mic muted (push-to-talk)
-— music transmitting", and the overlay's music circle shows the current destination.
+The status card and the overlay always reflect the outcome: when push-to-talk
+mutes the mic while music still flows, the pill reads **Mic muted** and the status
+line adds "music is still transmitting", and the overlay's music circle shows the
+current destination.
 
 ## Secondary output
 
@@ -290,7 +332,7 @@ Warnings:
   microphone. Prefer a device you cannot hear, or headphones.
 - **The capture source includes everything on that device.** Any other application playing
   audio to the same device ends up in the recording.
-- The secondary output can never use the same device as **Virtual cable output**;
+- The secondary output can never use the same device as the virtual cable (**Send the mix to**);
   MicMixer blocks that combination because the mix would play twice on the cable.
 - If the saved secondary device is missing at startup, MicMixer leaves the
   selection empty and refuses to start the secondary output until you explicitly
@@ -331,7 +373,7 @@ Exclusive fullscreen applications may prevent desktop overlays from being visibl
 
 When streaming software captures a game as an individual process, desktop
 overlays may not be part of the captured image, so viewers never see the overlay
-indicator. Enable **Stream overlay** in the routing settings and MicMixer serves
+indicator. Enable **Serve the stream overlay** in **Settings › Overlay** and MicMixer serves
 the same overlay as a local web page (`http://127.0.0.1:4573/` by default)
 that can be added as a browser source and layered on top of the game. The
 page mirrors the desktop overlay exactly — states, level rings, equalizer bars,
@@ -369,7 +411,9 @@ Runtime logs roll at 5 MB, rotate daily, and are retained for 14 days.
   producing audio and refresh the application list.
 - If a download fails, check the internet connection and inspect the logs under
   `%LocalAppData%\MicMixer\logs`.
-- If an audio device was disconnected, refresh the device list and select it again.
+- If an audio device was disconnected, reconnect it and click **Refresh devices**
+  in Settings › Devices. The main window shows a card for every saved device
+  that is not connected.
 - If the secondary output shows "device was not found", reconnect the device or
   select a new one explicitly; MicMixer intentionally never auto-picks a
   replacement secondary device.

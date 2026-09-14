@@ -502,7 +502,7 @@ public partial class MainWindow
             return ControlResult.Fail("last_folder", "At least one music folder must remain configured.");
         }
 
-        OnMusicFoldersChanged($"Tog bort musikmapp: {folder}");
+        OnMusicFoldersChanged($"Removed music folder: {folder}");
         return ControlResult.Ok();
     }
 

@@ -70,20 +70,28 @@ Skip this section if you already have a suitable virtual audio driver.
 1. Download VB-CABLE from https://vb-audio.com/Cable/ and extract its archive.
 2. Run the appropriate VB-CABLE setup as administrator and install the driver.
 3. Restart Windows if the installer requests it.
-4. In MicMixer, select "CABLE Input (VB-Audio Virtual Cable)" as the
-   "Virtual cable output".
+4. In MicMixer, open Settings > Devices and set "Send the mix to" to
+   "CABLE Input (VB-Audio Virtual Cable)".
 5. In your voice chat, game, streaming software, or another receiving app, select
    "CABLE Output (VB-Audio Virtual Cable)" as its microphone/input device.
 
+MicMixer plays the mix into CABLE Input; the cable passes it on to CABLE Output,
+which other apps use as a microphone.
+
 Basic MicMixer setup
 --------------------
-1. Select your physical microphone under "Normal mic".
-2. Select your voice-modified microphone, or choose "No modded mic".
-3. Select your virtual device under "Virtual cable output".
-4. Click "Enable" to start routing.
-5. If you use a modified microphone, choose a global hotkey. Holding it switches
-   from the normal microphone to the modified microphone.
-6. Play music from MicMixer's library or capture a running application when you
+On the first start, MicMixer opens a setup guide that recognizes an installed
+virtual cable, explains how to install VB-CABLE if there is none, and walks
+through the steps below. Run it again from Settings > General. By hand:
+
+1. Click "Settings" and open "Devices".
+2. Select your physical microphone under "Normal mic".
+3. Select your voice-modified microphone under "Modified voice", or choose "None".
+4. Set "Send the mix to" to your virtual cable, then click "Save".
+5. Click "Enable" in the main window to start routing.
+6. If you use a modified microphone, choose a hotkey in Settings > Hotkey.
+   Holding it switches from the normal microphone to the modified microphone.
+7. Play music from MicMixer's library or capture a running application when you
    want music mixed into the same virtual microphone channel.
 
 If music is heavily reduced in the receiving app, try
@@ -103,6 +111,7 @@ No plug-in, network setup, or additional integration software is required.
 
 More help
 ---------
-The app contains a VB-CABLE setup guide and contextual explanations for its
-audio and music settings. Full documentation is available at:
+The setup guide in Settings > General explains the virtual cable and every
+device choice.
+Full documentation is available at:
 https://github.com/benjibutten/MicMixer
