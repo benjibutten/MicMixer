@@ -150,16 +150,14 @@ Starters have stable reserved UUIDs and are loaded from the application, without
 creating files in AppData. Save voice always creates a new local UUID copy; imports
 cannot overwrite or shadow a starter. The original starters remain available.
 
-The device row at the top of the routing column holds three peer dropdowns: normal
-mic, modified voice and virtual cable output. The modified-voice dropdown only names
-the *kind* of source. Its settings live in a full-width panel directly below, which is
-absent for **None**, holds the device picker for **External microphone / Voicemod**,
-and holds the profile picker, **Create a voice** and **Delete** for
-**Local voice profile**. Keeping the settings out of the device row is what stops one
-column from growing several rows taller than the two beside it.
+**Settings › Devices** lists normal mic, modified voice and the virtual cable
+(**Send the mix to**) as sections, top to bottom. The modified-voice dropdown only
+names the *kind* of source. Its settings sit directly below it: nothing for
+**None**, the device picker for **External microphone / Voicemod**, and the profile
+picker, **Create a voice** and **Delete** for **Local voice profile**.
 
-The processed-voice volume sits under the modified-voice picker, next to the
-normal mic's volume and on the same 0–200% scale. The old alternate
+The processed-voice volume sits under the modified-voice picker, laid out like the
+normal mic's volume above it, with a level bar next to each and the same 0–200% scale. The old alternate
 analysis-window checkbox is hidden unless the selected profile actually supplies
 an alternate. For a longer alternate it reads **Smoother processing (more delay)**;
 its tooltip explains the quality/latency tradeoff. The two starters do not need this
