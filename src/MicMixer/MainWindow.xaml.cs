@@ -77,6 +77,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private OverlayIndicatorWindow? _overlayIndicator;
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
     private int _releaseDelayMilliseconds;
+    private float _noiseGatePeakHold;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
@@ -185,6 +186,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
         _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
         ProcessedVoiceVolumePercentText.Text = $"{Math.Round(_settings.ProcessedVoiceVolume * 100)} %";
+        NormalMicVolumeSlider.Value = _settings.NormalMicVolume;
+        _router.NormalMicVolume = _settings.NormalMicVolume;
+        NormalMicVolumePercentText.Text = $"{Math.Round(_settings.NormalMicVolume * 100)} %";
+        NoiseGateCheck.IsChecked = _settings.NoiseGateEnabled;
+        NoiseGateThresholdSlider.Value = _settings.NoiseGateThresholdDb;
+        _router.NoiseGateEnabled = _settings.NoiseGateEnabled;
+        _router.NoiseGateThresholdDb = _settings.NoiseGateThresholdDb;
+        NoiseGateThresholdText.Text = $"{_settings.NoiseGateThresholdDb:0} dB";
         _isUpdatingUi = false;
         UpdateSecondaryVolumePercentText();
         ApplySecondaryOutputConfig();
@@ -710,6 +719,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             UpdateExternalCaptureStatusText();
         }
 
+        UpdateNoiseGateStateText();
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
@@ -1100,7 +1110,72 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.ProcessedVoiceVolume = (float)e.NewValue;
         _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
         ProcessedVoiceVolumePercentText.Text = $"{Math.Round(e.NewValue * 100)} %";
+        ScheduleSettingsSave();
+    }
+
+    private void OnNormalMicVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingUi || NormalMicVolumePercentText == null)
+        {
+            return;
+        }
+
+        _settings.NormalMicVolume = (float)e.NewValue;
+        _router.NormalMicVolume = _settings.NormalMicVolume;
+        NormalMicVolumePercentText.Text = $"{Math.Round(e.NewValue * 100)} %";
+        ScheduleSettingsSave();
+    }
+
+    private void OnNoiseGateChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi || NoiseGateStateText == null)
+        {
+            return;
+        }
+
+        _settings.NoiseGateEnabled = NoiseGateCheck.IsChecked == true;
+        _router.NoiseGateEnabled = _settings.NoiseGateEnabled;
+        UpdateNoiseGateStateText();
         SaveSettings();
+    }
+
+    private void OnNoiseGateThresholdChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingUi || NoiseGateThresholdText == null)
+        {
+            return;
+        }
+
+        _settings.NoiseGateThresholdDb = (float)e.NewValue;
+        _router.NoiseGateThresholdDb = _settings.NoiseGateThresholdDb;
+        NoiseGateThresholdText.Text = $"{_settings.NoiseGateThresholdDb:0} dB";
+        ScheduleSettingsSave();
+    }
+
+    /// <summary>
+    /// Live gate readout: the level bar under the threshold slider plus open/closed.
+    /// Peak-hold with decay, like the capture meter, so the bar is readable instead
+    /// of flickering with every block.
+    /// </summary>
+    private void UpdateNoiseGateStateText()
+    {
+        if (!_router.IsRouting || !_settings.NoiseGateEnabled)
+        {
+            _noiseGatePeakHold = 0f;
+            NoiseGateLevelBar.Value = NoiseGateLevelBar.Minimum;
+            NoiseGateStateText.Text = string.Empty;
+            return;
+        }
+
+        float peak = _router.ReadAndResetNoiseGateInputPeak();
+        _noiseGatePeakHold = Math.Max(float.IsFinite(peak) ? peak : 0f, _noiseGatePeakHold * 0.85f);
+        double decibels = _noiseGatePeakHold > 0f ? 20 * Math.Log10(_noiseGatePeakHold) : double.NegativeInfinity;
+        NoiseGateLevelBar.Value = Math.Clamp(decibels, NoiseGateLevelBar.Minimum, NoiseGateLevelBar.Maximum);
+
+        bool open = _router.NoiseGateOpen;
+        NoiseGateStateText.Text = open ? "Open" : "Closed";
+        NoiseGateStateText.Foreground = open ? StatusTheme.LiveBrush : StatusTheme.StoppedInkBrush;
+        NoiseGateLevelBar.Foreground = open ? StatusTheme.LiveBrush : StatusTheme.StoppedInkBrush;
     }
 
     private void OnLongerAnalysisWindowChanged(object sender, RoutedEventArgs e)
