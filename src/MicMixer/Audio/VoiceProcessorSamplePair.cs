@@ -179,7 +179,7 @@ internal sealed class VoiceProcessorSamplePair : ISamplePair
     private void ApplyOutputVolume(Span<float> samples)
     {
         float requested = _outputVolume?.Invoke() ?? 1f;
-        requested = float.IsFinite(requested) ? Math.Clamp(requested, 0f, 1f) : 1f;
+        requested = float.IsFinite(requested) ? Math.Clamp(requested, 0f, 2f) : 1f;
         if (!_gainInitialized)
         {
             _currentGain = _targetGain = requested;
