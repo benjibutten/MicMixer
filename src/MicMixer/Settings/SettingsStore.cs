@@ -68,7 +68,11 @@ public sealed class SettingsStore
                 }
             }
             settings.ProcessedVoiceVolume = float.IsFinite(settings.ProcessedVoiceVolume)
-                ? Math.Clamp(settings.ProcessedVoiceVolume, 0f, 1f) : 1f;
+                ? Math.Clamp(settings.ProcessedVoiceVolume, 0f, 2f) : 1f;
+            settings.NormalMicVolume = float.IsFinite(settings.NormalMicVolume)
+                ? Math.Clamp(settings.NormalMicVolume, 0f, 2f) : 1f;
+            settings.NoiseGateThresholdDb = float.IsFinite(settings.NoiseGateThresholdDb)
+                ? Math.Clamp(settings.NoiseGateThresholdDb, -70f, -10f) : -45f;
             settings.SkipModdedMic = settings.ModifiedVoiceMode == ModifiedVoiceMode.None;
             return settings;
         }

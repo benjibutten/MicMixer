@@ -11,13 +11,30 @@ public sealed class SettingsStoreTests : IDisposable
     [Theory]
     [InlineData("{}", 1f)]
     [InlineData("{\"ProcessedVoiceVolume\":-1}", 0f)]
-    [InlineData("{\"ProcessedVoiceVolume\":3}", 1f)]
+    [InlineData("{\"ProcessedVoiceVolume\":3}", 2f)]
     public void Load_ShouldDefaultAndClampProcessedVoiceVolume(string json, float expected)
     {
         Directory.CreateDirectory(_root);
         string path = Path.Combine(_root, "settings.json");
         File.WriteAllText(path, json);
         new SettingsStore(path).Load().ProcessedVoiceVolume.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("{}", 1f, -45f)]
+    [InlineData("{\"NormalMicVolume\":-1,\"NoiseGateThresholdDb\":-200}", 0f, -70f)]
+    [InlineData("{\"NormalMicVolume\":5,\"NoiseGateThresholdDb\":12}", 2f, -10f)]
+    public void Load_ShouldDefaultAndClampMicVolumeAndGateThreshold(string json, float volume, float thresholdDb)
+    {
+        Directory.CreateDirectory(_root);
+        string path = Path.Combine(_root, "settings.json");
+        File.WriteAllText(path, json);
+
+        AppSettings settings = new SettingsStore(path).Load();
+
+        settings.NormalMicVolume.Should().Be(volume);
+        settings.NoiseGateThresholdDb.Should().Be(thresholdDb);
+        settings.NoiseGateEnabled.Should().BeFalse();
     }
 
     [Fact]
@@ -34,6 +51,9 @@ public sealed class SettingsStoreTests : IDisposable
             DownloadFolderPath = @"D:\Music B",
             MusicVolume = 0.75f,
             ProcessedVoiceVolume = 0.63f,
+            NormalMicVolume = 1.4f,
+            NoiseGateEnabled = true,
+            NoiseGateThresholdDb = -38f,
             SecondaryOutputEnabled = true,
             SecondaryOutputDeviceId = "secondary-device-id",
             SecondaryOutputVolume = 0.6f,
@@ -50,6 +70,9 @@ public sealed class SettingsStoreTests : IDisposable
         actual.DownloadFolderPath.Should().Be(expected.DownloadFolderPath);
         actual.MusicVolume.Should().Be(expected.MusicVolume);
         actual.ProcessedVoiceVolume.Should().Be(expected.ProcessedVoiceVolume);
+        actual.NormalMicVolume.Should().Be(expected.NormalMicVolume);
+        actual.NoiseGateEnabled.Should().BeTrue();
+        actual.NoiseGateThresholdDb.Should().Be(expected.NoiseGateThresholdDb);
         actual.SecondaryOutputEnabled.Should().BeTrue();
         actual.SecondaryOutputDeviceId.Should().Be(expected.SecondaryOutputDeviceId);
         actual.SecondaryOutputVolume.Should().Be(expected.SecondaryOutputVolume);

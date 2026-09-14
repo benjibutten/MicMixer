@@ -8,13 +8,21 @@ public sealed class AppSettings
 
     public string? ModdedInputDeviceId { get; set; }
 
+    /// <summary>Gain for the normal mic only. 1 sends it exactly as captured; up to 2 boosts a quiet mic.</summary>
+    public float NormalMicVolume { get; set; } = 1f;
+
+    /// <summary>Mutes the mic between phrases so only signal above the threshold is sent.</summary>
+    public bool NoiseGateEnabled { get; set; }
+
+    public float NoiseGateThresholdDb { get; set; } = -45f;
+
     public ModifiedVoiceMode ModifiedVoiceMode { get; set; }
 
     public string? SelectedVoiceProfileId { get; set; }
 
     public bool LongerAnalysisWindow { get; set; }
 
-    /// <summary>Post-effect gain for processed voice only, from silence to unity.</summary>
+    /// <summary>Post-effect gain for processed voice only. 1 is unity; up to 2 boosts, same scale as <see cref="NormalMicVolume"/>.</summary>
     public float ProcessedVoiceVolume { get; set; } = 1f;
 
     /// <summary>Legacy mirror retained so older MicMixer builds still understand a saved settings file.</summary>

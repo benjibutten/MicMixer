@@ -319,6 +319,20 @@
                                 </Border>
                             </StackPanel>
                             <ComboBox x:Name="DryInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
+                            <Grid Margin="0,8,0,0"
+                                  ToolTip="Adjusts only the normal mic. 100% sends it exactly as captured; above 100% boosts a mic that sounds quieter than your modified voice.">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Volume" FontSize="11" VerticalAlignment="Center"/>
+                                <Slider x:Name="NormalMicVolumeSlider" Grid.Column="1" Minimum="0" Maximum="2" Value="1" Margin="12,0,8,0"
+                                        SmallChange="0.01" LargeChange="0.1" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Normal mic volume" ValueChanged="OnNormalMicVolumeChanged"/>
+                                <TextBlock x:Name="NormalMicVolumePercentText" Grid.Column="2" Text="100 %" Width="42"
+                                           TextAlignment="Right" FontSize="11" VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
 
                         <!-- Modified voice: which kind of source, not how it is configured.
@@ -345,6 +359,22 @@
                             <ComboBox x:Name="ModdedInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"
                                       AutomationProperties.Name="How the modified voice is produced"
                                       ToolTipService.ShowOnDisabled="True"/>
+                            <!-- Same scale and row as the normal mic volume so the two read as a pair.
+                                 Only a local profile has a processed level to adjust. -->
+                            <Grid x:Name="ProcessedVoiceVolumePanel" Margin="0,8,0,0" Visibility="Collapsed"
+                                  ToolTip="Adjusts only the processed voice, after the effect. 100% keeps the level the profile produces; lower it if the processed voice comes out louder than your normal mic.">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Volume" FontSize="11" VerticalAlignment="Center"/>
+                                <Slider x:Name="ProcessedVoiceVolumeSlider" Grid.Column="1" Minimum="0" Maximum="2" Value="1" Margin="12,0,8,0"
+                                        SmallChange="0.01" LargeChange="0.1" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Processed voice volume" ValueChanged="OnProcessedVoiceVolumeChanged"/>
+                                <TextBlock x:Name="ProcessedVoiceVolumePercentText" Grid.Column="2" Text="100 %" Width="42"
+                                           TextAlignment="Right" FontSize="11" VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
 
                         <!-- Output -->
@@ -410,20 +440,6 @@
                                   Visibility="Collapsed">
                             <TextBlock x:Name="AlternateWindowLabel" Text="Alternate processing quality" TextWrapping="Wrap"/>
                         </CheckBox>
-                        <Grid x:Name="ProcessedVoiceVolumePanel" Margin="0,10,0,0" Visibility="Collapsed"
-                              ToolTip="Adjusts only the processed voice after the effect. 100% keeps the original level; 50% is about -6 dB.">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Voice volume" FontSize="11" VerticalAlignment="Center"/>
-                            <Slider x:Name="ProcessedVoiceVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="1" Margin="12,0,8,0"
-                                    SmallChange="0.01" LargeChange="0.1" VerticalAlignment="Center"
-                                    AutomationProperties.Name="Processed voice volume" ValueChanged="OnProcessedVoiceVolumeChanged"/>
-                            <TextBlock x:Name="ProcessedVoiceVolumePercentText" Grid.Column="2" Text="100 %" Width="42"
-                                       TextAlignment="Right" FontSize="11" VerticalAlignment="Center"/>
-                        </Grid>
                     </StackPanel>
                 </Border>
 
@@ -608,6 +624,58 @@
                                         </ToolTip>
                                     </CheckBox.ToolTip>
                                 </CheckBox>
+                                <CheckBox x:Name="NoiseGateCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A"
+                                          Checked="OnNoiseGateChanged" Unchecked="OnNoiseGateChanged"
+                                          ToolTipService.ShowDuration="60000">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Path Data="{StaticResource MicOffIcon}" Fill="#6B7280" Style="{StaticResource SectionIcon}" Width="12" Height="12" Margin="0,0,5,0"/>
+                                        <TextBlock Grid.Column="1" Text="Noise gate — the mic is silent unless you speak above the threshold" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    </Grid>
+                                    <CheckBox.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource TipTitle}" Text="Silence between phrases"/>
+                                                <TextBlock Style="{StaticResource TipBody}"
+                                                           Text="Mutes the mic whenever its level stays below the threshold, so the virtual cable carries true silence instead of room noise and hum. Apps that use voice activation on the cable stop treating you as talking as soon as you stop speaking. The gate stays open for a moment after each phrase so short pauses are not cut."/>
+                                                <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
+                                                           Text="Set the threshold just above the level shown while you are silent. Works together with push-to-talk and applies to both the normal and the modified mic. Music is not affected."/>
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </CheckBox.ToolTip>
+                                </CheckBox>
+                                <Grid Margin="22,6,0,0" IsEnabled="{Binding IsChecked, ElementName=NoiseGateCheck}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="Threshold" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                    <Slider x:Name="NoiseGateThresholdSlider" Grid.Column="1" Minimum="-70" Maximum="-10" Value="-45" Margin="12,0,8,0"
+                                            SmallChange="1" LargeChange="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"
+                                            AutomationProperties.Name="Noise gate threshold" ValueChanged="OnNoiseGateThresholdChanged"/>
+                                    <TextBlock x:Name="NoiseGateThresholdText" Grid.Column="2" Text="-45 dB" Width="46"
+                                               TextAlignment="Right" FontSize="11" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NoiseGateStateText" Grid.Column="3" Margin="10,0,0,0" MinWidth="48"
+                                               FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <!-- Same dB scale as the slider and inset by half the thumb width, so the
+                                         bar's edge lines up with the thumb: the level is above the threshold
+                                         exactly when the bar reaches past it. -->
+                                    <ProgressBar x:Name="NoiseGateLevelBar" Grid.Row="1" Grid.Column="1" Height="6" Margin="17,2,13,0"
+                                                 Minimum="-70" Maximum="-10" Value="-70" Background="#E5E7EB"
+                                                 Foreground="{x:Static ui:StatusTheme.StoppedInkBrush}"/>
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="4" Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
+                                               Text="Speak normally: the bar should pass the knob while you talk and stay below it while you are quiet."/>
+                                </Grid>
                                 <CheckBox x:Name="OverlayIndicatorCheck" Margin="0,8,0,0" FontSize="11.5" Foreground="#10233A"
                                           Checked="OnOverlayIndicatorChanged" Unchecked="OnOverlayIndicatorChanged"
                                           ToolTipService.ShowDuration="60000">

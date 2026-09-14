@@ -55,6 +55,10 @@ The rest of this document is the detailed reference.
 - Supports setups without a modified microphone.
 - Supports a configurable release delay before switching back to the normal mic.
 - Provides push-to-talk for the complete outgoing mix, including music.
+- Provides an optional noise gate that keeps the mic silent between phrases, so
+  the virtual cable carries true silence instead of room noise.
+- Provides matching volume controls for the normal mic and the processed voice,
+  from mute up to a 2× boost.
 - Optionally lets music bypass push-to-talk, so the music keeps playing into the
   virtual cable while the voice stays gated.
 - Provides a monitor-only preview mode that keeps music out of the virtual cable
@@ -152,7 +156,11 @@ button that should select the modified mic while routing is active:
 - Release delay above `0 ms`: the modified mic remains active until the delay ends.
 - **None**: the hotkey is disabled unless push-to-talk is enabled.
 - **External microphone / Voicemod**: select the existing voice-changer output device.
-- **Local voice profile** (experimental): processes the physical microphone using a private local profile. Select a profile, create or edit one in the voice designer, or delete one you no longer want. **Processed voice volume** adjusts the wet output from 0–100% while routing is active.
+- **Local voice profile** (experimental): processes the physical microphone using a private local profile. Select a profile, create or edit one in the voice designer, or delete one you no longer want. Its **Volume** slider (under the modified-voice picker) adjusts the processed voice only, from 0 to 200%, while routing is active.
+- **Volume** under the normal mic adjusts only the normal mic, on the same 0–200%
+  scale. 100% sends it exactly as captured. MicMixer never lowers the normal mic
+  on its own; raise this if it sounds quieter than your modified voice, or lower
+  the modified voice next to it.
 
 Push-to-talk reverses the idle behavior: while the hotkey is not held, the virtual
 cable receives silence. Neither microphone audio nor music is sent.
@@ -166,6 +174,20 @@ cable receives silence. Neither microphone audio nor music is sent.
 - With **Music ignores push-to-talk** enabled (music card), push-to-talk gates
   only the microphone: the music keeps flowing into the virtual cable as long as
   it plays. See [Music routing](#music-routing).
+
+**Noise gate** mutes the mic whenever its level stays below the threshold, so
+the cable carries true digital silence between phrases instead of room noise
+and hum. Apps that use voice activation on the cable
+then stop treating you as talking the moment you stop speaking, even while the
+push-to-talk key is still held.
+
+- The gate opens within a few milliseconds and stays open for a quarter second
+  after the level drops, so short pauses do not chop words.
+- The bar under the slider shows the mic level on the same scale: set the
+  threshold so the bar passes the knob while you talk and stays below it while
+  you are quiet. The label next to it tells whether the gate is open or closed.
+- It applies to the normal and the modified mic alike and works together with
+  push-to-talk. Music is not affected.
 
 ## Music sources
 
