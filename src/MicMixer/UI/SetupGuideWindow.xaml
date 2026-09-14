@@ -241,7 +241,7 @@
                                Text="Windows reports no microphone. Connect one, then come back to this page."/>
 
                     <TextBlock Style="{StaticResource Heading}" Text="A different voice while you hold the hotkey?"/>
-                    <TextBlock Style="{StaticResource Small}" Text="MicMixer can send a modified voice instead of your normal mic while you hold a key. You can change this later."/>
+                    <TextBlock Style="{StaticResource Small}" Text="MicMixer can send a modified voice instead of your normal mic while you hold a key. You can switch this any time in the main window."/>
                     <RadioButton x:Name="VoiceNoneRadio" GroupName="Voice" Checked="OnVoiceModeChanged">
                         <TextBlock TextWrapping="Wrap"><Run Text="No, just my normal mic" FontWeight="SemiBold"/><Run Text=" — the right choice for most people starting out"/></TextBlock>
                     </RadioButton>
@@ -251,7 +251,7 @@
                     <ComboBox x:Name="ExternalMicCombo" DisplayMemberPath="FriendlyName" Margin="24,6,0,0"
                               AutomationProperties.Name="Voice changer microphone"/>
                     <RadioButton x:Name="VoiceLocalRadio" GroupName="Voice" Checked="OnVoiceModeChanged">
-                        <TextBlock TextWrapping="Wrap"><Run Text="Yes, with MicMixer's own voice profiles" FontWeight="SemiBold"/><Run Text=" — experimental, runs on your processor"/></TextBlock>
+                        <TextBlock TextWrapping="Wrap"><Run Text="Yes, with MicMixer voices" FontWeight="SemiBold"/><Run Text=" — built in, experimental, changes your voice inside MicMixer"/></TextBlock>
                     </RadioButton>
                 </StackPanel>
 

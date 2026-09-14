@@ -35,6 +35,19 @@ public sealed class AudioDevicesTests
     }
 
     [Fact]
+    public void SelectInput_ShouldNeverGuessTheCable_BecauseItWouldFeedTheMixBackIn()
+    {
+        var inputs = new List<AudioDeviceOption>
+        {
+            new("mic", "Microphone (Realtek(R) Audio)"),
+            new("cable", "CABLE Output (VB-Audio Virtual Cable)")
+        };
+
+        AudioDevices.SelectInput(inputs, null, AudioDevices.LooksLikeVoiceModDevice, excludedId: "mic").Should().BeNull();
+        AudioDevices.SelectInput(inputs, "cable", AudioDevices.LooksLikeVoiceModDevice, excludedId: "mic")!.Id.Should().Be("cable");
+    }
+
+    [Fact]
     public void SelectInput_ShouldNotGuessTheCableAsAMicrophone_WhenAnotherDeviceExists()
     {
         var inputs = new List<AudioDeviceOption>

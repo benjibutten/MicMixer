@@ -88,7 +88,9 @@ repository or ignored and verify `git ls-files recording` is empty.
 
 ## Create a voice in the app
 
-Stop routing, select **Local voice profile**, then choose **Create a voice…**.
+In the app, local voice profiles are called **MicMixer voices**. Stop routing, choose
+**MicMixer voices** as the voice changer, then choose **Create a voice…** in
+**Settings › Devices**.
 Start from neutral settings, a built-in starter, or an installed profile. Give the new
 voice a name, record a short phrase from the selected normal microphone, and
 choose headphones under **Listen on**. The selected virtual cable is excluded
@@ -150,13 +152,15 @@ Starters have stable reserved UUIDs and are loaded from the application, without
 creating files in AppData. Save voice always creates a new local UUID copy; imports
 cannot overwrite or shadow a starter. The original starters remain available.
 
-**Settings › Devices** lists normal mic, modified voice and the virtual cable
-(**Send the mix to**) as sections, top to bottom. The modified-voice dropdown only
+**Settings › Devices** lists normal mic, voice changer and the virtual cable
+(**Send the mix to**) as sections, top to bottom. The voice changer dropdown only
 names the *kind* of source. Its settings sit directly below it: nothing for
-**None**, the device picker for **External microphone / Voicemod**, and the profile
-picker, **Create a voice** and **Delete** for **Local voice profile**.
+**Off**, the device picker for **Voice changer app**, and the voice picker,
+**Create a voice** and **Delete** for **MicMixer voices**. The main window has the
+same three-way switch plus the voice picker under its status card, because the
+voice is switched during a session; a running route restarts with the new choice.
 
-The processed-voice volume sits under the modified-voice picker, laid out like the
+The processed-voice volume sits under the voice changer picker, laid out like the
 normal mic's volume above it, with a level bar next to each and the same 0–200% scale. The old alternate
 analysis-window checkbox is hidden unless the selected profile actually supplies
 an alternate. For a longer alternate it reads **Smoother processing (more delay)**;

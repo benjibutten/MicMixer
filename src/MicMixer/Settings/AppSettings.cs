@@ -9,9 +9,9 @@ public sealed class AppSettings
     /// <summary>
     /// Copies the settings edited in the settings window. They apply live but are
     /// written to disk only by its Save button, so the saved values stay a reliable
-    /// reference for "is the app running the way I set it up?". Everything else
-    /// (music card, music folders, window size) is saved as it changes, because the
-    /// remote-control API changes those too.
+    /// reference for "is the app running the way I set it up?". Everything else is
+    /// saved as it changes: what is switched during a session (music card, the voice
+    /// changer and its voice) and what the remote-control API changes (music folders).
     /// </summary>
     public void CopyConfigurationFrom(AppSettings source)
     {
@@ -21,9 +21,6 @@ public sealed class AppSettings
         NormalMicVolume = source.NormalMicVolume;
         NoiseGateEnabled = source.NoiseGateEnabled;
         NoiseGateThresholdDb = source.NoiseGateThresholdDb;
-        ModifiedVoiceMode = source.ModifiedVoiceMode;
-        SelectedVoiceProfileId = source.SelectedVoiceProfileId;
-        LongerAnalysisWindow = source.LongerAnalysisWindow;
         ProcessedVoiceVolume = source.ProcessedVoiceVolume;
         OutputDeviceId = source.OutputDeviceId;
         HotkeyId = source.HotkeyId;

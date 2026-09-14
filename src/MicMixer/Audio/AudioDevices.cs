@@ -75,13 +75,11 @@ internal static class AudioDevices
         Func<AudioDeviceOption, bool> heuristic,
         string? excludedId = null)
     {
-        // The recording end of a cable is a microphone to Windows, but picking it as a
-        // source would feed the mix back into itself, so it is only a last resort.
+        // The recording end of a cable is a microphone to Windows, but as a source it
+        // would feed the mix back into itself. It is never guessed; no device is safer.
         return devices.FirstOrDefault(device => device.Id == preferredId)
             ?? devices.FirstOrDefault(device => device.Id != excludedId && heuristic(device))
-            ?? devices.FirstOrDefault(device => device.Id != excludedId && !LooksLikeVirtualCable(device))
-            ?? devices.FirstOrDefault(device => device.Id != excludedId)
-            ?? devices.FirstOrDefault();
+            ?? devices.FirstOrDefault(device => device.Id != excludedId && !LooksLikeVirtualCable(device));
     }
 
     public static AudioDeviceOption? SelectCableOutput(IReadOnlyList<AudioDeviceOption> devices, string? preferredId)
