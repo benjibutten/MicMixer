@@ -103,7 +103,14 @@ public sealed class TimeDomainVoiceTests
         var raw = SpeechLike(rate, .9);
         var first = new float[raw.Length + processor.LatencySamples];
         var again = new float[first.Length];
-        // Warm JIT/native math before measuring the processing loop.
+        // Warm JIT/native math before measuring the processing loop, with more calls than
+        // the measured loop makes: crossing tiered JIT's 30-call threshold inside it
+        // occasionally showed up as a few KB allocated on this thread.
+        for (int i = 0; i < 100; i++)
+        {
+            processor.Process(raw.AsSpan(0, 480), again.AsSpan(0, 480));
+        }
+        processor.Reset();
         processor.Process(raw, first.AsSpan(0, raw.Length)); processor.Flush(first.AsSpan(raw.Length)); processor.Reset();
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int offset = 0; offset < raw.Length; offset += 480)
