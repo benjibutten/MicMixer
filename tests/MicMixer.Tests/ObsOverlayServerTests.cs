@@ -91,8 +91,18 @@ public sealed class ObsOverlayServerTests
         await WaitForClientAsync(server);
         Assert.True(server.HasClients);
 
-        await socket.CloseAsync(
-            WebSocketCloseStatus.NormalClosure, null, TestContext.Current.CancellationToken);
+        try
+        {
+            await socket.CloseAsync(
+                WebSocketCloseStatus.NormalClosure, null, TestContext.Current.CancellationToken);
+        }
+        catch (WebSocketException)
+        {
+            // HttpListener tears the connection down inside its own close reply, so
+            // the client occasionally sees a reset instead of the reply. The client
+            // count is what this test is about.
+        }
+
         socket.Dispose();
 
         await WaitForAsync(() => !server.HasClients);
