@@ -73,10 +73,18 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private bool _trayBalloonShown;
     private bool _isDownloading;
     private ExternalCaptureRouteState? _lastExternalCaptureRouteState;
+    /// <summary>Live settings: what the app runs with right now.</summary>
     private AppSettings _settings;
+    /// <summary>What the settings window last saved; problems are measured against it.</summary>
+    private AppSettings _savedSettings;
+    private bool _hasUnsavedConfiguration;
+    private Window? _settingsWindow;
+    private List<Problem> _problems = [];
+    private string? _secondaryOutputError;
     private OverlayIndicatorWindow? _overlayIndicator;
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
     private int _releaseDelayMilliseconds;
+    private float _noiseGatePeakHold;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
@@ -160,11 +168,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _router.Error += OnRouterError;
         _hotkeyListener.PressedStateChanged += OnHotkeyPressedStateChanged;
 
-        _hotkeyBinding = HotkeyBinding.Parse(_settings.HotkeyId);
-        _hotkeyListener.UpdateBinding(_hotkeyBinding);
-        UpdateHotkeyUi();
-        ReleaseDelayTextBox.Text = _releaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
-
         _trayIcon = CreateTrayIcon();
         DryInputCombo.IsEnabled = false;
         ModdedInputCombo.IsEnabled = false;
@@ -173,22 +176,22 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SecondaryOutputCombo.IsEnabled = false;
 
         _isUpdatingUi = true;
-        StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
-        SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
-        SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
-        SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
         LoadVoiceProfiles();
-        bool alternateWindowAvailable = VoiceProfileCombo.SelectedItem is VoiceProfile { AlternateBlockMilliseconds: not null };
-        bool longerAnalysisWindow = _settings.LongerAnalysisWindow && alternateWindowAvailable;
-        _settings.LongerAnalysisWindow = longerAnalysisWindow;
-        LongerAnalysisWindowCheck.IsChecked = longerAnalysisWindow;
-        ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
-        _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
-        ProcessedVoiceVolumePercentText.Text = $"{Math.Round(_settings.ProcessedVoiceVolume * 100)} %";
         _isUpdatingUi = false;
-        UpdateSecondaryVolumePercentText();
-        ApplySecondaryOutputConfig();
+        bool alternateWindowAvailable = VoiceProfileCombo.SelectedItem is VoiceProfile { AlternateBlockMilliseconds: not null };
+        _settings.LongerAnalysisWindow = _settings.LongerAnalysisWindow && alternateWindowAvailable;
+        _savedSettings = _settings.Clone();
+        ApplyConfiguration();
+        ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
+        RenderVoiceChoice();
         SyncStartWithWindows();
+
+        // Migrate the legacy single-folder setting into the folder list.
+        _playlist.SetFolders(_settings.MusicFolderPaths is { Count: > 0 } paths
+            ? paths
+            : string.IsNullOrWhiteSpace(_settings.MusicFolderPath) ? [] : [_settings.MusicFolderPath]);
+        RefreshMusicFolderUi();
+        RefreshPlaylist(null);
 
         _music.MusicVolume = _settings.MusicVolume;
         _music.MonitorVolume = _settings.MonitorVolume;
@@ -197,33 +200,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
         MonitorVolumeSlider.Value = _music.MonitorVolume;
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
-        PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
         MusicIgnorePttCheck.IsChecked = _settings.MusicIgnoresPushToTalk;
         MusicMonitorOnlyCheck.IsChecked = _settings.MusicMonitorOnly;
-        OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
-        OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
-        MeterSensitivitySlider.Value = _settings.MeterSensitivityDb;
-        ObsOverlayCheck.IsChecked = _settings.ObsOverlayEnabled;
-        ObsOverlayPortBox.Text = _settings.ObsOverlayPort.ToString(CultureInfo.InvariantCulture);
         _isUpdatingMusicUi = false;
         ApplyMusicRoutingModes();
-        UpdateMeterSensitivityText();
         UpdateDelayedPlayIdleUi();
         SetSingleTrackMode(_settings.SingleTrackMode ? SingleTrackPlayMode.Always : SingleTrackPlayMode.Off,
             save: false, announce: false);
         _volumeLinkOffset = MonitorVolumeSlider.Value - MusicVolumeSlider.Value;
         UpdateVolumePercentTexts();
-        ApplyModdedMicUiState(_settings.ModifiedVoiceMode);
-
-        // Migrate the legacy single-folder setting into the folder list.
-        var storedFolders = _settings.MusicFolderPaths is { Count: > 0 } paths
-            ? paths
-            : string.IsNullOrWhiteSpace(_settings.MusicFolderPath)
-                ? new List<string>()
-                : new List<string> { _settings.MusicFolderPath! };
-        _playlist.SetFolders(storedFolders);
-        RefreshMusicFolderUi();
-        RefreshPlaylist(null);
 
         // Restore the music source mode without letting the radio handler run
         // (it would save settings before the device combos are populated).
@@ -246,10 +231,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _levelTimer.Tick += OnLevelTimerTick;
         _levelTimer.Start();
 
-        UpdateStatusText();
-        UpdateTrayIcon();
-        ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
-        ApplyObsOverlaySetting(_settings.ObsOverlayEnabled);
+        OnConfigurationChanged();
         Closing += OnClosing;
 
         App.StartupTrace("MainWindow ctor done");
@@ -279,7 +261,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (!App.StartupBenchmarkMode)
         {
             App.StartupTrace("Device refresh queued");
-            _ = RefreshDevicesAsync();
+            _ = LoadDevicesAndOfferSetupGuideAsync();
         }
 
         if (App.StartupBenchmarkMode)
@@ -314,65 +296,67 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         UpdateStatusText();
 
-        var selectedDryInput = (DryInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        var selectedModifiedVoiceMode = (ModdedInputCombo.SelectedItem as ModifiedVoiceOption)?.Mode;
-        var selectedModdedInput = (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.Id;
-        var selectedOutput = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
-        var selectedMonitor = (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
-        var selectedSecondary = (SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.Id;
-
         try
         {
             App.StartupTrace("Device refresh started");
-            var (inputs, outputs) = await Task.Run(EnumerateActiveDevices);
+            var (inputs, outputs) = await Task.Run(AudioDevices.EnumerateActive);
 
             _isUpdatingUi = true;
 
             try
             {
+                // Every combo change is written to _settings at once, so _settings (not the
+                // combos) holds the choice. A missing device gets a stand-in in the combo while
+                // _settings keeps the chosen id; UpdateProblems reports the difference.
                 DryInputCombo.ItemsSource = inputs;
                 ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
                 ExternalModdedInputCombo.ItemsSource = inputs;
                 OutputDeviceCombo.ItemsSource = outputs;
 
-                var drySelection = SelectInputDevice(
+                var drySelection = AudioDevices.SelectInput(
                     inputs,
-                    selectedDryInput ?? _settings.NormalInputDeviceId,
-                    device => !LooksLikeVoiceModDevice(device));
+                    _settings.NormalInputDeviceId,
+                    AudioDevices.LooksLikeNormalMic);
 
                 DryInputCombo.SelectedItem = drySelection;
 
-                ModifiedVoiceMode preferredMode = selectedModifiedVoiceMode ?? _settings.ModifiedVoiceMode;
-                ModdedInputCombo.SelectedItem = ModifiedVoiceOptions.First(option => option.Mode == preferredMode);
+                ModdedInputCombo.SelectedItem = ModifiedVoiceOptions.First(option => option.Mode == _settings.ModifiedVoiceMode);
 
-                AudioDeviceOption? moddedSelection = SelectInputDevice(
+                AudioDeviceOption? moddedSelection = AudioDevices.SelectInput(
                     inputs,
-                    selectedModdedInput ?? _settings.ModdedInputDeviceId,
-                    LooksLikeVoiceModDevice,
+                    _settings.ModdedInputDeviceId,
+                    AudioDevices.LooksLikeVoiceModDevice,
                     drySelection?.Id);
-
-                // The external mode keeps the legacy physical/Voicemod device choice,
-                // but never silently aliases it to the normal microphone.
-                if (moddedSelection?.Id == drySelection?.Id)
-                {
-                    moddedSelection = inputs.FirstOrDefault(device => device.Id != drySelection?.Id);
-                }
-
+                // Excluding the normal mic means a guess never aliases it; only a deliberate
+                // choice of the same device (Enable warns about it) can.
                 ExternalModdedInputCombo.SelectedItem = moddedSelection;
 
-                OutputDeviceCombo.SelectedItem = SelectOutputDevice(outputs, selectedOutput ?? _settings.OutputDeviceId);
+                OutputDeviceCombo.SelectedItem = AudioDevices.SelectCableOutput(outputs, _settings.OutputDeviceId);
 
                 MonitorDeviceCombo.ItemsSource = outputs;
-                MonitorDeviceCombo.SelectedItem = SelectMonitorDevice(outputs, selectedMonitor ?? _settings.MusicMonitorDeviceId);
+                MonitorDeviceCombo.SelectedItem = AudioDevices.SelectMonitor(outputs, _settings.MusicMonitorDeviceId);
 
                 // Strict id match only — never auto-pick a replacement. With the
                 // feature enabled, a silently substituted device would play the
                 // microphone on open speakers (feedback/unexpected exposure).
                 // A missing device leaves the combo empty and start is blocked
                 // until the user makes an explicit new choice.
-                string? preferredSecondaryId = selectedSecondary ?? _settings.SecondaryOutputDeviceId;
                 SecondaryOutputCombo.ItemsSource = outputs;
-                SecondaryOutputCombo.SelectedItem = outputs.FirstOrDefault(device => device.Id == preferredSecondaryId);
+                SecondaryOutputCombo.SelectedItem = outputs.FirstOrDefault(device => device.Id == _settings.SecondaryOutputDeviceId);
+
+                // First run: the guesses become unsaved choices, so Save keeps them. Later
+                // runs leave an unset id alone (it means "automatic"), or every user who
+                // never picked, say, a monitor device would face a permanent unsaved card.
+                if (_savedSettings.OutputDeviceId == null)
+                {
+                    _settings.NormalInputDeviceId ??= drySelection?.Id;
+                    _settings.OutputDeviceId ??= (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
+                    _settings.MusicMonitorDeviceId ??= (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id;
+                    if (_settings.ModifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone)
+                    {
+                        _settings.ModdedInputDeviceId ??= moddedSelection?.Id;
+                    }
+                }
             }
             finally
             {
@@ -408,34 +392,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         finally
         {
             _isDevicesLoading = false;
-            UpdateStatusText();
+            OnConfigurationChanged();
         }
-    }
-
-    private static (List<AudioDeviceOption> inputs, List<AudioDeviceOption> outputs) EnumerateActiveDevices()
-    {
-        App.StartupTrace("Creating MMDeviceEnumerator (lazy)");
-        using var enumerator = new MMDeviceEnumerator();
-        App.StartupTrace("MMDeviceEnumerator created (lazy)");
-
-        var inputs = ReadDeviceOptions(enumerator, DataFlow.Capture);
-        var outputs = ReadDeviceOptions(enumerator, DataFlow.Render);
-
-        return (inputs, outputs);
-    }
-
-    private static List<AudioDeviceOption> ReadDeviceOptions(MMDeviceEnumerator enumerator, DataFlow dataFlow)
-    {
-        var options = new List<AudioDeviceOption>();
-        foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(dataFlow, DeviceState.Active))
-        {
-            using (device)
-            {
-                options.Add(new AudioDeviceOption(device.ID, device.FriendlyName));
-            }
-        }
-
-        return options;
     }
 
     private async void OnToggleClick(object sender, RoutedEventArgs e)
@@ -446,6 +404,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        await StartRoutingAsync();
+    }
+
+    private async Task StartRoutingAsync()
+    {
         if (_isStartingRouting)
         {
             return;
@@ -474,8 +437,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             (modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone && moddedInput == null))
         {
             StatusText.Text = modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone
-                ? "Select a normal mic, external modified mic, and virtual cable."
-                : "Select a normal mic and virtual cable.";
+                ? "Select a normal mic, the voice changer app's microphone and a virtual cable in Settings › Devices."
+                : "Select a normal mic and a virtual cable in Settings › Devices.";
             return;
         }
 
@@ -487,13 +450,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
             && _acknowledgedSameMicId != dryInput.Id)
         {
             _acknowledgedSameMicId = dryInput.Id;
-            StatusText.Text = "The normal and external modified mic are the same device — the hotkey will make no audible difference. Did you mean 'None'? Click Enable again to start anyway.";
+            StatusText.Text = "The normal mic and the voice changer app's microphone are the same device — the hotkey will make no audible difference. Did you mean Off? Click Enable again to start anyway.";
             return;
         }
 
         // Warn instead of hard-blocking: unusual cable drivers (VAC, Voicemeeter Aux)
         // fail the name heuristic, and a silent refusal looks like a dead button.
-        if (!LooksLikeVirtualCable(output) && _acknowledgedNonCableOutputId != output.Id)
+        if (!AudioDevices.LooksLikeVirtualCable(output) && _acknowledgedNonCableOutputId != output.Id)
         {
             _acknowledgedNonCableOutputId = output.Id;
             StatusText.Text = $"\"{output.FriendlyName}\" does not appear to be a virtual cable — the game can hear the mix only through a device such as CABLE Input. Click Enable again to start anyway.";
@@ -512,7 +475,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             // sum both copies of the mix on the cable.
             if (secondaryDevice.Id == output.Id)
             {
-                StatusText.Text = "The secondary output and virtual cable output are the same device — the mix would play twice. Select a different device for the secondary output.";
+                StatusText.Text = "The secondary output and the virtual cable are the same device — the mix would play twice. Select a different device for the secondary output.";
                 return;
             }
         }
@@ -525,6 +488,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         StatusText.Text = "Starting routing...";
 
         bool pushToTalk = IsPushToTalk;
+        _secondaryOutputError = null;
 
         try
         {
@@ -559,26 +523,20 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
-            ToggleBtnText.Text = "Stop routing";
+            ToggleBtnText.Text = "Stop";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
+            // Devices are opened for the whole route. The voice changer choice stays
+            // switchable: ChangeVoiceAsync restarts the route instead.
             DryInputCombo.IsEnabled = false;
-            ModdedInputCombo.IsEnabled = false;
             ExternalModdedInputCombo.IsEnabled = false;
             LongerAnalysisWindowCheck.IsEnabled = false;
             OutputDeviceCombo.IsEnabled = false;
             SecondaryOutputEnabledCheck.IsEnabled = false;
             SecondaryOutputCombo.IsEnabled = false;
             UpdateSecondaryOutputStatus();
-            _settings.NormalInputDeviceId = dryInput.Id;
-            _settings.ModifiedVoiceMode = modifiedVoiceMode;
-            _settings.SkipModdedMic = skipModded;
-            _settings.LongerAnalysisWindow = LongerAnalysisWindowCheck.IsChecked == true;
-            if (modifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone)
-            {
-                _settings.ModdedInputDeviceId = moddedInput!.Id;
-            }
-            _settings.OutputDeviceId = output.Id;
-            SaveSettings();
+            // Starting never saves the devices it used: a stand-in for a missing
+            // device must not replace the saved choice.
+            StatusText.Text = string.Empty;
             UpdateStatusText();
             ResumeMusicIfAutoPaused();
             UpdateExternalCaptureStatusText();
@@ -648,6 +606,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         ApplyModdedMicUiState();
         SecondaryOutputEnabledCheck.IsEnabled = true;
+        _secondaryOutputError = null;
         UpdateSecondaryOutputStatus();
         UpdateStatusText();
         UpdateExternalCaptureStatusText();
@@ -710,6 +669,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             UpdateExternalCaptureStatusText();
         }
 
+        UpdateNoiseGateStateText();
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
@@ -745,16 +705,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         else if (ReferenceEquals(sender, ModdedInputCombo)
             && ModdedInputCombo.SelectedItem is ModifiedVoiceOption modifiedVoice)
         {
-            _settings.ModifiedVoiceMode = modifiedVoice.Mode;
-            _settings.SkipModdedMic = modifiedVoice.Mode == ModifiedVoiceMode.None;
+            _ = ChangeVoiceAsync(modifiedVoice.Mode, _settings.SelectedVoiceProfileId);
+            return;
         }
         else if (ReferenceEquals(sender, ExternalModdedInputCombo)
             && ExternalModdedInputCombo.SelectedItem is AudioDeviceOption moddedInput)
         {
-            if (CurrentModifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone)
-            {
-                _settings.ModdedInputDeviceId = moddedInput.Id;
-            }
+            _settings.ModdedInputDeviceId = moddedInput.Id;
         }
         else if (ReferenceEquals(sender, OutputDeviceCombo)
             && OutputDeviceCombo.SelectedItem is AudioDeviceOption output)
@@ -765,8 +722,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ApplyModdedMicUiState();
         UpdateOutputCableWarning();
         UpdateSecondaryOutputWarning();
-        SaveSettings();
-        UpdateStatusText();
+        OnConfigurationChanged();
     }
 
     // --- Secondary output (pre-gate fanout, e.g. for recording or streaming) ---
@@ -796,7 +752,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.SecondaryOutputIgnorePushToTalk = SecondaryIgnorePttCheck.IsChecked == true;
         ApplySecondaryOutputConfig();
         UpdateSecondaryOutputWarning();
-        SaveSettings();
+        OnConfigurationChanged();
     }
 
     private void OnSecondaryOutputDeviceChanged(object sender, SelectionChangedEventArgs e)
@@ -812,7 +768,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
         ApplySecondaryOutputConfig();
         UpdateSecondaryOutputWarning();
-        SaveSettings();
+        OnConfigurationChanged();
     }
 
     private void OnSecondaryVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -832,7 +788,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _secondaryOutput.Volume = (float)e.NewValue;
         _settings.SecondaryOutputVolume = (float)e.NewValue;
-        ScheduleSettingsSave();
+        OnConfigurationChanged();
     }
 
     private void UpdateSecondaryVolumePercentText()
@@ -864,7 +820,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if ((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id == secondary.Id)
         {
             SecondaryOutputWarningText.Text =
-                "⚠ Same device as the virtual cable output — the mix would play twice. Select a different device.";
+                "⚠ Same device as the virtual cable — the mix would play twice. Select a different device.";
             SecondaryOutputWarningText.Visibility = Visibility.Visible;
             return;
         }
@@ -903,6 +859,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 return;
             }
 
+            _secondaryOutputError = message;
             SecondaryOutputStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xB9, 0x1C, 0x1C));
             SecondaryOutputStatusText.Text = $"Secondary output stopped: {message} — routing to the cable continues.";
             SecondaryOutputStatusText.Visibility = Visibility.Visible;
@@ -918,13 +875,111 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private static readonly ModifiedVoiceOption[] ModifiedVoiceOptions =
     [
-        new(ModifiedVoiceMode.None, "None"),
-        new(ModifiedVoiceMode.ExternalMicrophone, "External microphone / Voicemod"),
-        new(ModifiedVoiceMode.LocalProfile, "Local voice profile")
+        new(ModifiedVoiceMode.None, "Off"),
+        new(ModifiedVoiceMode.ExternalMicrophone, "Voice changer app (Voicemod or similar)"),
+        new(ModifiedVoiceMode.LocalProfile, "MicMixer voices (built in, experimental)")
     ];
 
     private ModifiedVoiceMode CurrentModifiedVoiceMode =>
         (ModdedInputCombo.SelectedItem as ModifiedVoiceOption)?.Mode ?? _settings.ModifiedVoiceMode;
+
+    private void OnVoiceSwitchChecked(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        ModifiedVoiceMode mode = ReferenceEquals(sender, VoiceAppRadio) ? ModifiedVoiceMode.ExternalMicrophone
+            : ReferenceEquals(sender, VoiceMicMixerRadio) ? ModifiedVoiceMode.LocalProfile
+            : ModifiedVoiceMode.None;
+        _ = ChangeVoiceAsync(mode, _settings.SelectedVoiceProfileId);
+    }
+
+    /// <summary>Both voice lists (main window and settings) end up here.</summary>
+    private void OnVoiceProfileChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || _router == null)
+        {
+            return;
+        }
+
+        if (((System.Windows.Controls.ComboBox)sender).SelectedItem is VoiceProfile profile)
+        {
+            _ = ChangeVoiceAsync(CurrentModifiedVoiceMode, profile.Id);
+        }
+    }
+
+    /// <summary>
+    /// Switches the voice changer or its voice. Both are built into the route when it
+    /// starts, so a running route restarts with the new choice (a short gap in the audio).
+    /// Saved at once: this is switched during a session, not set up once.
+    /// </summary>
+    private async Task ChangeVoiceAsync(ModifiedVoiceMode mode, string? profileId)
+    {
+        if (_isStartingRouting)
+        {
+            // The start in flight already took the old choice; show that one again.
+            RenderVoiceChoice();
+            return;
+        }
+
+        if (mode == _settings.ModifiedVoiceMode && profileId == _settings.SelectedVoiceProfileId)
+        {
+            return;
+        }
+
+        bool restart = _router.IsRouting;
+        if (restart)
+        {
+            StopRouting();
+        }
+
+        if (profileId != _settings.SelectedVoiceProfileId)
+        {
+            // The alternate analysis window belongs to one profile.
+            _settings.LongerAnalysisWindow = false;
+        }
+
+        _settings.ModifiedVoiceMode = mode;
+        _settings.SkipModdedMic = mode == ModifiedVoiceMode.None;
+        _settings.SelectedVoiceProfileId = profileId;
+        if (mode == ModifiedVoiceMode.ExternalMicrophone)
+        {
+            _settings.ModdedInputDeviceId ??= SelectedDeviceId(ExternalModdedInputCombo);
+        }
+
+        SaveSettings();
+        RenderVoiceChoice();
+        ApplyModdedMicUiState();
+        OnConfigurationChanged();
+
+        if (restart)
+        {
+            await StartRoutingAsync();
+        }
+    }
+
+    /// <summary>Shows the voice changer choice in both windows' controls.</summary>
+    private void RenderVoiceChoice()
+    {
+        bool wasUpdating = _isUpdatingUi;
+        _isUpdatingUi = true;
+        try
+        {
+            ModdedInputCombo.SelectedItem = ModifiedVoiceOptions.First(option => option.Mode == _settings.ModifiedVoiceMode);
+            VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+            QuickVoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+            LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
+            VoiceOffRadio.IsChecked = _settings.ModifiedVoiceMode == ModifiedVoiceMode.None;
+            VoiceAppRadio.IsChecked = _settings.ModifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone;
+            VoiceMicMixerRadio.IsChecked = _settings.ModifiedVoiceMode == ModifiedVoiceMode.LocalProfile;
+        }
+        finally
+        {
+            _isUpdatingUi = wasUpdating;
+        }
+    }
 
     private bool IsModdedMicSkipped => CurrentModifiedVoiceMode == ModifiedVoiceMode.None;
 
@@ -941,17 +996,25 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         // "None" has nothing to configure, so the panel is absent rather than empty.
         ModifiedVoicePanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
-        ModifiedVoiceTitle.Text = builtIn ? "Local voice profile · experimental" : "External modified microphone";
+        ModifiedVoiceTitle.Text = builtIn ? "MicMixer voices · experimental" : "The microphone device your voice changer app creates";
 
         var localControls = builtIn ? Visibility.Visible : Visibility.Collapsed;
         VoiceProfileCombo.Visibility = localControls;
         DeleteVoiceButton.Visibility = localControls;
         CreateVoiceButton.Visibility = localControls;
-        ProcessedVoiceVolumePanel.Visibility = localControls;
+        ProcessedVoiceVolumeSlider.Visibility = localControls;
+        ProcessedVoiceVolumePercentText.Visibility = localControls;
+        ModdedLevelLabel.Text = builtIn ? "Volume" : "Level";
         ExternalModdedInputCombo.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
 
         bool idle = !_router.IsRouting && !_isStartingRouting;
-        VoiceProfileCombo.IsEnabled = builtIn && idle;
+        VoiceProfileCombo.IsEnabled = builtIn && !_isStartingRouting;
+        VoiceSwitchPanel.IsEnabled = !_isStartingRouting;
+        QuickVoiceProfileCombo.Visibility = localControls;
+        string? appDevice = (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName;
+        VoiceSwitchHint.Text = !external ? string.Empty
+            : appDevice != null ? $"from {appDevice}"
+            : "choose the app's microphone in Settings › Devices";
         CreateVoiceButton.IsEnabled = idle;
         CreateVoiceButton.ToolTip = idle
             ? "Record a sample, shape a voice and save it as a local profile."
@@ -967,7 +1030,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
         HotkeyConfigPanel.IsEnabled = hotkeyRelevant;
         HotkeyConfigPanel.Opacity = hotkeyRelevant ? 1.0 : 0.55;
         ModdedMeterPanel.Visibility = skip ? Visibility.Collapsed : Visibility.Visible;
-        Grid.SetColumnSpan(DryMeterPanel, skip ? 3 : 1);
     }
 
     private void LoadVoiceProfiles()
@@ -975,13 +1037,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
         var result = new VoiceProfileStore().List();
         _voiceProfileProblems = result.Errors;
         VoiceProfileCombo.ItemsSource = result.Profiles;
+        QuickVoiceProfileCombo.ItemsSource = result.Profiles;
         VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+        QuickVoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
         // A first run has no stored choice. Land on a starter rather than an empty
         // combo that only reports its emptiness once Enable has already failed.
         if (VoiceProfileCombo.SelectedItem == null && _settings.SelectedVoiceProfileId == null)
         {
             VoiceProfileCombo.SelectedItem = result.Profiles.FirstOrDefault();
             _settings.SelectedVoiceProfileId = (VoiceProfileCombo.SelectedItem as VoiceProfile)?.Id;
+            QuickVoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
         }
         ShowModifiedVoiceStatus();
         UpdateVoiceWindowLabel();
@@ -1028,7 +1093,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void OnDeleteVoice(object sender, RoutedEventArgs e)
     {
         if (VoiceProfileCombo.SelectedItem is not VoiceProfile profile || _router.IsRouting || _isStartingRouting) return;
-        var answer = System.Windows.MessageBox.Show(this, $"Delete '{profile.DisplayName}' permanently? This cannot be undone.",
+        var answer = System.Windows.MessageBox.Show(Window.GetWindow(DeleteVoiceButton), $"Delete '{profile.DisplayName}' permanently? This cannot be undone.",
             "Delete voice", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.OK) return;
         try
@@ -1036,7 +1101,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             new VoiceProfileStore().Delete(profile.Id);
             _settings.SelectedVoiceProfileId = null;
             LoadVoiceProfiles();
-            _settingsStore.Save(_settings);
+            SaveSettings();
+            UpdateStatusText();
             SetModifiedVoiceMessage($"Deleted '{profile.DisplayName}'.");
         }
         catch (Exception ex) { SetModifiedVoiceMessage("Could not delete the voice: " + ex.Message, problem: true); }
@@ -1051,14 +1117,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
             var input = DryInputCombo.SelectedItem as AudioDeviceOption;
             var dialog = new VoiceDesignerDialog(VoiceProfileCombo.SelectedItem as VoiceProfile,
                 input?.Id, input?.FriendlyName, (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id,
-                (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id ?? _settings.OutputDeviceId) { Owner = this };
+                (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id ?? _settings.OutputDeviceId) { Owner = Window.GetWindow(CreateVoiceButton) };
             if (dialog.ShowDialog() == true && dialog.SavedProfile is { } profile)
             {
                 _settings.SelectedVoiceProfileId = profile.Id;
                 _settings.LongerAnalysisWindow = false;
                 LongerAnalysisWindowCheck.IsChecked = false;
                 LoadVoiceProfiles();
-                _settingsStore.Save(_settings);
+                SaveSettings();
+                UpdateStatusText();
                 SetModifiedVoiceMessage($"Saved '{profile.DisplayName}' and selected it.");
             }
         }
@@ -1075,21 +1142,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 ? "Smoother processing (more delay)" : "Alternate processing quality";
     }
 
-    private void OnVoiceProfileChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_isUpdatingUi || _router == null || _router.IsRouting || _isStartingRouting) return;
-        if (VoiceProfileCombo.SelectedItem is VoiceProfile profile)
-        {
-            _settings.SelectedVoiceProfileId = profile.Id;
-            LongerAnalysisWindowCheck.IsChecked = false;
-            _settings.LongerAnalysisWindow = false;
-            ShowModifiedVoiceStatus();
-            UpdateVoiceWindowLabel();
-            UpdateDeleteButton();
-            _settingsStore.Save(_settings);
-        }
-    }
-
     private void OnProcessedVoiceVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_isUpdatingUi || ProcessedVoiceVolumePercentText == null)
@@ -1100,7 +1152,72 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.ProcessedVoiceVolume = (float)e.NewValue;
         _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
         ProcessedVoiceVolumePercentText.Text = $"{Math.Round(e.NewValue * 100)} %";
-        SaveSettings();
+        OnConfigurationChanged();
+    }
+
+    private void OnNormalMicVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingUi || NormalMicVolumePercentText == null)
+        {
+            return;
+        }
+
+        _settings.NormalMicVolume = (float)e.NewValue;
+        _router.NormalMicVolume = _settings.NormalMicVolume;
+        NormalMicVolumePercentText.Text = $"{Math.Round(e.NewValue * 100)} %";
+        OnConfigurationChanged();
+    }
+
+    private void OnNoiseGateChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi || NoiseGateStateText == null)
+        {
+            return;
+        }
+
+        _settings.NoiseGateEnabled = NoiseGateCheck.IsChecked == true;
+        _router.NoiseGateEnabled = _settings.NoiseGateEnabled;
+        UpdateNoiseGateStateText();
+        OnConfigurationChanged();
+    }
+
+    private void OnNoiseGateThresholdChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingUi || NoiseGateThresholdText == null)
+        {
+            return;
+        }
+
+        _settings.NoiseGateThresholdDb = (float)e.NewValue;
+        _router.NoiseGateThresholdDb = _settings.NoiseGateThresholdDb;
+        NoiseGateThresholdText.Text = $"{_settings.NoiseGateThresholdDb:0} dB";
+        OnConfigurationChanged();
+    }
+
+    /// <summary>
+    /// Live gate readout: the level bar under the threshold slider plus open/closed.
+    /// Peak-hold with decay, like the capture meter, so the bar is readable instead
+    /// of flickering with every block.
+    /// </summary>
+    private void UpdateNoiseGateStateText()
+    {
+        if (!_router.IsRouting || !_settings.NoiseGateEnabled)
+        {
+            _noiseGatePeakHold = 0f;
+            NoiseGateLevelBar.Value = NoiseGateLevelBar.Minimum;
+            NoiseGateStateText.Text = string.Empty;
+            return;
+        }
+
+        float peak = _router.ReadAndResetNoiseGateInputPeak();
+        _noiseGatePeakHold = Math.Max(float.IsFinite(peak) ? peak : 0f, _noiseGatePeakHold * 0.85f);
+        double decibels = _noiseGatePeakHold > 0f ? 20 * Math.Log10(_noiseGatePeakHold) : double.NegativeInfinity;
+        NoiseGateLevelBar.Value = Math.Clamp(decibels, NoiseGateLevelBar.Minimum, NoiseGateLevelBar.Maximum);
+
+        bool open = _router.NoiseGateOpen;
+        NoiseGateStateText.Text = open ? "Open" : "Closed";
+        NoiseGateStateText.Foreground = open ? StatusTheme.LiveBrush : StatusTheme.StoppedInkBrush;
+        NoiseGateLevelBar.Foreground = open ? StatusTheme.LiveBrush : StatusTheme.StoppedInkBrush;
     }
 
     private void OnLongerAnalysisWindowChanged(object sender, RoutedEventArgs e)
@@ -1133,8 +1250,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ApplyEffectiveRoutingStates();
         }
 
-        SaveSettings();
-        UpdateStatusText();
+        OnConfigurationChanged();
     }
 
     /// <summary>
@@ -1238,7 +1354,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void UpdateOutputCableWarning()
     {
-        bool looksWrong = OutputDeviceCombo.SelectedItem is AudioDeviceOption output && !LooksLikeVirtualCable(output);
+        bool looksWrong = OutputDeviceCombo.SelectedItem is AudioDeviceOption output && !AudioDevices.LooksLikeVirtualCable(output);
         OutputCableWarningText.Visibility = looksWrong ? Visibility.Visible : Visibility.Collapsed;
 
         if (!looksWrong)
@@ -1251,8 +1367,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         _isCapturingHotkey = true;
         UpdateHotkeyUi();
-        Activate();
-        Focus();
+        Window window = Window.GetWindow(CaptureHotkeyButton);
+        window.Activate();
+        window.Focus();
     }
 
     private void OnPreviewHotkeyKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -1319,7 +1436,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             "MicMixer",
             "https://github.com/benjibutten/MicMixer")
         {
-            Owner = this
+            Owner = Window.GetWindow((DependencyObject)sender)
         };
         dialog.ShowDialog();
     }
@@ -1335,6 +1452,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             e.Cancel = true;
             Hide();
+            _settingsWindow?.Close();
 
             if (!_trayBalloonShown)
             {
@@ -1361,11 +1479,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _hotkeyListener.Dispose();
     }
 
+    /// <summary>
+    /// Saves what changes outside the settings window (music card, window size).
+    /// Unsaved settings-window changes stay out of the file until its Save button.
+    /// </summary>
     private void SaveSettings()
     {
+        AppSettings file = _settings.Clone();
+        file.CopyConfigurationFrom(_savedSettings);
         try
         {
-            _settingsStore.Save(_settings);
+            _settingsStore.Save(file);
         }
         catch (Exception ex)
         {
@@ -1380,6 +1504,237 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settingsSaveTimer.Start();
     }
 
+    // --- Settings window: live changes, explicit save ---
+
+    /// <summary>Call after any settings-window value in _settings changed.</summary>
+    private void OnConfigurationChanged()
+    {
+        _hasUnsavedConfiguration = !_settings.ConfigurationEquals(_savedSettings);
+        SettingsSaveStateText.Text = _hasUnsavedConfiguration
+            ? "Unsaved changes. They are already in use; Save keeps them for the next time MicMixer starts."
+            : "Everything is saved.";
+        SettingsSaveStateText.Foreground = _hasUnsavedConfiguration ? ProblemInkBrush : MutedInkBrush;
+        UpdateDependentSettingsControls();
+        UpdateStatusText();
+    }
+
+    private static readonly System.Windows.Media.Brush ProblemInkBrush = CreateFrozenBrush(0x9A, 0x34, 0x12);
+    private static readonly System.Windows.Media.Brush MutedInkBrush = CreateFrozenBrush(0x6B, 0x72, 0x80);
+
+    private void OnSaveSettingsClick(object sender, RoutedEventArgs e) => SaveConfiguration();
+
+    private void SaveConfiguration()
+    {
+        AppSettings saved = _settings.Clone();
+        try
+        {
+            _settingsStore.Save(saved);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to save settings.");
+            SettingsSaveStateText.Text = $"Could not save: {ex.Message}";
+            StatusText.Text = $"Could not save settings: {ex.Message}";
+            return;
+        }
+
+        _savedSettings = saved;
+        SyncStartWithWindows();
+        OnConfigurationChanged();
+    }
+
+    private void OnRunSetupGuideClick(object sender, RoutedEventArgs e) => ShowSetupGuide();
+
+    /// <summary>
+    /// Runs the setup guide. Finish applies and saves its choices, then optionally
+    /// starts routing so the user can test straight away.
+    /// </summary>
+    private async void ShowSetupGuide()
+    {
+        var guide = new SetupGuideWindow(_settings)
+        {
+            Owner = _settingsWindow is { IsVisible: true } settingsWindow ? settingsWindow : this
+        };
+
+        if (guide.ShowDialog() != true)
+        {
+            if (guide.Skipped && !_settings.SetupGuideDismissed)
+            {
+                _settings.SetupGuideDismissed = true;
+                SaveSettings();
+            }
+
+            return;
+        }
+
+        // Devices cannot change under a running route.
+        if (_router.IsRouting)
+        {
+            StopRouting();
+        }
+
+        guide.ApplyTo(_settings);
+        ApplyConfiguration();
+        SaveConfiguration();
+        await RefreshDevicesAsync();
+
+        if (guide.StartRoutingWhenDone && !_router.IsRouting)
+        {
+            OnToggleClick(ToggleBtn, new RoutedEventArgs());
+        }
+    }
+
+    private async Task LoadDevicesAndOfferSetupGuideAsync()
+    {
+        await RefreshDevicesAsync();
+
+        // Nothing saved yet and the guide never skipped: this is a first run.
+        if (IsVisible && _devicesLoaded && _savedSettings.OutputDeviceId == null && !_settings.SetupGuideDismissed)
+        {
+            ShowSetupGuide();
+        }
+    }
+
+    private void OnDiscardSettingsClick(object sender, RoutedEventArgs e)
+    {
+        // Like Refresh devices: the route was started with the devices being discarded.
+        if (_router.IsRouting)
+        {
+            StopRouting();
+        }
+
+        _settings.CopyConfigurationFrom(_savedSettings);
+        ApplyConfiguration();
+        OnConfigurationChanged();
+        _ = RefreshDevicesAsync();
+    }
+
+    /// <summary>
+    /// Shows the settings-window values of _settings in its controls and applies
+    /// them to the running app. Device combos follow in RefreshDevicesAsync.
+    /// </summary>
+    private void ApplyConfiguration()
+    {
+        _isUpdatingUi = true;
+        try
+        {
+            StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
+            VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
+            LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
+            ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
+            NormalMicVolumeSlider.Value = _settings.NormalMicVolume;
+            NoiseGateCheck.IsChecked = _settings.NoiseGateEnabled;
+            NoiseGateThresholdSlider.Value = _settings.NoiseGateThresholdDb;
+            ReleaseDelayTextBox.Text = _settings.ReleaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
+            PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
+            SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
+            SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
+            SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
+            OverlayIndicatorCheck.IsChecked = _settings.OverlayIndicatorEnabled;
+            OverlayVolumeMeterCheck.IsChecked = _settings.OverlayVolumeMeterEnabled;
+            MeterSensitivitySlider.Value = _settings.MeterSensitivityDb;
+            ObsOverlayCheck.IsChecked = _settings.ObsOverlayEnabled;
+            ObsOverlayPortBox.Text = _settings.ObsOverlayPort.ToString(CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            _isUpdatingUi = false;
+        }
+
+        _router.ProcessedVoiceVolume = _settings.ProcessedVoiceVolume;
+        _router.NormalMicVolume = _settings.NormalMicVolume;
+        _router.NoiseGateEnabled = _settings.NoiseGateEnabled;
+        _router.NoiseGateThresholdDb = _settings.NoiseGateThresholdDb;
+        ProcessedVoiceVolumePercentText.Text = $"{Math.Round(_settings.ProcessedVoiceVolume * 100)} %";
+        NormalMicVolumePercentText.Text = $"{Math.Round(_settings.NormalMicVolume * 100)} %";
+        NoiseGateThresholdText.Text = $"{_settings.NoiseGateThresholdDb:0} dB";
+        UpdateSecondaryVolumePercentText();
+        ApplySecondaryOutputConfig();
+
+        _releaseDelayMilliseconds = _settings.ReleaseDelayMilliseconds;
+        CancelPendingReleaseDelay();
+        _hotkeyBinding = HotkeyBinding.Parse(_settings.HotkeyId);
+        _hotkeyListener.UpdateBinding(_hotkeyBinding);
+        UpdateHotkeyUi();
+
+        UpdateMeterSensitivityText();
+        ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
+        ApplyObsOverlaySetting(_settings.ObsOverlayEnabled);
+
+        ShowModifiedVoiceStatus();
+        UpdateVoiceWindowLabel();
+        UpdateDeleteButton();
+        ApplyModdedMicUiState();
+        if (_router.IsRouting)
+        {
+            SetHotkeyMonitoringEnabled(!IsModdedMicSkipped || IsPushToTalk);
+            ApplyEffectiveRoutingStates();
+        }
+    }
+
+    /// <summary>Enables the settings that only matter while the setting they refine is on.</summary>
+    private void UpdateDependentSettingsControls()
+    {
+        SecondaryOutputConfigPanel.IsEnabled = _settings.SecondaryOutputEnabled;
+        NoiseGateSettingsPanel.IsEnabled = _settings.NoiseGateEnabled;
+        bool anyOverlay = _settings.OverlayIndicatorEnabled || _settings.ObsOverlayEnabled;
+        OverlayVolumeMeterCheck.IsEnabled = anyOverlay;
+        MeterSensitivityPanel.IsEnabled = anyOverlay && _settings.OverlayVolumeMeterEnabled;
+        ObsOverlayDetailsPanel.Visibility = _settings.ObsOverlayEnabled ? Visibility.Visible : Visibility.Collapsed;
+        // Without push-to-talk there is nothing for the music to ignore.
+        MusicIgnorePttCheck.IsEnabled = _settings.PushToTalkMode;
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => ShowSettings(null);
+
+    private void OnStopRoutingClick(object sender, RoutedEventArgs e) => StopRouting();
+
+    /// <summary>Opens the settings window, on <paramref name="page"/> or where it was left.</summary>
+    private void ShowSettings(TabItem? page)
+    {
+        if (_settingsWindow == null)
+        {
+            // The controls live in MainWindow.xaml so this class keeps its handlers; the
+            // window only borrows them, and hides instead of closing to keep them alive.
+            SettingsHost.Child = null;
+            _settingsWindow = new Window
+            {
+                Title = "MicMixer settings",
+                Content = SettingsContent,
+                Resources = Resources,
+                Owner = this,
+                Icon = Icon,
+                Width = 800,
+                Height = 660,
+                MinWidth = 620,
+                MinHeight = 440,
+                ShowInTaskbar = false,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner
+            };
+            _settingsWindow.PreviewKeyDown += OnPreviewHotkeyKeyDown;
+            _settingsWindow.PreviewMouseDown += OnPreviewHotkeyMouseDown;
+            _settingsWindow.Closing += (window, closing) =>
+            {
+                if (!_isReallyClosing)
+                {
+                    closing.Cancel = true;
+                    ((Window)window!).Hide();
+                    // An armed capture would otherwise take the next key or click for the hotkey.
+                    _isCapturingHotkey = false;
+                    UpdateHotkeyUi();
+                }
+            };
+        }
+
+        if (page != null)
+        {
+            SettingsTabs.SelectedItem = page;
+        }
+
+        _settingsWindow.Show();
+        _settingsWindow.Activate();
+    }
+
     private void OnStartWithWindowsChanged(object sender, RoutedEventArgs e)
     {
         if (_isUpdatingUi)
@@ -1387,20 +1742,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        // The registry follows on Save, together with the settings file.
         _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
-        try
-        {
-            // Save the loaded settings object directly: device lists may still be
-            // loading, and a full UI snapshot would otherwise clear saved ids.
-            _settingsStore.Save(_settings);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Failed to save the Start with Windows setting.");
-            StatusText.Text = $"Could not save the setting: {ex.Message}";
-        }
-
-        SyncStartWithWindows();
+        OnConfigurationChanged();
     }
 
     private void SyncStartWithWindows()
@@ -1418,95 +1762,246 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
     }
 
+    /// <summary>Refreshes the status strip, the problem cards and the tray icon.</summary>
     private void UpdateStatusText()
     {
-        if (_isCapturingHotkey)
+        MicStatus status = ComputeMicStatus();
+        // Muted with the music branch still open must say so: "muted" alone would be
+        // a lie while music keeps playing into the cable past push-to-talk.
+        bool musicStillTransmitting = status == MicStatus.Muted && _router.MusicRouteOpen && HasActiveMusicSignal();
+        StatePill.Background = StatusTheme.TintFor(status);
+        StatePillDot.Fill = StatusTheme.BrushFor(status);
+        StatePillGlyph.Data = StatusTheme.GlyphFor(status);
+        StatePillText.Foreground = StatusTheme.InkFor(status);
+        StatePillText.Text = status switch
         {
-            HotkeyStateText.Text = "Press the keyboard key or mouse button that should switch to the modded mic.";
+            MicStatus.Live => "Live",
+            MicStatus.Modded => "Modified voice",
+            MicStatus.Muted when musicStillTransmitting => "Mic muted",
+            MicStatus.Muted => "Muted",
+            _ => "Stopped"
+        };
+
+        HotkeyStateText.Text = string.Join(" · ", new[]
+        {
+            DescribeHotkeyState(),
+            musicStillTransmitting ? "music is still transmitting" : null,
+            IsModdedMicSkipped ? null : $"{DescribeModifiedVoice()} while held",
+            _settings.NoiseGateEnabled ? "noise gate on" : null
+        }.OfType<string>());
+
+        OverviewText.Text = DescribeRoute();
+        RoutingLockBanner.Visibility = _router.IsRouting ? Visibility.Visible : Visibility.Collapsed;
+        UpdateProblems();
+        UpdateTrayIcon();
+    }
+
+    private string DescribeHotkeyState()
+    {
+        string key = _hotkeyBinding.DisplayName;
+        if (!_router.IsRouting)
+        {
+            return IsPushToTalk
+                ? $"Push-to-talk: hold {key} to be heard"
+                : IsModdedMicSkipped ? "Normal mic and music" : $"Hold {key} for the modified voice";
         }
 
-        if (_router.IsRouting)
+        if (IsPushToTalk)
         {
-            bool pushToTalk = IsPushToTalk;
-            var status = ComputeMicStatus();
+            return _hotkeyListener.IsPressed ? $"{key} held, you are heard"
+                : _isReleaseDelayPending ? $"{key} released, muting in {_releaseDelayMilliseconds} ms"
+                : $"Hold {key} to be heard";
+        }
 
-            RoutingStateText.Text = "Routing active";
-            RoutingStateIcon.Data = (Geometry)FindResource("CheckCircleIcon");
-            RoutingStateIcon.Fill = StatusTheme.BrushFor(status);
+        return IsModdedMicSkipped ? "Your normal mic is live"
+            : _hotkeyListener.IsPressed ? $"{key} held, modified voice is live"
+            : _isReleaseDelayPending ? $"{key} released, switching back in {_releaseDelayMilliseconds} ms"
+            : $"Normal mic is live, hold {key} for the modified voice";
+    }
 
-            // Muted with the music branch still open must say so: "muted" would be
-            // a lie while music keeps playing into the cable past push-to-talk.
-            ActiveSourceText.Text = status switch
+    private string DescribeModifiedVoice() => CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile
+        ? (VoiceProfileCombo.SelectedItem as VoiceProfile)?.DisplayName ?? "MicMixer voice"
+        : (ExternalModdedInputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "Voice changer app";
+
+    /// <summary>Where the mix goes and what else is on, as one line.</summary>
+    private string DescribeRoute()
+    {
+        if (!_devicesLoaded)
+        {
+            return _isDevicesLoading ? "Loading audio devices…" : "Audio devices could not be read.";
+        }
+
+        var parts = new List<string>
+        {
+            $"To {(OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "no output"}"
+        };
+
+        if (_secondaryOutput.IsRunning)
+        {
+            parts.Add($"also on {(SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "the secondary output"}");
+        }
+        else if (_settings.SecondaryOutputEnabled)
+        {
+            parts.Add("secondary output on");
+        }
+
+        if (!_isExternalMode)
+        {
+            parts.Add(_settings.MonitorEnabled ? "monitoring on" : "monitoring off");
+        }
+
+        string? overlay = (_settings.OverlayIndicatorEnabled, _settings.ObsOverlayEnabled) switch
+        {
+            (true, true) => "overlay on screen and stream",
+            (true, false) => "overlay on screen",
+            (false, true) => "stream overlay on",
+            _ => null
+        };
+        if (overlay != null)
+        {
+            parts.Add(overlay);
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>Something that differs from how MicMixer was set up, and the settings page (or the setup guide) that fixes it.</summary>
+    private sealed record Problem(string Message, string ActionText, TabItem? Page, bool OpensSetupGuide = false);
+
+    /// <summary>
+    /// Compares what is running and connected with the settings. Shows nothing when
+    /// they agree, so an empty list means everything is as set up.
+    /// </summary>
+    private void UpdateProblems()
+    {
+        var problems = new List<Problem>();
+
+        if (_deviceLoadError != null)
+        {
+            problems.Add(new Problem(_deviceLoadError, "Devices…", DevicesPage));
+        }
+
+        if (_devicesLoaded)
+        {
+            if (_savedSettings.OutputDeviceId == null)
             {
-                MicStatus.Muted when _router.MusicRouteOpen && HasActiveMusicSignal()
-                    => "Active source: Mic muted (push-to-talk) — music transmitting",
-                MicStatus.Muted => "Active source: Muted (push-to-talk)",
-                MicStatus.Modded when CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile
-                    => "Active source: Local voice profile",
-                MicStatus.Modded => "Active source: Modded mic",
-                _ => "Active source: Normal mic"
-            };
-            ActiveSourceText.Foreground = StatusTheme.InkFor(status);
-
-            if (!_isCapturingHotkey)
-            {
-                if (pushToTalk)
-                {
-                    HotkeyStateText.Text = _hotkeyListener.IsPressed
-                        ? IsModdedMicSkipped
-                            ? $"{_hotkeyBinding.DisplayName} held — audio transmitting"
-                            : $"{_hotkeyBinding.DisplayName} held — modded mic transmitting"
-                        : _isReleaseDelayPending
-                            ? $"{_hotkeyBinding.DisplayName} released — muting in {_releaseDelayMilliseconds} ms"
-                            : $"Push-to-talk: hold {_hotkeyBinding.DisplayName} to be heard";
-                }
-                else
-                {
-                    HotkeyStateText.Text = IsModdedMicSkipped
-                        ? "Modded mic not in use — music is mixed in while playing"
-                        : _hotkeyListener.IsPressed
-                            ? $"{_hotkeyBinding.DisplayName} held — modded mic"
-                            : _isReleaseDelayPending
-                                ? $"{_hotkeyBinding.DisplayName} released — switching back in {_releaseDelayMilliseconds} ms"
-                                : $"{_hotkeyBinding.DisplayName} — normal mic";
-                }
+                problems.Add(new Problem(
+                    "MicMixer is not set up yet. The setup guide walks you through it in a few minutes.",
+                    "Start setup…", null, OpensSetupGuide: true));
             }
 
-            string outputLine = $"Output: {((OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "—")}";
-            if (_secondaryOutput.IsRunning)
+            AddDeviceProblems(problems);
+        }
+
+        if (CurrentModifiedVoiceMode == ModifiedVoiceMode.LocalProfile && VoiceProfileCombo.SelectedItem is not VoiceProfile)
+        {
+            problems.Add(new Problem(
+                "The selected MicMixer voice is missing or invalid, so routing cannot start with it.",
+                "Devices…", DevicesPage));
+        }
+
+        if (_secondaryOutputError != null)
+        {
+            problems.Add(new Problem(
+                $"Secondary output stopped: {_secondaryOutputError} Routing to the virtual cable continues.",
+                "Secondary output…", SecondaryOutputPage));
+        }
+
+        if (_hasUnsavedConfiguration && _savedSettings.OutputDeviceId != null)
+        {
+            problems.Add(new Problem(
+                "Some settings are changed but not saved. They are in use now, but MicMixer goes back to the saved ones the next time it starts.",
+                "Review…", null));
+        }
+
+        if (!problems.SequenceEqual(_problems))
+        {
+            _problems = problems;
+            ProblemsList.ItemsSource = problems;
+        }
+    }
+
+    private void AddDeviceProblems(List<Problem> problems)
+    {
+        // A combo shows a stand-in when the chosen device is missing, so a combo
+        // that disagrees with _settings means "not connected".
+        if (_settings.NormalInputDeviceId != null && SelectedDeviceId(DryInputCombo) != _settings.NormalInputDeviceId)
+        {
+            problems.Add(new Problem(
+                $"Your normal mic is not connected.{UsingInstead(DryInputCombo)}",
+                "Devices…", DevicesPage));
+        }
+
+        if (CurrentModifiedVoiceMode == ModifiedVoiceMode.ExternalMicrophone
+            && _settings.ModdedInputDeviceId != null
+            && SelectedDeviceId(ExternalModdedInputCombo) != _settings.ModdedInputDeviceId)
+        {
+            problems.Add(new Problem(
+                $"The voice changer app's microphone is not connected.{UsingInstead(ExternalModdedInputCombo)}",
+                "Devices…", DevicesPage));
+        }
+
+        if (OutputDeviceCombo.SelectedItem is not AudioDeviceOption output)
+        {
+            problems.Add(new Problem(
+                "There is no device to send the mix to. Install a virtual cable such as VB-CABLE, then refresh devices.",
+                "Devices…", DevicesPage));
+        }
+        else if (_settings.OutputDeviceId != null && output.Id != _settings.OutputDeviceId)
+        {
+            problems.Add(new Problem(
+                $"Your virtual cable is not connected. The mix would go to {output.FriendlyName} instead.",
+                "Devices…", DevicesPage));
+        }
+        // No card for an output that merely doesn't look like a cable: unrecognized cable
+        // drivers are a deliberate, saved choice, and the Devices page and Enable warn anyway.
+
+        if (_settings.MonitorEnabled && !_isExternalMode
+            && _settings.MusicMonitorDeviceId != null
+            && SelectedDeviceId(MonitorDeviceCombo) != _settings.MusicMonitorDeviceId)
+        {
+            problems.Add(new Problem(
+                $"Your monitoring device is not connected.{UsingInstead(MonitorDeviceCombo)}",
+                "Devices…", DevicesPage));
+        }
+
+        if (_settings.SecondaryOutputEnabled)
+        {
+            if (SecondaryOutputCombo.SelectedItem is not AudioDeviceOption secondary)
             {
-                outputLine += $" · Secondary output: {((SecondaryOutputCombo.SelectedItem as AudioDeviceOption)?.FriendlyName ?? "active")}";
+                problems.Add(new Problem(
+                    "Secondary output is on, but no connected device is chosen for it. Routing will not start until you choose one or turn it off.",
+                    "Secondary output…", SecondaryOutputPage));
             }
+            else if (secondary.Id == SelectedDeviceId(OutputDeviceCombo))
+            {
+                problems.Add(new Problem(
+                    "Secondary output uses the same device as the virtual cable, so the mix would play twice.",
+                    "Secondary output…", SecondaryOutputPage));
+            }
+        }
+    }
 
-            StatusText.Text = outputLine;
+    private static string? SelectedDeviceId(System.Windows.Controls.ComboBox combo) => (combo.SelectedItem as AudioDeviceOption)?.Id;
 
-            UpdateCompactStatus();
-            UpdateTrayIcon();
+    private static string UsingInstead(System.Windows.Controls.ComboBox combo) =>
+        combo.SelectedItem is AudioDeviceOption standIn ? $" Using {standIn.FriendlyName} until it is back." : string.Empty;
+
+    private void OnProblemActionClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Problem problem)
+        {
             return;
         }
 
-        RoutingStateText.Text = "Routing stopped";
-        RoutingStateIcon.Data = (Geometry)FindResource("CircleOffIcon");
-        RoutingStateIcon.Fill = StatusTheme.StoppedBrush;
-        ActiveSourceText.Text = "Active source: None";
-        ActiveSourceText.Foreground = StatusTheme.StoppedInkBrush;
-        if (!_isCapturingHotkey)
+        if (problem.OpensSetupGuide)
         {
-            HotkeyStateText.Text = IsPushToTalk
-                ? $"Push-to-talk active — hold {_hotkeyBinding.DisplayName} to be heard while routing is active"
-                : IsModdedMicSkipped
-                    ? "Modded mic not in use — normal mic + music only"
-                    : $"Hold {_hotkeyBinding.DisplayName} for the modded mic";
+            ShowSetupGuide();
         }
-
-        StatusText.Text = _devicesLoaded
-            ? ""
-            : _isDevicesLoading
-                ? "Loading audio devices..."
-                : _deviceLoadError ?? "Loading audio devices...";
-
-        UpdateCompactStatus();
-        UpdateTrayIcon();
+        else
+        {
+            ShowSettings(problem.Page);
+        }
     }
 
     private void ApplyHotkeyBinding(HotkeyBinding binding)
@@ -1518,8 +2013,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.HotkeyId = binding.SerializedValue;
         ApplyEffectiveRoutingStates();
         UpdateHotkeyUi();
-        SaveSettings();
-        UpdateStatusText();
+        OnConfigurationChanged();
     }
 
     private void UpdateHotkeyUi()
@@ -1622,8 +2116,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
         }
 
-        SaveSettings();
-        UpdateStatusText();
+        OnConfigurationChanged();
     }
 
     /// <summary>True while the hotkey is held or its release delay is still running.</summary>
@@ -1641,41 +2134,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private static int ClampReleaseDelay(int releaseDelayMilliseconds)
     {
         return Math.Clamp(releaseDelayMilliseconds, 0, MaxReleaseDelayMilliseconds);
-    }
-
-    private static AudioDeviceOption? SelectInputDevice(
-        IReadOnlyList<AudioDeviceOption> devices,
-        string? preferredId,
-        Func<AudioDeviceOption, bool> heuristic,
-        string? excludedId = null)
-    {
-        return devices.FirstOrDefault(device => device.Id == preferredId)
-            ?? devices.FirstOrDefault(device => device.Id != excludedId && heuristic(device))
-            ?? devices.FirstOrDefault(device => device.Id != excludedId)
-            ?? devices.FirstOrDefault();
-    }
-
-    private static AudioDeviceOption? SelectOutputDevice(IReadOnlyList<AudioDeviceOption> devices, string? preferredId)
-    {
-        return devices.FirstOrDefault(device => device.Id == preferredId)
-            ?? devices.FirstOrDefault(LooksLikeVirtualCable)
-            ?? devices.FirstOrDefault();
-    }
-
-    private static bool LooksLikeVoiceModDevice(AudioDeviceOption device)
-    {
-        string name = device.FriendlyName;
-        return name.Contains("voicemod", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("voice mod", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool LooksLikeVirtualCable(AudioDeviceOption device)
-    {
-        string name = device.FriendlyName;
-        return name.Contains("cable input", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("vb-audio", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("virtual cable", StringComparison.OrdinalIgnoreCase)
-            || name.Contains("voicemeeter input", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void OpenUrl(string url)
@@ -2376,73 +2834,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
     }
 
-    private void OnMusicFolderOptionsClick(object sender, RoutedEventArgs e)
-    {
-        var menu = new System.Windows.Controls.ContextMenu
-        {
-            PlacementTarget = MusicFolderOptionsBtn,
-            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom
-        };
-
-        // TextBlock as header so underscores in folder paths aren't eaten as access keys.
-        menu.Items.Add(new System.Windows.Controls.MenuItem
-        {
-            Header = new TextBlock
-            {
-                Text = _playlist.Folders.Count == 1
-                    ? "Music folder — add more to combine folders"
-                    : $"Music folders ({_playlist.Folders.Count}) — tracks from all folders appear in the list"
-            },
-            IsEnabled = false
-        });
-        menu.Items.Add(new Separator());
-
-        bool canRemove = _playlist.Folders.Count > 1;
-
-        foreach (string folder in _playlist.Folders)
-        {
-            string captured = folder;
-            var item = new System.Windows.Controls.MenuItem
-            {
-                Header = new TextBlock { Text = GetFolderMenuLabel(folder) },
-                Icon = CreateFolderBadge(_folderInfoByPath.GetValueOrDefault(folder)),
-                IsCheckable = true,
-                IsChecked = true,
-                IsEnabled = canRemove,
-                ToolTip = canRemove ? "Clear the check box to remove the folder from the list" : "At least one music folder must remain"
-            };
-            item.Click += (_, _) => RemoveMusicFolder(captured);
-            menu.Items.Add(item);
-        }
-
-        menu.Items.Add(new Separator());
-
-        var addItem = new System.Windows.Controls.MenuItem { Header = "Add folder…" };
-        addItem.Click += (_, _) => AddMusicFolderViaDialog();
-        menu.Items.Add(addItem);
-
-        if (!_playlist.UsesOnlyDefaultFolder)
-        {
-            var resetItem = new System.Windows.Controls.MenuItem { Header = "Use only the default folder" };
-            resetItem.Click += (_, _) =>
-            {
-                _playlist.SetFolders(null);
-                OnMusicFoldersChanged("Using the default music folder again.");
-            };
-            menu.Items.Add(resetItem);
-        }
-
-        menu.IsOpen = true;
-    }
-
-    private void AddMusicFolderViaDialog()
+    private void OnAddMusicFolderClick(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
             Title = "Select a folder containing MP3 files"
         };
 
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(Window.GetWindow(MusicFoldersList)) != true)
         {
             return;
         }
@@ -2457,16 +2856,18 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
     }
 
-    private void RemoveMusicFolder(string folder)
+    private void OnRemoveMusicFolderClick(object sender, RoutedEventArgs e)
     {
-        if (_playlist.RemoveFolder(folder))
+        if ((sender as FrameworkElement)?.DataContext is FolderInfo folder && _playlist.RemoveFolder(folder.Path))
         {
-            OnMusicFoldersChanged($"Tog bort musikmapp: {folder}");
+            OnMusicFoldersChanged($"Removed music folder: {folder.Path}");
         }
-        else
-        {
-            MusicStatusText.Text = "At least one music folder must remain.";
-        }
+    }
+
+    private void OnResetMusicFoldersClick(object sender, RoutedEventArgs e)
+    {
+        _playlist.SetFolders(null);
+        OnMusicFoldersChanged("Using the default music folder again.");
     }
 
     private void OnMusicFoldersChanged(string statusMessage)
@@ -2566,6 +2967,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         SyncDownloadFolderToFilter(announce: false);
         DownloadFolderCombo.Visibility = multiple ? Visibility.Visible : Visibility.Collapsed;
+
+        MusicFoldersList.ItemsSource = infos;
+        // Read by the Remove buttons: the last folder cannot be removed.
+        MusicFoldersList.Tag = multiple;
+        ResetMusicFoldersButton.Visibility = _playlist.UsesOnlyDefaultFolder ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnFolderChipClick(object sender, RoutedEventArgs e)
@@ -2718,6 +3124,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _ = ApplyMonitorConfigAsync();
         SaveSettings();
         UpdateMusicUi();
+        UpdateStatusText();
     }
 
     private void ApplyMusicModeUi()
@@ -3463,6 +3870,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.MonitorEnabled = MonitorEnabledCheck.IsChecked == true;
         SaveSettings();
         UpdateMusicRouteHint();
+        UpdateStatusText();
         _ = ApplyMonitorConfigAsync();
     }
 
@@ -3477,7 +3885,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             _settings.MusicMonitorDeviceId = device.Id;
         }
-        SaveSettings();
+        OnConfigurationChanged();
         _ = ApplyMonitorConfigAsync();
     }
 
@@ -3593,13 +4001,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _isDownloading = false;
             DownloadBtn.IsEnabled = true;
         }
-    }
-
-    private static AudioDeviceOption? SelectMonitorDevice(IReadOnlyList<AudioDeviceOption> devices, string? preferredId)
-    {
-        return devices.FirstOrDefault(device => device.Id == preferredId)
-            ?? devices.FirstOrDefault(device => !LooksLikeVirtualCable(device))
-            ?? devices.FirstOrDefault();
     }
 
     private sealed class QueueEntry : INotifyPropertyChanged
@@ -3927,7 +4328,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _trayIcon.Text = newStatus switch
             {
                 MicStatus.Live => "MicMixer — Normal mic is live",
-                MicStatus.Modded => "MicMixer — Modded mic is live",
+                MicStatus.Modded => "MicMixer — Modified voice is live",
                 MicStatus.Muted => "MicMixer — Muted (push-to-talk)",
                 _ => "MicMixer — Routing stopped"
             };
@@ -3992,7 +4393,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _settings.OverlayIndicatorEnabled = OverlayIndicatorCheck.IsChecked == true;
         ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
-        SaveSettings();
+        OnConfigurationChanged();
     }
 
     private void OnOverlayVolumeMeterChanged(object sender, RoutedEventArgs e)
@@ -4010,7 +4411,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         UpdateOutputMeteringEnabled();
         PublishObsOverlayState();
-        SaveSettings();
+        OnConfigurationChanged();
     }
 
     private void OnMeterSensitivityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -4029,7 +4430,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         PublishObsOverlayState();
 
         UpdateMeterSensitivityText();
-        ScheduleSettingsSave();
+        OnConfigurationChanged();
     }
 
     private void OnMeterSensitivityLabelMouseDown(object sender, MouseButtonEventArgs e)
@@ -4098,208 +4499,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     #region Responsive layout
 
-    private enum LayoutMode
-    {
-        /// <summary>Routing and music side by side, equal width (the original layout).</summary>
-        Wide,
-
-        /// <summary>Still two columns, but the music player gets the larger share.</summary>
-        Medium,
-
-        /// <summary>Music player fills the window; routing folds into a status bar below.</summary>
-        Narrow
-    }
-
-    private const double NarrowBreakpoint = 830;
-    private const double WideBreakpoint = 1010;
-
-    private LayoutMode _layoutMode = LayoutMode.Wide;
-    private bool _layoutModeApplied;
-    private bool _deviceGridStacked;
-    private bool _delayPanelWrapped;
-    private bool _musicHeaderCompact;
     private bool _volumesStacked;
     private bool _playlistButtonsCompact;
-
-    private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        var mode = ActualWidth < NarrowBreakpoint
-            ? LayoutMode.Narrow
-            : ActualWidth < WideBreakpoint
-                ? LayoutMode.Medium
-                : LayoutMode.Wide;
-
-        if (mode != _layoutMode || !_layoutModeApplied)
-        {
-            _layoutMode = mode;
-            _layoutModeApplied = true;
-            ApplyLayoutMode();
-        }
-
-        if (_layoutMode == LayoutMode.Narrow)
-        {
-            UpdateNarrowRoutingHeight();
-        }
-    }
-
-    private void ApplyLayoutMode()
-    {
-        bool narrow = _layoutMode == LayoutMode.Narrow;
-
-        if (narrow)
-        {
-            // Music on top, full width — the part used most when space is scarce.
-            Grid.SetRow(MusicCard, 0);
-            Grid.SetColumn(MusicCard, 0);
-            Grid.SetColumnSpan(MusicCard, 3);
-
-            Grid.SetRow(RoutingScroll, 2);
-            Grid.SetColumn(RoutingScroll, 0);
-            Grid.SetColumnSpan(RoutingScroll, 3);
-            RoutingScroll.Margin = new Thickness(0, 8, 0, 0);
-
-            CompactStatusToggle.Visibility = Visibility.Visible;
-            UpdateNarrowRoutingVisibility();
-            UpdateNarrowRoutingHeight();
-        }
-        else
-        {
-            // The music player keeps the larger share as space shrinks.
-            RoutingColumn.Width = _layoutMode == LayoutMode.Medium
-                ? new GridLength(2, GridUnitType.Star)
-                : new GridLength(1, GridUnitType.Star);
-            MusicColumn.Width = _layoutMode == LayoutMode.Medium
-                ? new GridLength(3, GridUnitType.Star)
-                : new GridLength(1, GridUnitType.Star);
-
-            Grid.SetRow(MusicCard, 0);
-            Grid.SetColumn(MusicCard, 2);
-            Grid.SetColumnSpan(MusicCard, 1);
-
-            Grid.SetRow(RoutingScroll, 0);
-            Grid.SetColumn(RoutingScroll, 0);
-            Grid.SetColumnSpan(RoutingScroll, 1);
-            RoutingScroll.Margin = new Thickness(0);
-            RoutingScroll.MaxHeight = double.PositiveInfinity;
-            RoutingScroll.Visibility = Visibility.Visible;
-
-            CompactStatusToggle.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void OnCompactStatusToggled(object sender, RoutedEventArgs e)
-    {
-        UpdateNarrowRoutingVisibility();
-    }
-
-    private void UpdateNarrowRoutingVisibility()
-    {
-        if (_layoutMode != LayoutMode.Narrow)
-        {
-            return;
-        }
-
-        bool expanded = CompactStatusToggle.IsChecked == true;
-        RoutingScroll.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        CompactStatusHint.Text = expanded ? "Hide settings" : "Show settings";
-        CompactChevronRotate.Angle = expanded ? 0 : 180;
-    }
-
-    /// <summary>Caps the folded-out routing panel so the music player always keeps
-    /// enough height for all its controls in narrow mode; the routing panel
-    /// scrolls internally instead.</summary>
-    private void UpdateNarrowRoutingHeight()
-    {
-        RoutingScroll.MaxHeight = Math.Clamp(ActualHeight - 470, 150, 420);
-    }
-
-    private void UpdateCompactStatus()
-    {
-        CompactStatusDot.Fill = RoutingStateIcon.Fill;
-        var source = ActiveSourceText.Text.Replace("Active source: ", string.Empty);
-        CompactStatusText.Text = _router.IsRouting
-            ? $"Routing active · {source}"
-            : "Routing stopped";
-    }
-
-    /// <summary>Stacks the three device pickers vertically when the card is too
-    /// narrow for three columns side by side.</summary>
-    private void OnDeviceGridSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        bool stacked = e.NewSize.Width < 430;
-        if (stacked == _deviceGridStacked)
-        {
-            return;
-        }
-
-        _deviceGridStacked = stacked;
-        var panels = new[] { DryDevicePanel, ModdedDevicePanel, OutputDevicePanel };
-        for (int i = 0; i < panels.Length; i++)
-        {
-            if (stacked)
-            {
-                Grid.SetRow(panels[i], i);
-                Grid.SetColumn(panels[i], 0);
-                Grid.SetColumnSpan(panels[i], 3);
-                panels[i].Margin = new Thickness(0, i == 0 ? 0 : 10, 0, 0);
-            }
-            else
-            {
-                Grid.SetRow(panels[i], 0);
-                Grid.SetColumn(panels[i], i);
-                Grid.SetColumnSpan(panels[i], 1);
-                panels[i].Margin = new Thickness(i == 0 ? 0 : 8, 0, i == panels.Length - 1 ? 0 : 8, 0);
-            }
-        }
-    }
-
-    /// <summary>Moves the release-delay field below the hotkey picker when the card
-    /// cannot fit them side by side.</summary>
-    private void OnHotkeyConfigSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        bool wrapped = e.NewSize.Width < 350;
-        if (wrapped == _delayPanelWrapped)
-        {
-            return;
-        }
-
-        _delayPanelWrapped = wrapped;
-        Grid.SetRow(DelayPanel, wrapped ? 1 : 0);
-        Grid.SetColumn(DelayPanel, wrapped ? 0 : 1);
-        DelayPanel.Margin = wrapped ? new Thickness(0, 12, 0, 0) : new Thickness(0);
-        DelayPanel.HorizontalAlignment = wrapped ? System.Windows.HorizontalAlignment.Left : System.Windows.HorizontalAlignment.Right;
-    }
-
-    /// <summary>Drops the monitor-device combo to its own full-width row when the
-    /// music card header gets cramped.</summary>
-    private void OnMusicHeaderSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        bool compact = e.NewSize.Width < 470;
-        if (compact == _musicHeaderCompact)
-        {
-            return;
-        }
-
-        _musicHeaderCompact = compact;
-        if (compact)
-        {
-            Grid.SetRow(MonitorDeviceCombo, 1);
-            Grid.SetColumn(MonitorDeviceCombo, 0);
-            Grid.SetColumnSpan(MonitorDeviceCombo, 3);
-            MonitorDeviceCombo.Width = double.NaN;
-            MonitorDeviceCombo.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
-            MonitorDeviceCombo.Margin = new Thickness(0, 6, 0, 0);
-        }
-        else
-        {
-            Grid.SetRow(MonitorDeviceCombo, 0);
-            Grid.SetColumn(MonitorDeviceCombo, 2);
-            Grid.SetColumnSpan(MonitorDeviceCombo, 1);
-            MonitorDeviceCombo.Width = 170;
-            MonitorDeviceCombo.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
-            MonitorDeviceCombo.Margin = new Thickness(10, 0, 0, 0);
-        }
-    }
 
     /// <summary>Stacks the two volume sliders on top of each other when a single row
     /// would leave them too short to drag comfortably. The link toggle sits between
@@ -4425,19 +4626,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _settings.WindowHeight = size.Height;
         }
         _settings.WindowMaximized = _lastNonMinimizedWindowState == WindowState.Maximized;
-
-        try
-        {
-            _settingsStore.Save(_settings);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Failed to save window bounds.");
-        }
+        SaveSettings();
     }
 
     #endregion
 
-    private sealed record AudioDeviceOption(string Id, string FriendlyName);
     private sealed record ModifiedVoiceOption(ModifiedVoiceMode Mode, string FriendlyName);
 }

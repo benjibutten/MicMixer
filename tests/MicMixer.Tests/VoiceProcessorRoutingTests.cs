@@ -166,7 +166,12 @@ public sealed class VoiceProcessorRoutingTests
         using var pair = new VoiceProcessorSamplePair(source, processor, new VoiceProcessorRuntimeDiagnostics(), () => volume);
         using var sut = new SwitchingSampleProvider(pair, static () => true);
         var output = new float[480];
-        sut.Read(output);
+        // Past tiered JIT's 30-call threshold: crossing it inside the measured loop
+        // occasionally showed up as a few KB allocated on this thread.
+        for (int i = 0; i < 100; i++)
+        {
+            sut.Read(output);
+        }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 100; i++)

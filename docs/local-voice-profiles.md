@@ -88,7 +88,9 @@ repository or ignored and verify `git ls-files recording` is empty.
 
 ## Create a voice in the app
 
-Stop routing, select **Local voice profile**, then choose **Create a voice…**.
+In the app, local voice profiles are called **MicMixer voices**. Stop routing, choose
+**MicMixer voices** as the voice changer, then choose **Create a voice…** in
+**Settings › Devices**.
 Start from neutral settings, a built-in starter, or an installed profile. Give the new
 voice a name, record a short phrase from the selected normal microphone, and
 choose headphones under **Listen on**. The selected virtual cable is excluded
@@ -150,15 +152,16 @@ Starters have stable reserved UUIDs and are loaded from the application, without
 creating files in AppData. Save voice always creates a new local UUID copy; imports
 cannot overwrite or shadow a starter. The original starters remain available.
 
-The device row at the top of the routing column holds three peer dropdowns: normal
-mic, modified voice and virtual cable output. The modified-voice dropdown only names
-the *kind* of source. Its settings live in a full-width panel directly below, which is
-absent for **None**, holds the device picker for **External microphone / Voicemod**,
-and holds the profile picker, **Create a voice**, **Delete** and the voice volume for
-**Local voice profile**. Keeping the settings out of the device row is what stops one
-column from growing several rows taller than the two beside it.
+**Settings › Devices** lists normal mic, voice changer and the virtual cable
+(**Send the mix to**) as sections, top to bottom. The voice changer dropdown only
+names the *kind* of source. Its settings sit directly below it: nothing for
+**Off**, the device picker for **Voice changer app**, and the voice picker,
+**Create a voice** and **Delete** for **MicMixer voices**. The main window has the
+same three-way switch plus the voice picker under its status card, because the
+voice is switched during a session; a running route restarts with the new choice.
 
-The main voice volume slider occupies its own full-width row. The old alternate
+The processed-voice volume sits under the voice changer picker, laid out like the
+normal mic's volume above it, with a level bar next to each and the same 0–200% scale. The old alternate
 analysis-window checkbox is hidden unless the selected profile actually supplies
 an alternate. For a longer alternate it reads **Smoother processing (more delay)**;
 its tooltip explains the quality/latency tradeoff. The two starters do not need this

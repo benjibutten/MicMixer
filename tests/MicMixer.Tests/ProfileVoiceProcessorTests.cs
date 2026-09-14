@@ -72,7 +72,12 @@ public sealed class ProfileVoiceProcessorTests
         using var processor = new ProfileVoiceProcessor(SampleRate, channels: 1);
         var input = new float[480];
         var output = new float[input.Length];
-        processor.Process(input, output);
+        // Past tiered JIT's 30-call threshold: crossing it inside the measured loop
+        // occasionally showed up as a few KB allocated on this thread.
+        for (int i = 0; i < 100; i++)
+        {
+            processor.Process(input, output);
+        }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 100; i++)

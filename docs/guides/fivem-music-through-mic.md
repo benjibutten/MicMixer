@@ -25,9 +25,9 @@ continuously.
 ## Step 1 — Route MicMixer into the game and open its voice gate
 
 1. Install VB-CABLE and reboot if the installer asks.
-2. In MicMixer, set **Normal mic** to your real microphone and **Virtual cable
-   output** to *CABLE Input (VB-Audio Virtual Cable)*. If you don't use a voice
-   changer, choose **None**.
+2. In MicMixer's **Settings › Devices**, set **Normal mic** to your real microphone
+   and **Send the mix to** to *CABLE Input (VB-Audio Virtual Cable)*, then click
+   **Save**. If you don't use a voice changer, set **Voice changer** to **Off**.
 3. In FiveM's voice settings, set **Input Device** to **CABLE Output**. FiveM
    exposes both an input-device setting and a voice-chat mode; a server resource
    may replace or override either one. Both settings are listed in the official
@@ -51,9 +51,9 @@ remove that requirement.
 Because the game listens to an always-open cable, MicMixer has to be the thing
 that gates your voice — otherwise your mic is live all the time.
 
-1. Set a **Global hotkey** in MicMixer (for example a mouse side button or the
-   key that feels natural for speaking).
-2. Enable **push-to-talk**. Now, while the hotkey is *not* held, MicMixer sends
+1. Open **Settings › Hotkey** in MicMixer and set a **Hotkey** (for example a
+   mouse side button or the key that feels natural for speaking).
+2. Enable **push-to-talk** on the same page and click **Save**. Now, while the hotkey is *not* held, MicMixer sends
    silence for your voice; while it is held, your voice goes through.
 
 At this point MicMixer is the only push-to-talk gate in the supported setup, so
@@ -92,6 +92,14 @@ else hears it, then turn it off to send it.
   own push-to-talk key; if that gate is mandatory, this setup is unsupported.
   Disable noise suppression / echo cancellation in the game or voice resource —
   those filters often strip out music.
+- **Your character keeps "talking" after you stop.** FiveM decides who is
+  talking from the signal on the cable, with no hold time of its own. While the
+  MicMixer hotkey is held, room noise alone is enough to keep its
+  voice detection triggered. Enable the noise gate in **Settings › Noise gate** and set
+  the threshold so the level bar passes the knob while you talk and stays below
+  it while you are quiet; the cable then carries true silence between phrases. Also keep **Release delay** at 0
+  when you use push-to-talk, and lower FiveM's **Microphone Sensitivity** if
+  quiet sounds still register.
 - **The music cuts out when you stop talking.** *Music ignores push-to-talk* is
   off, or push-to-talk isn't enabled. The ignore toggle only does something
   while push-to-talk is on.

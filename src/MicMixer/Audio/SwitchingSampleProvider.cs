@@ -5,14 +5,19 @@ namespace MicMixer.Audio;
 internal sealed class SwitchingSampleProvider : ISampleProvider, IDisposable
 {
     private const double HalfPi = Math.PI / 2d;
+    private const float VolumeRampSeconds = 0.01f;
+    private const float MaxPrimaryVolume = 2f;
     private readonly ISamplePair _pair;
     private readonly Func<bool> _useSecondary;
+    private readonly Func<float>? _primaryVolume;
     private readonly float[] _fadeOut;
     private readonly float[] _fadeIn;
+    private readonly float _volumeStepPerFrame;
     private float[] _primaryBuffer = Array.Empty<float>();
     private float[] _secondaryBuffer = Array.Empty<float>();
     private bool _targetSecondary;
     private int _fadePosition;
+    private float _currentPrimaryVolume = 1f;
     private bool _initialized;
 
     public SwitchingSampleProvider(
@@ -24,14 +29,17 @@ internal sealed class SwitchingSampleProvider : ISampleProvider, IDisposable
     {
     }
 
+    /// <param name="primaryVolume">Gain for the primary source only, 0–2; null means unity.</param>
     public SwitchingSampleProvider(
         ISamplePair pair,
         Func<bool> useSecondary,
-        int crossfadeMilliseconds = 8)
+        int crossfadeMilliseconds = 8,
+        Func<float>? primaryVolume = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(crossfadeMilliseconds);
         _pair = pair;
         _useSecondary = useSecondary;
+        _primaryVolume = primaryVolume;
         WaveFormat = pair.WaveFormat;
 
         int fadeFrames = Math.Max(1, WaveFormat.SampleRate * crossfadeMilliseconds / 1_000);
@@ -43,6 +51,9 @@ internal sealed class SwitchingSampleProvider : ISampleProvider, IDisposable
             _fadeOut[frame] = (float)Math.Cos(progress * HalfPi);
             _fadeIn[frame] = (float)Math.Sin(progress * HalfPi);
         }
+
+        // Ten milliseconds per unit of change keeps slider drags click-free.
+        _volumeStepPerFrame = 1f / Math.Max(1f, VolumeRampSeconds * WaveFormat.SampleRate);
     }
 
     public WaveFormat WaveFormat { get; }
@@ -60,11 +71,13 @@ internal sealed class SwitchingSampleProvider : ISampleProvider, IDisposable
         _pair.Read(primary, secondary);
 
         bool requestedSecondary = _pair.HasSecondary && _useSecondary();
+        float requestedVolume = RequestedPrimaryVolume();
         if (!_initialized)
         {
             _initialized = true;
             _targetSecondary = requestedSecondary;
             _fadePosition = requestedSecondary ? _fadeOut.Length - 1 : 0;
+            _currentPrimaryVolume = requestedVolume;
         }
         else
         {
@@ -74,15 +87,26 @@ internal sealed class SwitchingSampleProvider : ISampleProvider, IDisposable
         int channels = WaveFormat.Channels;
         for (int offset = 0; offset < buffer.Length; offset += channels)
         {
+            _currentPrimaryVolume = _currentPrimaryVolume < requestedVolume
+                ? Math.Min(requestedVolume, _currentPrimaryVolume + _volumeStepPerFrame)
+                : Math.Max(requestedVolume, _currentPrimaryVolume - _volumeStepPerFrame);
+
+            float primaryGain;
+            float secondaryGain;
             if (_fadeOut.Length == 1)
             {
-                ReadOnlySpan<float> selected = _targetSecondary ? secondary : primary;
-                selected.Slice(offset, channels).CopyTo(buffer.Slice(offset, channels));
-                continue;
+                // A one-entry table cannot hold both ends of a crossfade, so a
+                // zero-length crossfade switches hard.
+                primaryGain = _targetSecondary ? 0f : 1f;
+                secondaryGain = 1f - primaryGain;
+            }
+            else
+            {
+                primaryGain = _fadeOut[_fadePosition];
+                secondaryGain = _fadeIn[_fadePosition];
             }
 
-            float primaryGain = _fadeOut[_fadePosition];
-            float secondaryGain = _fadeIn[_fadePosition];
+            primaryGain *= _currentPrimaryVolume;
             for (int channel = 0; channel < channels; channel++)
             {
                 buffer[offset + channel] =
@@ -105,6 +129,12 @@ internal sealed class SwitchingSampleProvider : ISampleProvider, IDisposable
     public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
 
     public void Dispose() => _pair.Dispose();
+
+    private float RequestedPrimaryVolume()
+    {
+        float requested = _primaryVolume?.Invoke() ?? 1f;
+        return float.IsFinite(requested) ? Math.Clamp(requested, 0f, MaxPrimaryVolume) : 1f;
+    }
 
     private void EnsureCapacity(int count)
     {

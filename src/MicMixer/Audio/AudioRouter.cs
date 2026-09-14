@@ -30,9 +30,13 @@ public sealed class AudioRouter : IDisposable
     private InputRoute? _normalRoute;
     private InputRoute? _moddedRoute;
     private SwitchingSampleProvider? _micSource;
+    private NoiseGateSampleProvider? _noiseGate;
     private VoiceProcessorSamplePair? _voiceProcessorPair;
     private bool _useModdedInput;
     private float _processedVoiceVolume = 1f;
+    private float _normalMicVolume = 1f;
+    private bool _noiseGateEnabled;
+    private float _noiseGateThresholdDb = -45f;
     private bool _outputGateOpen = true;
     private bool _musicIgnoresPushToTalk;
     private bool _musicMonitorOnly;
@@ -44,13 +48,41 @@ public sealed class AudioRouter : IDisposable
     private float _musicRms;
     private bool _disposed;
 
-    /// <summary>Applied after the built-in effect, before switching and output fan-out.</summary>
+    /// <summary>Applied after the built-in effect, before switching and output fan-out. 1 is unity, up to 2 boosts.</summary>
     public float ProcessedVoiceVolume
     {
         get => Volatile.Read(ref _processedVoiceVolume);
         set => Volatile.Write(ref _processedVoiceVolume,
-            float.IsFinite(value) ? Math.Clamp(value, 0f, 1f) : 1f);
+            float.IsFinite(value) ? Math.Clamp(value, 0f, 2f) : 1f);
     }
+
+    /// <summary>Applied to the normal mic only, before switching. 1 is unity; up to 2 boosts a quiet mic.</summary>
+    public float NormalMicVolume
+    {
+        get => Volatile.Read(ref _normalMicVolume);
+        set => Volatile.Write(ref _normalMicVolume,
+            float.IsFinite(value) ? Math.Clamp(value, 0f, 2f) : 1f);
+    }
+
+    /// <summary>Mutes the mic branch between phrases; see <see cref="NoiseGateSampleProvider"/>.</summary>
+    public bool NoiseGateEnabled
+    {
+        get => Volatile.Read(ref _noiseGateEnabled);
+        set => Volatile.Write(ref _noiseGateEnabled, value);
+    }
+
+    public float NoiseGateThresholdDb
+    {
+        get => Volatile.Read(ref _noiseGateThresholdDb);
+        set => Volatile.Write(ref _noiseGateThresholdDb,
+            float.IsFinite(value) ? Math.Clamp(value, -70f, -10f) : -45f);
+    }
+
+    /// <summary>Whether the noise gate currently lets the mic through; false while routing is stopped.</summary>
+    public bool NoiseGateOpen => _noiseGate?.IsOpen ?? false;
+
+    /// <summary>Highest mic-branch peak seen by the noise gate since the last call, for placing the threshold.</summary>
+    public float ReadAndResetNoiseGateInputPeak() => _noiseGate?.ReadAndResetInputPeak() ?? 0f;
 
     public bool IsRouting => _player?.PlaybackState == PlaybackState.Playing;
     public bool UseModdedInput => Volatile.Read(ref _useModdedInput);
@@ -104,6 +136,7 @@ public sealed class AudioRouter : IDisposable
         InputRoute? normalRoute = null;
         InputRoute? moddedRoute = null;
         SwitchingSampleProvider? micSource = null;
+        NoiseGateSampleProvider? noiseGate = null;
         VoiceProcessorSamplePair? voiceProcessorPair = null;
         WasapiPlayer? player = null;
 
@@ -158,7 +191,10 @@ public sealed class AudioRouter : IDisposable
                 samplePair = new IndependentSamplePair(normalRoute, moddedRoute);
             }
 
-            micSource = new SwitchingSampleProvider(samplePair, () => UseModdedInput);
+            micSource = new SwitchingSampleProvider(samplePair, () => UseModdedInput, primaryVolume: () => NormalMicVolume);
+            // Gated after switching and both mic volumes, so the threshold refers
+            // to the level actually sent and covers every mic source alike.
+            noiseGate = new NoiseGateSampleProvider(micSource, () => NoiseGateEnabled, () => NoiseGateThresholdDb);
             ISampleProvider? musicSource = MusicSourceFactory?.Invoke(targetFormat);
 
             // A secondary start failure only skips that branch — the cable
@@ -186,7 +222,7 @@ public sealed class AudioRouter : IDisposable
             // (monitor-only preview). Upstream sources keep advancing regardless,
             // so music never rewinds while a gate is closed.
             ISampleProvider source = new MixFanoutSampleProvider(
-                micSource,
+                noiseGate,
                 musicSource,
                 micGateOpen: () => OutputGateOpen,
                 musicGateOpen: () => MusicRouteOpen,
@@ -221,6 +257,7 @@ public sealed class AudioRouter : IDisposable
                 _normalRoute = normalRoute;
                 _moddedRoute = moddedRoute;
                 _micSource = micSource;
+                _noiseGate = noiseGate;
                 _voiceProcessorPair = voiceProcessorPair;
                 _player = player;
 
@@ -236,6 +273,7 @@ public sealed class AudioRouter : IDisposable
                     _normalRoute = null;
                     _moddedRoute = null;
                     _micSource = null;
+                    _noiseGate = null;
                     _voiceProcessorPair = null;
                     _player = null;
                     throw;
@@ -414,6 +452,7 @@ public sealed class AudioRouter : IDisposable
             _normalRoute = null;
             _moddedRoute = null;
             _micSource = null;
+            _noiseGate = null;
             _voiceProcessorPair = null;
         }
 
@@ -496,6 +535,7 @@ public sealed class AudioRouter : IDisposable
             _normalRoute = null;
             _moddedRoute = null;
             _micSource = null;
+            _noiseGate = null;
             _voiceProcessorPair = null;
 
             // Keep the secondary branch from running after its master clock has

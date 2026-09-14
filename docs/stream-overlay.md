@@ -15,13 +15,13 @@ behaves like the desktop.
 
 ## Enabling
 
-Check **Stream overlay** in MicMixer's routing settings. MicMixer then starts a
-small web server bound to `127.0.0.1` (default port 4573, configurable next to
-the checkbox). The settings UI shows the overlay address, and the link can be
-opened in a normal browser to test it.
+Check **Serve the stream overlay** in MicMixer's **Settings › Overlay** and click
+**Save**. MicMixer then starts a small web server bound to `127.0.0.1` (default
+port 4573, configurable below the checkbox). The page shows the overlay address,
+and the link can be opened in a normal browser to test it.
 
 The stream overlay works independently of the on-screen overlay indicator: either
-one, both, or neither can be enabled. The **Volume meter** and
+one, both, or neither can be enabled. The **Level rings** and
 **Sensitivity** settings apply to both overlays.
 
 ## Streaming software setup

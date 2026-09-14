@@ -35,7 +35,7 @@ public partial class MainWindow
 
         _settings.ObsOverlayEnabled = ObsOverlayCheck.IsChecked == true;
         ApplyObsOverlaySetting(_settings.ObsOverlayEnabled);
-        SaveSettings();
+        OnConfigurationChanged();
     }
 
     private void ApplyObsOverlaySetting(bool enabled)
@@ -253,6 +253,6 @@ public partial class MainWindow
             ApplyObsOverlaySetting(enabled: true);
         }
 
-        SaveSettings();
+        OnConfigurationChanged();
     }
 }
