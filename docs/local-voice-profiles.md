@@ -154,11 +154,12 @@ The device row at the top of the routing column holds three peer dropdowns: norm
 mic, modified voice and virtual cable output. The modified-voice dropdown only names
 the *kind* of source. Its settings live in a full-width panel directly below, which is
 absent for **None**, holds the device picker for **External microphone / Voicemod**,
-and holds the profile picker, **Create a voice**, **Delete** and the voice volume for
+and holds the profile picker, **Create a voice** and **Delete** for
 **Local voice profile**. Keeping the settings out of the device row is what stops one
 column from growing several rows taller than the two beside it.
 
-The main voice volume slider occupies its own full-width row. The old alternate
+The processed-voice volume sits under the modified-voice picker, next to the
+normal mic's volume and on the same 0–200% scale. The old alternate
 analysis-window checkbox is hidden unless the selected profile actually supplies
 an alternate. For a longer alternate it reads **Smoother processing (more delay)**;
 its tooltip explains the quality/latency tradeoff. The two starters do not need this

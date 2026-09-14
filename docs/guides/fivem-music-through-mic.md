@@ -92,6 +92,14 @@ else hears it, then turn it off to send it.
   own push-to-talk key; if that gate is mandatory, this setup is unsupported.
   Disable noise suppression / echo cancellation in the game or voice resource —
   those filters often strip out music.
+- **Your character keeps "talking" after you stop.** FiveM decides who is
+  talking from the signal on the cable, with no hold time of its own. While the
+  MicMixer hotkey is held, room noise alone is enough to keep its
+  voice detection triggered. Enable **Noise gate** under push-to-talk and set
+  the threshold so the level bar passes the knob while you talk and stays below
+  it while you are quiet; the cable then carries true silence between phrases. Also keep **Release delay** at 0
+  when you use push-to-talk, and lower FiveM's **Microphone Sensitivity** if
+  quiet sounds still register.
 - **The music cuts out when you stop talking.** *Music ignores push-to-talk* is
   off, or push-to-talk isn't enabled. The ignore toggle only does something
   while push-to-talk is on.
