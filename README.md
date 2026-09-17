@@ -186,7 +186,8 @@ Secondary output, Music folders and General.
   settings are changed but not saved, the main window shows one card per problem
   with a button to the settings page that fixes it.
   MicMixer never replaces a saved device with a stand-in without saying so, and
-  starting routing never overwrites the saved devices.
+  starting routing never overwrites the saved devices. Devices coming and going are
+  noticed while routing is off, so a card clears itself once the device is back.
 - Music card controls (volumes, monitoring on/off, the music routing toggles,
   source mode), the voice changer and its voice, and music folders are saved as
   they change.
@@ -423,9 +424,12 @@ Runtime logs roll at 5 MB, rotate daily, and are retained for 14 days.
   producing audio and refresh the application list.
 - If a download fails, check the internet connection and inspect the logs under
   `%LocalAppData%\MicMixer\logs`.
-- If an audio device was disconnected, reconnect it and click **Refresh devices**
-  in Settings › Devices. The main window shows a card for every saved device
-  that is not connected.
+- If an audio device was disconnected, reconnect it: MicMixer picks it up again by
+  itself when routing is off, and its card disappears. While routing is on, the
+  card stays until you stop routing, because the route keeps using the device it
+  started with. **Refresh devices** in Settings › Devices reads the devices again
+  at once, but stops routing first. Music that paused because the monitoring device
+  was unplugged resumes when that device is back, not on a stand-in device.
 - If the secondary output shows "device was not found", reconnect the device or
   select a new one explicitly; MicMixer intentionally never auto-picks a
   replacement secondary device.

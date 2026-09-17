@@ -45,6 +45,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _musicTimer;
     private readonly DispatcherTimer _delayedStartTimer;
     private readonly DispatcherTimer _settingsSaveTimer;
+    private readonly DispatcherTimer _deviceChangeTimer;
+    private MMDeviceEnumerator? _deviceEnumerator;
+    private MMDeviceNotificationClient? _deviceNotifications;
     private readonly SignalActivityTracker _externalSignalActivity = new(
         ExternalSignalActivationThreshold,
         ExternalSignalHoldDuration);
@@ -89,6 +92,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
     private bool _isDevicesLoading;
+    private Task _deviceRefresh = Task.CompletedTask;
     private bool _isUpdatingUi;
     private bool _isReallyClosing;
     private bool _devicesLoaded;
@@ -147,6 +151,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _settingsSaveTimer.Stop();
             SaveSettings();
         };
+        // Plugging one headset in fires several endpoint callbacks; wait for the burst to settle.
+        _deviceChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _deviceChangeTimer.Tick += OnDeviceChangeSettled;
         _singleTrackAnnounceTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(System.Windows.Forms.SystemInformation.DoubleClickTime + 50)
@@ -262,6 +269,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             App.StartupTrace("Device refresh queued");
             _ = LoadDevicesAndOfferSetupGuideAsync();
+            StartWatchingDevices();
         }
 
         if (App.StartupBenchmarkMode)
@@ -274,15 +282,68 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
     }
 
-    private async Task RefreshDevicesAsync()
+    /// <summary>
+    /// Follows devices coming and going, so the cards about a missing mic, cable or
+    /// monitor clear themselves once the device is plugged back in.
+    /// </summary>
+    private void StartWatchingDevices()
     {
-        if (_isDevicesLoading)
+        try
         {
+            _deviceEnumerator = new MMDeviceEnumerator();
+            // Created on the UI thread, so the events arrive there too.
+            _deviceNotifications = _deviceEnumerator.CreateNotificationClient();
+            _deviceNotifications.DeviceAdded += (_, _) => RestartDeviceChangeTimer();
+            _deviceNotifications.DeviceRemoved += (_, _) => RestartDeviceChangeTimer();
+            _deviceNotifications.DeviceStateChanged += (_, _) => RestartDeviceChangeTimer();
+        }
+        catch (Exception ex)
+        {
+            // Refresh devices still works; only the automatic part is lost.
+            Log.Warning(ex, "Could not watch audio devices for changes.");
+        }
+    }
+
+    private void RestartDeviceChangeTimer()
+    {
+        _deviceChangeTimer.Stop();
+        _deviceChangeTimer.Start();
+    }
+
+    private void OnDeviceChangeSettled(object? sender, EventArgs e)
+    {
+        _deviceChangeTimer.Stop();
+
+        // Devices cannot change under a running route, and the cards describe what the
+        // route is actually using, so wait for routing to stop before reading them.
+        // A refresh already under way may have listed the devices before this change.
+        if (_router.IsRouting || _isStartingRouting || _isDevicesLoading)
+        {
+            _deviceChangeTimer.Start();
             return;
         }
 
+        Log.Information("Audio endpoints changed; reading the device list again.");
+        _ = RefreshDevicesAsync();
+    }
+
+    /// <summary>
+    /// A refresh asked for during another one runs after it instead of being dropped:
+    /// callers rely on the combos matching _settings and the devices once this completes.
+    /// </summary>
+    private Task RefreshDevicesAsync()
+    {
+        return _deviceRefresh = RefreshDevicesAfterAsync(_deviceRefresh);
+    }
+
+    private async Task RefreshDevicesAfterAsync(Task previous)
+    {
+        // WhenAny does not rethrow, so one failed refresh cannot fail every later one.
+        await Task.WhenAny(previous);
+
+        // _devicesLoaded keeps its value: the old list stays valid, and the cards and the
+        // status line would otherwise blink on every refresh.
         _isDevicesLoading = true;
-        _devicesLoaded = false;
         _deviceLoadError = null;
 
         if (!_router.IsRouting)
@@ -409,22 +470,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private async Task StartRoutingAsync()
     {
+        // A device refresh can start by itself, so wait for it rather than refuse the click.
+        await Task.WhenAny(_deviceRefresh);
+
         if (_isStartingRouting)
         {
             return;
         }
 
-        if (_isDevicesLoading)
-        {
-            StatusText.Text = "Please wait, loading audio devices...";
-            return;
-        }
-
         if (!_devicesLoaded)
         {
-            StatusText.Text = _isDevicesLoading
-                ? "Please wait, loading audio devices..."
-                : _deviceLoadError ?? "Could not read audio devices. Click Refresh and try again.";
+            StatusText.Text = _deviceLoadError ?? "Could not read audio devices. Click Refresh and try again.";
             return;
         }
 
@@ -1477,6 +1533,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _secondaryOutput.Dispose();
         _appCapture?.Dispose();
         _hotkeyListener.Dispose();
+        _deviceChangeTimer.Stop();
+        _deviceNotifications?.Dispose();
+        _deviceEnumerator?.Dispose();
     }
 
     /// <summary>
@@ -3904,7 +3963,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             await Task.Run(() => _music.ConfigureMonitor(deviceId));
             PauseMusicIfClockLost();
-            ResumeMusicIfAutoPaused();
+
+            // Not onto a stand-in: unplugging the headset must not move the music to the
+            // speakers by itself. It resumes when the chosen device is back, or on Play.
+            bool isStandIn = deviceId != null
+                && _settings.MusicMonitorDeviceId != null
+                && deviceId != _settings.MusicMonitorDeviceId;
+            if (!isStandIn)
+            {
+                ResumeMusicIfAutoPaused();
+            }
         }
         catch (Exception ex)
         {
