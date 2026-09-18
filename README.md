@@ -242,6 +242,16 @@ push-to-talk key is still held.
   you are quiet. The label next to it tells whether the gate is open or closed.
 - It applies to the normal and the modified mic alike and works together with
   push-to-talk. Music is not affected.
+- Every period the gate was open is written to the runtime log when it closes,
+  with start time, duration, the highest input peak, the threshold and whether
+  the modified voice was selected. Use it to check what the cable carried at a
+  given moment, for example when a voice-activated game showed you talking.
+  Pressing **Pause** on the keyboard, in any window, or the **Mark** button
+  under the status card, writes a marker line with the current gate, hotkey
+  and volume state, so the moment someone reports it is easy to find in the
+  log afterwards. If FiveM is installed, its voice chat settings (chat mode,
+  microphone sensitivity) are logged next to it, read from `fivem.cfg`, along
+  with the capture device FiveM reported opening in its own newest log.
 
 ## Music sources
 
@@ -380,6 +390,10 @@ The optional level rings wrap each circle: the mic ring shows the complete
 outgoing mix after the gates (exactly what the cable receives), and the music
 ring shows the music branch alone after the music volume — also during a
 monitor-only preview, so the level can be set before anyone else hears it.
+
+While the noise gate is on, a small dot in the top-right corner of the mic
+circle shows its state: white while the gate lets the mic through, dark gray
+while it holds silence. It is only on the desktop overlay, not the stream overlay.
 Exclusive fullscreen applications may prevent desktop overlays from being visible.
 
 ## Stream overlay

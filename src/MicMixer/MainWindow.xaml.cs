@@ -32,6 +32,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly AudioRouter _router;
     private readonly SecondaryOutputEngine _secondaryOutput;
     private readonly GlobalHotkeyListener _hotkeyListener;
+    private readonly GlobalHotkeyListener _markerKeyListener;
     private readonly SettingsStore _settingsStore;
     private readonly StartupRegistrySyncService _startupRegistrySyncService;
     private readonly DispatcherTimer _levelTimer;
@@ -88,6 +89,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
     private int _releaseDelayMilliseconds;
     private float _noiseGatePeakHold;
+    private DateTime? _noiseGateOpenedAt;
+    private DateTime? _noiseGateLastClosedAt;
+    private float _noiseGateOpenPeak;
+    private bool _noiseGateOpenedModded;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
@@ -174,6 +179,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _router.Error += OnRouterError;
         _hotkeyListener.PressedStateChanged += OnHotkeyPressedStateChanged;
+
+        // Diagnostic marker: pressing Pause stamps the log, so a moment someone
+        // else reported can be matched against the noise gate periods.
+        _markerKeyListener = new GlobalHotkeyListener();
+        _markerKeyListener.UpdateBinding(HotkeyBinding.FromKeyboardKey(Key.Pause));
+        _markerKeyListener.SetMonitoringEnabled(true);
+        _markerKeyListener.PressedStateChanged += OnMarkerKeyPressedStateChanged;
 
         _trayIcon = CreateTrayIcon();
         DryInputCombo.IsEnabled = false;
@@ -627,6 +639,18 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ? (sampleRate, channels) => CreateLocalProfileProcessor(sampleRate, channels, parameters!)
             : null;
         _router.Start(dryInput, moddedInput, output, processorFactory);
+        Log.Information(
+            "Routing started. NoiseGate={NoiseGate} ThresholdDb={ThresholdDb:0} NormalMicVolume={NormalMicVolume:P0} ProcessedVoiceVolume={ProcessedVoiceVolume:P0} VoiceChanger={VoiceChanger} Voice={Voice} Hotkey={Hotkey} ReleaseDelayMs={ReleaseDelayMs} PushToTalk={PushToTalk}",
+            _settings.NoiseGateEnabled,
+            _settings.NoiseGateThresholdDb,
+            _settings.NormalMicVolume,
+            _settings.ProcessedVoiceVolume,
+            modifiedVoiceMode,
+            DescribeModifiedVoice(),
+            _hotkeyBinding.DisplayName,
+            _settings.ReleaseDelayMilliseconds,
+            _settings.PushToTalkMode);
+        Log.Information("FiveM voice settings: {Summary}", FiveMVoiceSettings.Describe());
     }
 
     private static IVoiceProcessor CreateLocalProfileProcessor(int sampleRate, int channels, VoiceDspParameters parameters)
@@ -1262,6 +1286,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _noiseGatePeakHold = 0f;
             NoiseGateLevelBar.Value = NoiseGateLevelBar.Minimum;
             NoiseGateStateText.Text = string.Empty;
+            _overlayIndicator?.SetNoiseGateOpen(null);
+            LogNoiseGateActivity(open: false, peak: 0f);
             return;
         }
 
@@ -1271,9 +1297,81 @@ public partial class MainWindow : Window, IMicMixerControlHost
         NoiseGateLevelBar.Value = Math.Clamp(decibels, NoiseGateLevelBar.Minimum, NoiseGateLevelBar.Maximum);
 
         bool open = _router.NoiseGateOpen;
+        _overlayIndicator?.SetNoiseGateOpen(open);
+        LogNoiseGateActivity(open, peak);
         NoiseGateStateText.Text = open ? "Open" : "Closed";
         NoiseGateStateText.Foreground = open ? StatusTheme.LiveBrush : StatusTheme.StoppedInkBrush;
         NoiseGateLevelBar.Foreground = open ? StatusTheme.LiveBrush : StatusTheme.StoppedInkBrush;
+    }
+
+    /// <summary>
+    /// One log line per open period, written when it closes, so a moment where
+    /// others saw the character talk can be checked against what the cable
+    /// actually carried. Polled at the 50 ms tick; the gate's minimum open time
+    /// (hold plus release) is longer than that, so no period is missed.
+    /// </summary>
+    private void LogNoiseGateActivity(bool open, float peak)
+    {
+        if (_noiseGateOpenedAt is not { } openedAt)
+        {
+            if (open)
+            {
+                _noiseGateOpenedAt = DateTime.Now;
+                _noiseGateOpenPeak = peak;
+                _noiseGateOpenedModded = _router.UseModdedInput;
+            }
+
+            return;
+        }
+
+        _noiseGateOpenPeak = Math.Max(_noiseGateOpenPeak, peak);
+        if (open)
+        {
+            return;
+        }
+
+        double peakDb = _noiseGateOpenPeak > 0f ? 20 * Math.Log10(_noiseGateOpenPeak) : double.NegativeInfinity;
+        Log.Information(
+            "Noise gate open {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0.0} dBFS, threshold {ThresholdDb:0} dB, modified voice {ModifiedVoice}",
+            openedAt,
+            (DateTime.Now - openedAt).TotalSeconds,
+            peakDb,
+            _settings.NoiseGateThresholdDb,
+            _noiseGateOpenedModded);
+        _noiseGateOpenedAt = null;
+        _noiseGateLastClosedAt = DateTime.Now;
+    }
+
+    private void OnMarkerKeyPressedStateChanged(object? sender, bool isPressed)
+    {
+        if (isPressed)
+        {
+            Dispatcher.BeginInvoke(LogDiagnosticMarker);
+        }
+    }
+
+    private void OnMarkerClick(object sender, RoutedEventArgs e) => LogDiagnosticMarker();
+
+    /// <summary>Stamps the log with everything that decides what the cable carries right now.</summary>
+    private void LogDiagnosticMarker()
+    {
+        MarkerText.Text = $"Marked {DateTime.Now:HH:mm:ss}";
+        string gate = !_router.IsRouting ? "routing stopped"
+            : !_settings.NoiseGateEnabled ? "off"
+            : _router.NoiseGateOpen ? "open"
+            : _noiseGateLastClosedAt is { } closedAt ? $"closed {(DateTime.Now - closedAt).TotalSeconds:0.0} s ago"
+            : "closed";
+
+        Log.Information(
+            "MARKER pressed. Gate {Gate}, hotkey held {HotkeyHeld}, modified voice {ModifiedVoice}, push-to-talk gate open {CableOpen}, threshold {ThresholdDb:0} dB, normal mic {NormalMicVolume:P0}, processed voice {ProcessedVoiceVolume:P0}",
+            gate,
+            _hotkeyListener.IsPressed,
+            _router.UseModdedInput,
+            _router.OutputGateOpen,
+            _settings.NoiseGateThresholdDb,
+            _settings.NormalMicVolume,
+            _settings.ProcessedVoiceVolume);
+        Log.Information("FiveM voice settings: {Summary}", FiveMVoiceSettings.Describe());
     }
 
     private void OnLongerAnalysisWindowChanged(object sender, RoutedEventArgs e)
@@ -1533,6 +1631,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _secondaryOutput.Dispose();
         _appCapture?.Dispose();
         _hotkeyListener.Dispose();
+        _markerKeyListener.Dispose();
         _deviceChangeTimer.Stop();
         _deviceNotifications?.Dispose();
         _deviceEnumerator?.Dispose();

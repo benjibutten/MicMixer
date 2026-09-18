@@ -132,6 +132,15 @@ public sealed class OverlayIndicatorWindow : Window
     private static readonly System.Windows.Media.Brush MusicSendingBrush = CreateFrozenBrush(0x7C, 0x3A, 0xED);
     private static readonly System.Windows.Media.Brush MusicMonitorOnlyBrush = CreateFrozenBrush(0xD9, 0x77, 0x06);
 
+    // Noise gate dot in the mic zone's corner: bright while the gate lets the
+    // mic through, dark while it holds silence. Kept off the status color
+    // language so it reads as a second, independent signal.
+    private const double GateDotDiameter = 7;
+    private const double GateDotMargin = 2;
+    private static readonly System.Windows.Media.Brush GateOpenBrush = CreateFrozenBrush(0xFF, 0xFF, 0xFF);
+    private static readonly System.Windows.Media.Brush GateClosedBrush = CreateFrozenBrush(0x37, 0x41, 0x51);
+    private static readonly System.Windows.Media.Brush GateDotOutlineBrush = CreateFrozenBrush(0x00, 0x00, 0x00, 0x99);
+
     private static readonly Geometry MusicNoteGlyph = CreateFrozenGeometry(
         "M12,3V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V7H18V3H12Z");
     private static readonly Geometry MusicNoteOffGlyph = CreateFrozenGeometry(
@@ -142,6 +151,7 @@ public sealed class OverlayIndicatorWindow : Window
     private readonly Ellipse _dot;
     private readonly System.Windows.Shapes.Path _glyph;
     private readonly LevelRingGauge _micGauge;
+    private readonly Ellipse _gateDot;
     private readonly Grid _musicZone;
     private readonly Ellipse _musicDot;
     private readonly System.Windows.Shapes.Path _musicGlyph;
@@ -261,10 +271,24 @@ public sealed class OverlayIndicatorWindow : Window
         _musicZone.Children.Add(_musicDot);
         _musicZone.Children.Add(_musicGlyph);
 
+        _gateDot = new Ellipse
+        {
+            Width = GateDotDiameter,
+            Height = GateDotDiameter,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, GateDotMargin, GateDotMargin, 0),
+            Fill = GateClosedBrush,
+            Stroke = GateDotOutlineBrush,
+            StrokeThickness = 1,
+            Visibility = Visibility.Collapsed
+        };
+
         var micZone = new Grid();
         micZone.Children.Add(_micGauge.Visual);
         micZone.Children.Add(_dot);
         micZone.Children.Add(_glyph);
+        micZone.Children.Add(_gateDot);
 
         var root = new Grid { IsHitTestVisible = false };
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(DotZoneSize) });
@@ -362,6 +386,22 @@ public sealed class OverlayIndicatorWindow : Window
 
         _musicState = state;
         UpdateVisuals();
+    }
+
+    /// <summary>
+    /// Shows whether the noise gate currently lets the mic through; null hides
+    /// the dot (gate off or routing stopped). Call on the same tick as the levels.
+    /// </summary>
+    public void SetNoiseGateOpen(bool? isOpen)
+    {
+        if (isOpen == null)
+        {
+            _gateDot.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _gateDot.Fill = isOpen.Value ? GateOpenBrush : GateClosedBrush;
+        _gateDot.Visibility = Visibility.Visible;
     }
 
     /// <summary>
