@@ -93,6 +93,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private DateTime? _noiseGateLastClosedAt;
     private float _noiseGateOpenPeak;
     private bool _noiseGateOpenedModded;
+    private int _noiseGateOpenTicks;
+    private int _noiseGateCableOpenTicks;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
@@ -1319,6 +1321,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 _noiseGateOpenedAt = DateTime.Now;
                 _noiseGateOpenPeak = peak;
                 _noiseGateOpenedModded = _router.UseModdedInput;
+                _noiseGateOpenTicks = 0;
+                _noiseGateCableOpenTicks = 0;
             }
 
             return;
@@ -1327,17 +1331,27 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _noiseGateOpenPeak = Math.Max(_noiseGateOpenPeak, peak);
         if (open)
         {
+            // The push-to-talk gate sits after the noise gate, so an open noise
+            // gate only reaches the cable while that gate is open too.
+            _noiseGateOpenTicks++;
+            if (_router.OutputGateOpen)
+            {
+                _noiseGateCableOpenTicks++;
+            }
+
             return;
         }
 
         double peakDb = _noiseGateOpenPeak > 0f ? 20 * Math.Log10(_noiseGateOpenPeak) : double.NegativeInfinity;
+        double cableOpenPercent = _noiseGateOpenTicks == 0 ? 100d : 100d * _noiseGateCableOpenTicks / _noiseGateOpenTicks;
         Log.Information(
-            "Noise gate open {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0.0} dBFS, threshold {ThresholdDb:0} dB, modified voice {ModifiedVoice}",
+            "Noise gate open {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0.0} dBFS, threshold {ThresholdDb:0} dB, modified voice {ModifiedVoice}, reached the cable {CablePercent:0}% of the time",
             openedAt,
             (DateTime.Now - openedAt).TotalSeconds,
             peakDb,
             _settings.NoiseGateThresholdDb,
-            _noiseGateOpenedModded);
+            _noiseGateOpenedModded,
+            cableOpenPercent);
         _noiseGateOpenedAt = null;
         _noiseGateLastClosedAt = DateTime.Now;
     }

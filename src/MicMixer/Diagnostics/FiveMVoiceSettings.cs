@@ -22,9 +22,11 @@ internal static class FiveMVoiceSettings
     // The device index in fivem.cfg is resolved inside the game process against
     // a device order this process cannot reproduce (it differs per process on
     // the same machine). FiveM logs the device it actually opened, so that line
-    // is the fact and the index is only reported raw.
+    // is the fact and the index is only reported raw. The output device logs the
+    // same words on another channel, hence the "Audio Input" anchor. The
+    // default-device fallback logs nothing, so a missing line is reported as such.
     private static readonly Regex CaptureDeviceLine = new(
-        @"Returning device (?<name>.+?) for GUID \{[0-9A-Fa-f-]+\}",
+        @"Audio Input/ Returning device (?<name>.+?) for GUID \{[0-9A-Fa-f-]+\}",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 
@@ -126,7 +128,7 @@ internal static class FiveMVoiceSettings
 
         string logStamp = newest.LastWriteTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         return lastDevice == null
-            ? $"no capture device line in {newest.Name} (written {logStamp})"
+            ? $"no Audio Input device line in {newest.Name} (written {logStamp}): not connected to a server yet, or FiveM fell back to the Windows default communications device"
             : $"{lastDevice} ({newest.Name}, written {logStamp})";
     }
 }
