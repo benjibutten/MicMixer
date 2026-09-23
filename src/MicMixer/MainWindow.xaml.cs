@@ -59,6 +59,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ExternalSignalActivationThreshold,
         ExternalSignalHoldDuration);
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
+    /// <summary>Cancelled when the app really closes, so running downloads and yt-dlp stop with it.</summary>
+    private readonly CancellationTokenSource _closingCancellation = new();
     private List<TrackItem> _allTracks = new();
     private readonly Dictionary<string, TrackItem> _trackByPath = new(StringComparer.OrdinalIgnoreCase);
     private TrackItem? _playingTrackItem;
@@ -1678,6 +1680,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _closingCancellation.Cancel();
         _levelTimer.Stop();
         _releaseDelayTimer.Stop();
         _musicTimer.Stop();
@@ -4393,7 +4396,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             var toolStatus = new Progress<string>(text => DownloadStatusText.Text = text);
             await _toolBootstrapper.EnsureToolsAsync(
                 toolStatus,
-                CancellationToken.None,
+                _closingCancellation.Token,
                 requireJavaScriptRuntime: DownloadUrlValidator.IsYouTubeUrl(url));
 
             var progress = new Progress<DownloadProgress>(update =>
@@ -4413,7 +4416,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             string downloadFolder = downloadFolderOverride
                 ?? (DownloadFolderCombo.SelectedItem as FolderInfo)?.Path
                 ?? _playlist.Folders[0];
-            string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, downloadFolder, progress, CancellationToken.None);
+            string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, downloadFolder, progress, _closingCancellation.Token);
 
             YoutubeUrlBox.Text = "";
             RefreshPlaylist(newFile);
@@ -4422,6 +4425,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             DownloadStatusText.Text = newFile != null
                 ? $"Finished: {Path.GetFileNameWithoutExtension(newFile)}"
                 : "Finished.";
+        }
+        catch (OperationCanceledException) when (_closingCancellation.IsCancellationRequested)
+        {
+            Log.Information("Download stopped because MicMixer is closing.");
         }
         catch (Exception ex)
         {

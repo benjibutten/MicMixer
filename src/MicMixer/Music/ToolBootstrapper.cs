@@ -184,31 +184,44 @@ public sealed class ToolBootstrapper
     {
         string tempPath = destination + ".download";
 
-        using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        await using (var target = File.Create(tempPath))
+        try
         {
-            await response.Content.CopyToAsync(target, cancellationToken);
-        }
+            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
 
-        string actualSha256;
-        await using (var readStream = File.OpenRead(tempPath))
+            await using (var target = File.Create(tempPath))
+            {
+                await response.Content.CopyToAsync(target, cancellationToken);
+            }
+
+            string actualSha256;
+            await using (var readStream = File.OpenRead(tempPath))
+            {
+                actualSha256 = Convert.ToHexString(await SHA256.HashDataAsync(readStream, cancellationToken));
+            }
+
+            if (!actualSha256.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Error(
+                    "Checksum mismatch for {Url}: expected {Expected}, got {Actual}.",
+                    url, expectedSha256, actualSha256);
+                throw new InvalidOperationException(
+                    "The download could not be verified (checksum mismatch). Please try again later.");
+            }
+
+            File.Move(tempPath, destination, overwrite: true);
+        }
+        finally
         {
-            actualSha256 = Convert.ToHexString(await SHA256.HashDataAsync(readStream, cancellationToken));
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch
+            {
+                // Leftover temp file is harmless.
+            }
         }
-
-        if (!actualSha256.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
-        {
-            File.Delete(tempPath);
-            Log.Error(
-                "Checksum mismatch for {Url}: expected {Expected}, got {Actual}.",
-                url, expectedSha256, actualSha256);
-            throw new InvalidOperationException(
-                "The download could not be verified (checksum mismatch). Please try again later.");
-        }
-
-        File.Move(tempPath, destination, overwrite: true);
     }
 
     private void ExtractExecutables(string zipPath, string requiredExecutable, string[] optionalExecutables)
