@@ -3633,7 +3633,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ExternalAppCombo.ItemsSource = apps;
             ExternalAppCombo.SelectedItem =
                 apps.FirstOrDefault(app => string.Equals(app.ProcessName, preferredName, StringComparison.OrdinalIgnoreCase))
-                ?? apps.FirstOrDefault(app => app.ProcessName.Contains("spotify", StringComparison.OrdinalIgnoreCase))
                 ?? apps.FirstOrDefault(app => app.IsPlaying)
                 ?? apps.FirstOrDefault();
         }
