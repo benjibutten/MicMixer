@@ -57,7 +57,7 @@ internal partial class VoiceDesignerDialog : Window
         {
             InitializeComponent();
             _inputId = inputId;
-            InputLabel.Text = inputName == null ? "Select a normal microphone in the main window to record." : $"Microphone: {inputName}";
+            InputLabel.Text = inputName == null ? "Select a normal mic in Settings › Devices to record." : $"Microphone: {inputName}";
             RecordButton.IsEnabled = inputId != null;
             _neutral = new VoiceProfile { FormatVersion = 1, Id = Guid.NewGuid().ToString(), DisplayName = NeutralName, Parameters = VoiceDspParameters.Initial };
             StartingPoint.ItemsSource = new[] { _neutral }.Concat(_store.List().Profiles).ToList();

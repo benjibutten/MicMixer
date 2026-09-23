@@ -3312,7 +3312,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private string GetFolderMenuLabel(string folder)
     {
-        return PlaylistManager.IsDefaultFolder(folder) ? $"Standard: {folder}" : folder;
+        return PlaylistManager.IsDefaultFolder(folder) ? $"Default: {folder}" : folder;
     }
 
     /// <summary>Small colored letter badge matching the playlist badges, for menu icons.</summary>
@@ -4507,7 +4507,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             Path = path;
             DisplayName = PlaylistManager.IsDefaultFolder(path)
-                ? "Standard"
+                ? "Default"
                 : System.IO.Path.GetFileName(path) is { Length: > 0 } leaf ? leaf : path;
             Letter = char.ToUpperInvariant(DisplayName[0]).ToString();
             Accent = accent;
