@@ -1421,8 +1421,7 @@
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- Secondary output: optional fanout of the finished mix, tapped before
-                         the push-to-talk gate. Off by default; the cable path is untouched. -->
+                    <!-- Secondary output: optional second device for the mix. Off by default; the cable path is untouched. -->
                     <TabItem x:Name="SecondaryOutputPage" Header="Secondary output">
                         <ScrollViewer Style="{StaticResource SettingsPage}">
                             <StackPanel Style="{StaticResource SettingsSection}">

@@ -108,9 +108,9 @@ public sealed class AudioRouter : IDisposable
     public Func<WaveFormat, ISampleProvider>? MusicSourceFactory { get; set; }
 
     /// <summary>
-    /// Optional secondary output that receives the finished mix before the
-    /// push-to-talk gate. Owned by the caller; the router only starts/stops it
-    /// alongside the routing session and feeds it via a pre-gate tap.
+    /// Optional secondary output. Owned by the caller; the router starts and stops
+    /// it with the routing session and feeds it a mix with its own gates (see
+    /// <see cref="MixFanoutSampleProvider"/>).
     /// </summary>
     public SecondaryOutputEngine? SecondaryOutput { get; set; }
 

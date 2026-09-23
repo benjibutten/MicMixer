@@ -125,7 +125,7 @@ public sealed class AppSettings
 
     public string? MusicMonitorDeviceId { get; set; }
 
-    /// <summary>Plays the finished pre-gate mix (mic + music) on an extra render device, e.g. for recording or streaming.</summary>
+    /// <summary>Plays the mic + music mix on an extra render device, e.g. for recording or streaming.</summary>
     public bool SecondaryOutputEnabled { get; set; }
 
     public string? SecondaryOutputDeviceId { get; set; }

@@ -824,7 +824,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OnConfigurationChanged();
     }
 
-    // --- Secondary output (pre-gate fanout, e.g. for recording or streaming) ---
+    // --- Secondary output ---
 
     /// <summary>
     /// Pushes the current UI state into the engine. The device takes effect at the
