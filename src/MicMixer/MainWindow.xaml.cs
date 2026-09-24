@@ -815,6 +815,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             && OutputDeviceCombo.SelectedItem is AudioDeviceOption output)
         {
             _settings.OutputDeviceId = output.Id;
+            _ = ApplyMonitorConfigAsync();
         }
 
         ApplyModdedMicUiState();
@@ -4130,10 +4131,25 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ? (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.Id
             : null;
 
+        // Hard-block, like the secondary output: monitoring onto the cable would send
+        // the music to the game past push-to-talk, whether routing runs or not.
+        string? cableId = (OutputDeviceCombo.SelectedItem as AudioDeviceOption)?.Id ?? _settings.OutputDeviceId;
+        bool monitorIsCable = deviceId != null && deviceId == cableId;
+        if (monitorIsCable)
+        {
+            deviceId = null;
+        }
+
         try
         {
             await Task.Run(() => _music.ConfigureMonitor(deviceId));
             PauseMusicIfClockLost();
+            if (monitorIsCable)
+            {
+                Log.Warning("Music monitoring is off: the monitoring device is the virtual cable {Device}.",
+                    (MonitorDeviceCombo.SelectedItem as AudioDeviceOption)?.FriendlyName);
+                MusicStatusText.Text = "The monitoring device is the virtual cable — the music would reach the game past push-to-talk. Select your headset or speakers for monitoring.";
+            }
 
             // Not onto a stand-in: unplugging the headset must not move the music to the
             // speakers by itself. It resumes when the chosen device is back, or on Play.
