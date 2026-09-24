@@ -598,6 +598,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
+            _outputAppWatcher?.Flush();
             _outputAppWatcher?.Dispose();
             _outputAppWatcher = new OutputDeviceAppWatcher(output.Id, output.FriendlyName);
             _outputAppWatcher.Poll();
@@ -682,8 +683,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         CancelPendingReleaseDelay();
         _router.Stop();
         _outputAppWatchTimer.Stop();
-        _outputAppWatcher?.Dispose();
-        _outputAppWatcher = null;
+        FlushCableActivityLogs();
         PauseMusicIfClockLost();
         ToggleBtnText.Text = "Enable";
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
@@ -1379,9 +1379,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// only MicMixer source that reaches the cable while the mic is silent; music
     /// sent with the mic open says nothing a report of the mouth moving needs.
     /// </summary>
-    private void LogMusicCableActivity()
+    /// <param name="ending">Routing stops or the app exits: a running period is written now.</param>
+    private void LogMusicCableActivity(bool ending = false)
     {
-        bool sending = ComputeOverlayMusicState() == OverlayMusicState.Sending && !_router.OutputGateOpen;
+        bool sending = !ending && ComputeOverlayMusicState() == OverlayMusicState.Sending && !_router.OutputGateOpen;
         if (sending)
         {
             _musicSendingSince ??= DateTime.Now;
@@ -1398,6 +1399,18 @@ public partial class MainWindow : Window, IMicMixerControlHost
             since,
             (DateTime.Now - since).TotalSeconds);
         _musicSendingSince = null;
+    }
+
+    /// <summary>
+    /// Writes the cable-activity lines still pending and stops watching the cable,
+    /// so a period that is running when routing stops or the app exits is not lost.
+    /// </summary>
+    private void FlushCableActivityLogs()
+    {
+        LogMusicCableActivity(ending: true);
+        _outputAppWatcher?.Flush();
+        _outputAppWatcher?.Dispose();
+        _outputAppWatcher = null;
     }
 
     private void OnMarkerKeyPressedStateChanged(object? sender, bool isPressed)
@@ -1693,6 +1706,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         _levelTimer.Stop();
+        _outputAppWatchTimer.Stop();
+        FlushCableActivityLogs();
         _releaseDelayTimer.Stop();
         _musicTimer.Stop();
         _settingsSaveTimer.Stop();

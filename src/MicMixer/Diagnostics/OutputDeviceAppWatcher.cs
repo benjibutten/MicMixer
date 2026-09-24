@@ -122,7 +122,7 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         foreach (int processId in _playing.Where(pair => now - pair.Value.LastAudible >= SilenceBeforeStopped)
                      .Select(pair => pair.Key).ToList())
         {
-            LogStopped(processId);
+            LogStopped(processId, stillPlaying: false);
         }
     }
 
@@ -135,6 +135,19 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
 
         return string.Join(", ", _playing.Values.Select(app => $"{app.Name} since {app.Since:HH:mm:ss}"));
+    }
+
+    /// <summary>
+    /// Writes the lines still pending, for when routing stops or the app exits:
+    /// the current cable period and every app that is still playing.
+    /// </summary>
+    public void Flush()
+    {
+        EndCableSound();
+        foreach (int processId in _playing.Keys.ToList())
+        {
+            LogStopped(processId, stillPlaying: true);
+        }
     }
 
     public void Dispose()
@@ -253,11 +266,12 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
     }
 
-    private void LogStopped(int processId)
+    private void LogStopped(int processId, bool stillPlaying)
     {
         var app = _playing[processId];
         Log.Information(
-            "Other app stopped playing to {Device}: {App} (pid {ProcessId}) after {Seconds:0.0} s, peak {PeakDb:0} dBFS",
+            "Other app {Change} to {Device}: {App} (pid {ProcessId}) after {Seconds:0.0} s, peak {PeakDb:0} dBFS",
+            stillPlaying ? "still playing when the log stopped watching" : "stopped playing",
             _deviceName, app.Name, processId, (app.LastAudible - app.Since).TotalSeconds, ToDecibels(app.Peak));
         _playing.Remove(processId);
     }
