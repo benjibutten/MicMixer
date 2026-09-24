@@ -766,7 +766,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         UpdateNoiseGateStateText();
         LogMusicCableActivity();
-        _outputAppWatcher?.Sample();
+        // MicMixer sends silence while push-to-talk is closed and no music reaches the cable.
+        _outputAppWatcher?.Sample(!_router.OutputGateOpen && ComputeOverlayMusicState() != OverlayMusicState.Sending);
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;

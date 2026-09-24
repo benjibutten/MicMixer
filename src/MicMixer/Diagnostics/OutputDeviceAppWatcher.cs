@@ -20,10 +20,18 @@ public sealed class OutputDeviceAppWatcher : IDisposable
     // much silence, so one sound is one start and one stop line.
     private static readonly TimeSpan SilenceBeforeStopped = TimeSpan.FromSeconds(2);
 
+    // MicMixer's own stream still plays its buffered audio (about 50 ms) after the
+    // push-to-talk gate closes; the cable is judged only once that has drained.
+    private static readonly TimeSpan OwnOutputTail = TimeSpan.FromMilliseconds(300);
+
     private readonly string _deviceId;
     private readonly string _deviceName;
     private readonly List<(int ProcessId, AudioSessionControl Session)> _sessions = new();
     private readonly Dictionary<int, PlayingApp> _playing = new();
+    private MMDevice? _endpoint;
+    private bool _endpointFailed;
+    private DateTime? _micMixerSilentSince;
+    private CableSound? _cableSound;
 
     public OutputDeviceAppWatcher(string deviceId, string deviceName)
     {
@@ -50,17 +58,35 @@ public sealed class OutputDeviceAppWatcher : IDisposable
 
         DisposeSessions();
         _sessions.AddRange(sessions);
-        Sample();
+        MeasureSessions(DateTime.Now);
     }
 
     /// <summary>
-    /// Measures the sessions from the last <see cref="Poll"/> and writes one log line
-    /// when an app becomes audible on the device and one when it has been silent for
-    /// <see cref="SilenceBeforeStopped"/>. Called often, so short sounds are not missed.
+    /// Measures the device and the sessions from the last <see cref="Poll"/>. Called
+    /// often, so short sounds are not missed.
     /// </summary>
-    public void Sample()
+    /// <param name="micMixerSilent">
+    /// Whether MicMixer sends silence to the device (push-to-talk closed, no music).
+    /// Any sound on the device is then another app's, including one whose stream
+    /// opened and closed between two polls.
+    /// </param>
+    public void Sample(bool micMixerSilent)
     {
         DateTime now = DateTime.Now;
+        SampleCable(now, micMixerSilent);
+        MeasureSessions(now);
+        if (_cableSound != null)
+        {
+            _cableSound.Apps.UnionWith(_playing.Values.Select(app => app.Name));
+        }
+    }
+
+    /// <summary>
+    /// Writes one log line when an app becomes audible on the device and one when it
+    /// has been silent for <see cref="SilenceBeforeStopped"/>.
+    /// </summary>
+    private void MeasureSessions(DateTime now)
+    {
         foreach (var (processId, session) in _sessions)
         {
             float peak;
@@ -114,6 +140,8 @@ public sealed class OutputDeviceAppWatcher : IDisposable
     public void Dispose()
     {
         DisposeSessions();
+        _endpoint?.Dispose();
+        _endpoint = null;
     }
 
     /// <summary>
@@ -142,6 +170,87 @@ public sealed class OutputDeviceAppWatcher : IDisposable
 
         using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, role);
         return device.FriendlyName;
+    }
+
+    /// <summary>
+    /// One log line per period in which the device carried sound while MicMixer sent
+    /// silence, written after <see cref="SilenceBeforeStopped"/> of quiet or when
+    /// MicMixer starts sending again.
+    /// </summary>
+    private void SampleCable(DateTime now, bool micMixerSilent)
+    {
+        if (!micMixerSilent)
+        {
+            _micMixerSilentSince = null;
+            EndCableSound();
+            return;
+        }
+
+        _micMixerSilentSince ??= now;
+        if (now - _micMixerSilentSince < OwnOutputTail || ReadEndpointPeak() is not { } peak)
+        {
+            return;
+        }
+
+        if (peak >= AudibleThreshold)
+        {
+            if (_cableSound == null)
+            {
+                _cableSound = new CableSound(now);
+                // A short sound may come from a stream opened since the last poll.
+                Poll();
+            }
+
+            _cableSound.LastAudible = now;
+            _cableSound.Peak = Math.Max(_cableSound.Peak, peak);
+        }
+        else if (_cableSound != null && now - _cableSound.LastAudible >= SilenceBeforeStopped)
+        {
+            EndCableSound();
+        }
+    }
+
+    private void EndCableSound()
+    {
+        if (_cableSound is not { } sound)
+        {
+            return;
+        }
+
+        Log.Information(
+            "{Device} carried sound while MicMixer sent silence: {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0} dBFS, apps: {Apps}",
+            _deviceName,
+            sound.Start,
+            (sound.LastAudible - sound.Start).TotalSeconds,
+            ToDecibels(sound.Peak),
+            sound.Apps.Count == 0 ? "unknown (the stream closed before it was read)" : string.Join(", ", sound.Apps));
+        _cableSound = null;
+    }
+
+    private float? ReadEndpointPeak()
+    {
+        if (_endpointFailed)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (_endpoint == null)
+            {
+                using var enumerator = new MMDeviceEnumerator();
+                _endpoint = enumerator.GetDevice(_deviceId);
+            }
+
+            return _endpoint.AudioMeterInformation.MasterPeakValue;
+        }
+        catch (Exception ex)
+        {
+            // Not retried: the device is gone or has no meter until routing restarts.
+            _endpointFailed = true;
+            Log.Debug(ex, "Failed to read the level of {Device}.", _deviceName);
+            return null;
+        }
     }
 
     private void LogStopped(int processId)
@@ -214,6 +323,14 @@ public sealed class OutputDeviceAppWatcher : IDisposable
             // The process exited between enumeration and lookup.
             return "exited process";
         }
+    }
+
+    private sealed class CableSound(DateTime start)
+    {
+        public DateTime Start { get; } = start;
+        public DateTime LastAudible { get; set; } = start;
+        public float Peak { get; set; }
+        public HashSet<string> Apps { get; } = new();
     }
 
     private sealed class PlayingApp(string name, DateTime since)
