@@ -598,6 +598,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
+            _outputAppWatcher?.Dispose();
             _outputAppWatcher = new OutputDeviceAppWatcher(output.Id, output.FriendlyName);
             _outputAppWatcher.Poll();
             _outputAppWatchTimer.Start();
@@ -681,6 +682,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         CancelPendingReleaseDelay();
         _router.Stop();
         _outputAppWatchTimer.Stop();
+        _outputAppWatcher?.Dispose();
         _outputAppWatcher = null;
         PauseMusicIfClockLost();
         ToggleBtnText.Text = "Enable";
@@ -764,6 +766,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         UpdateNoiseGateStateText();
         LogMusicCableActivity();
+        _outputAppWatcher?.Sample();
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
