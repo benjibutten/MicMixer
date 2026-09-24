@@ -30,6 +30,7 @@ public sealed class OutputDeviceAppWatcher : IDisposable
     private readonly Dictionary<int, PlayingApp> _playing = new();
     private MMDevice? _endpoint;
     private bool _endpointFailed;
+    private bool _sessionReadFailing;
     private DateTime? _micMixerSilentSince;
     private CableSound? _cableSound;
 
@@ -52,8 +53,20 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Failed to read audio sessions on {Device}.", _deviceName);
+            // Once per failure streak: the read repeats every 2 s.
+            if (!_sessionReadFailing)
+            {
+                _sessionReadFailing = true;
+                Log.Debug(ex, "Failed to read audio sessions on {Device}.", _deviceName);
+            }
+
             return;
+        }
+
+        if (_sessionReadFailing)
+        {
+            _sessionReadFailing = false;
+            Log.Debug("Reading audio sessions on {Device} works again.", _deviceName);
         }
 
         DisposeSessions();
