@@ -95,6 +95,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private bool _noiseGateOpenedModded;
     private int _noiseGateOpenTicks;
     private int _noiseGateCableOpenTicks;
+    private DateTime? _musicSendingSince;
+    private OutputDeviceAppWatcher? _outputAppWatcher;
+    private readonly DispatcherTimer _outputAppWatchTimer;
     private bool _isCapturingHotkey;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
@@ -161,6 +164,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // Plugging one headset in fires several endpoint callbacks; wait for the burst to settle.
         _deviceChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _deviceChangeTimer.Tick += OnDeviceChangeSettled;
+        _outputAppWatchTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _outputAppWatchTimer.Tick += (_, _) => _outputAppWatcher?.Poll();
         _singleTrackAnnounceTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(System.Windows.Forms.SystemInformation.DoubleClickTime + 50)
@@ -593,6 +598,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
+            _outputAppWatcher = new OutputDeviceAppWatcher(output.Id, output.FriendlyName);
+            _outputAppWatcher.Poll();
+            _outputAppWatchTimer.Start();
+            Log.Information("Windows default playback device: {Defaults}", OutputDeviceAppWatcher.DescribeWindowsDefaults());
             ToggleBtnText.Text = "Stop";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             // Devices are opened for the whole route. The voice changer choice stays
@@ -671,6 +680,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SetHotkeyMonitoringEnabled(false);
         CancelPendingReleaseDelay();
         _router.Stop();
+        _outputAppWatchTimer.Stop();
+        _outputAppWatcher = null;
         PauseMusicIfClockLost();
         ToggleBtnText.Text = "Enable";
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
@@ -752,6 +763,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         UpdateNoiseGateStateText();
+        LogMusicCableActivity();
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
@@ -1356,6 +1368,33 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _noiseGateLastClosedAt = DateTime.Now;
     }
 
+    /// <summary>
+    /// One log line per period in which music reached the cable, written when it
+    /// ends. Music is the only source besides the mic that can reach the cable,
+    /// and with "ignore push-to-talk" it does so while the mic is silent.
+    /// </summary>
+    private void LogMusicCableActivity()
+    {
+        bool sending = ComputeOverlayMusicState() == OverlayMusicState.Sending;
+        if (sending)
+        {
+            _musicSendingSince ??= DateTime.Now;
+            return;
+        }
+
+        if (_musicSendingSince is not { } since)
+        {
+            return;
+        }
+
+        Log.Information(
+            "Music reached the cable {Start:HH:mm:ss.fff} for {Seconds:0.00} s, ignores push-to-talk {IgnoresPushToTalk}",
+            since,
+            (DateTime.Now - since).TotalSeconds,
+            _router.MusicIgnoresPushToTalk);
+        _musicSendingSince = null;
+    }
+
     private void OnMarkerKeyPressedStateChanged(object? sender, bool isPressed)
     {
         if (isPressed)
@@ -1386,6 +1425,21 @@ public partial class MainWindow : Window, IMicMixerControlHost
             _settings.NormalMicVolume,
             _settings.ProcessedVoiceVolume);
         Log.Information("FiveM voice settings: {Summary}", FiveMVoiceSettings.Describe());
+
+        string music = ComputeOverlayMusicState() switch
+        {
+            OverlayMusicState.Sending => "reaching the cable",
+            OverlayMusicState.Blocked => "blocked by push-to-talk",
+            OverlayMusicState.MonitorOnly => "monitor only",
+            _ => "not playing"
+        };
+        _outputAppWatcher?.Poll();
+        Log.Information(
+            "Marker sources: music {Music}, ignores push-to-talk {IgnoresPushToTalk}; other apps playing to the cable: {OtherApps}; Windows default playback device: {Defaults}",
+            music,
+            _router.MusicIgnoresPushToTalk,
+            _outputAppWatcher?.DescribePlaying() ?? "routing stopped",
+            OutputDeviceAppWatcher.DescribeWindowsDefaults());
     }
 
     private void OnLongerAnalysisWindowChanged(object sender, RoutedEventArgs e)
