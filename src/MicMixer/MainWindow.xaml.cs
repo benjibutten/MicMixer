@@ -1373,13 +1373,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
     }
 
     /// <summary>
-    /// One log line per period in which music reached the cable, written when it
-    /// ends. Music is the only source besides the mic that can reach the cable,
-    /// and with "ignore push-to-talk" it does so while the mic is silent.
+    /// One log line per period in which music reached the cable while push-to-talk
+    /// was closed, written when it ends. With "ignore push-to-talk" music is the
+    /// only MicMixer source that reaches the cable while the mic is silent; music
+    /// sent with the mic open says nothing a report of the mouth moving needs.
     /// </summary>
     private void LogMusicCableActivity()
     {
-        bool sending = ComputeOverlayMusicState() == OverlayMusicState.Sending;
+        bool sending = ComputeOverlayMusicState() == OverlayMusicState.Sending && !_router.OutputGateOpen;
         if (sending)
         {
             _musicSendingSince ??= DateTime.Now;
@@ -1392,10 +1393,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         Log.Information(
-            "Music reached the cable {Start:HH:mm:ss.fff} for {Seconds:0.00} s, ignores push-to-talk {IgnoresPushToTalk}",
+            "Music reached the cable while push-to-talk was closed: {Start:HH:mm:ss.fff} for {Seconds:0.00} s",
             since,
-            (DateTime.Now - since).TotalSeconds,
-            _router.MusicIgnoresPushToTalk);
+            (DateTime.Now - since).TotalSeconds);
         _musicSendingSince = null;
     }
 
