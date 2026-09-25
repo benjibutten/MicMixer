@@ -181,3 +181,6 @@ recording/
 /recording/
 /legacy-voice-profile.json
 *private-manifest*.json
+
+# Log files from player machines, for local troubleshooting only
+mumbleissuelogs/
