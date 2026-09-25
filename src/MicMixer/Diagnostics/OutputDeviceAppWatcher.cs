@@ -91,6 +91,7 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         if (_cableSound != null)
         {
             _cableSound.Apps.UnionWith(_playing.Values.Select(app => app.Name));
+            _cableSound.OpenStreamProcessIds.UnionWith(ActiveSessionProcessIds());
         }
     }
 
@@ -244,12 +245,15 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
 
         Log.Information(
-            "{Device} carried sound while MicMixer sent silence: {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0} dBFS, apps: {Apps}",
+            "{Device} carried sound while MicMixer sent silence: {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0} dBFS, apps: {Apps}; open streams from other apps: {OpenStreams}",
             _deviceName,
             sound.Start,
             (sound.LastAudible - sound.Start).TotalSeconds,
             ToDecibels(sound.Peak),
-            sound.Apps.Count == 0 ? "unknown (the stream closed before it was read)" : string.Join(", ", sound.Apps));
+            sound.Apps.Count == 0 ? "none measured audible" : string.Join(", ", sound.Apps),
+            sound.OpenStreamProcessIds.Count == 0
+                ? "none"
+                : string.Join(", ", sound.OpenStreamProcessIds.Select(id => $"{DescribeProcess(id)} (pid {id})")));
         _cableSound = null;
     }
 
@@ -276,6 +280,32 @@ public sealed class OutputDeviceAppWatcher : IDisposable
             _endpointFailed = true;
             Log.Debug(ex, "Failed to read the level of {Device}.", _deviceName);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Processes with an active stream on the device, whether or not their level
+    /// could be read: a protected process's meter can refuse access while its sound
+    /// still reaches the device.
+    /// </summary>
+    private IEnumerable<int> ActiveSessionProcessIds()
+    {
+        foreach (var (processId, session) in _sessions)
+        {
+            bool active;
+            try
+            {
+                active = session.State == AudioSessionState.AudioSessionStateActive;
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (active)
+            {
+                yield return processId;
+            }
         }
     }
 
@@ -358,6 +388,7 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         public DateTime LastAudible { get; set; } = start;
         public float Peak { get; set; }
         public HashSet<string> Apps { get; } = new();
+        public HashSet<int> OpenStreamProcessIds { get; } = new();
     }
 
     private sealed class PlayingApp(string name, DateTime since)
