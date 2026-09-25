@@ -598,6 +598,18 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
+            Log.Information(
+                "Routing started. NoiseGate={NoiseGate} ThresholdDb={ThresholdDb:0} NormalMicVolume={NormalMicVolume:P0} ProcessedVoiceVolume={ProcessedVoiceVolume:P0} VoiceChanger={VoiceChanger} Voice={Voice} Hotkey={Hotkey} ReleaseDelayMs={ReleaseDelayMs} PushToTalk={PushToTalk}",
+                _settings.NoiseGateEnabled,
+                _settings.NoiseGateThresholdDb,
+                _settings.NormalMicVolume,
+                _settings.ProcessedVoiceVolume,
+                modifiedVoiceMode,
+                DescribeModifiedVoice(),
+                _hotkeyBinding.DisplayName,
+                _settings.ReleaseDelayMilliseconds,
+                _settings.PushToTalkMode);
+            Log.Information("FiveM voice settings: {Summary}", FiveMVoiceSettings.Describe());
             _outputAppWatcher?.Flush();
             _outputAppWatcher?.Dispose();
             _outputAppWatcher = new OutputDeviceAppWatcher(output.Id, output.FriendlyName);
@@ -652,18 +664,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ? (sampleRate, channels) => CreateLocalProfileProcessor(sampleRate, channels, parameters!)
             : null;
         _router.Start(dryInput, moddedInput, output, processorFactory);
-        Log.Information(
-            "Routing started. NoiseGate={NoiseGate} ThresholdDb={ThresholdDb:0} NormalMicVolume={NormalMicVolume:P0} ProcessedVoiceVolume={ProcessedVoiceVolume:P0} VoiceChanger={VoiceChanger} Voice={Voice} Hotkey={Hotkey} ReleaseDelayMs={ReleaseDelayMs} PushToTalk={PushToTalk}",
-            _settings.NoiseGateEnabled,
-            _settings.NoiseGateThresholdDb,
-            _settings.NormalMicVolume,
-            _settings.ProcessedVoiceVolume,
-            modifiedVoiceMode,
-            DescribeModifiedVoice(),
-            _hotkeyBinding.DisplayName,
-            _settings.ReleaseDelayMilliseconds,
-            _settings.PushToTalkMode);
-        Log.Information("FiveM voice settings: {Summary}", FiveMVoiceSettings.Describe());
     }
 
     private static IVoiceProcessor CreateLocalProfileProcessor(int sampleRate, int channels, VoiceDspParameters parameters)
