@@ -612,7 +612,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
             Log.Information("FiveM voice settings: {Summary}", FiveMVoiceSettings.Describe());
             _outputAppWatcher?.Flush();
             _outputAppWatcher?.Dispose();
-            _outputAppWatcher = new OutputDeviceAppWatcher(output.Id, output.FriendlyName);
+            var inputs = DryInputCombo.ItemsSource as IReadOnlyList<AudioDeviceOption> ?? [];
+            _outputAppWatcher = new OutputDeviceAppWatcher(
+                output.Id, output.FriendlyName, AudioDevices.FindRecordingEnd(output, inputs));
             _outputAppWatcher.Poll();
             _outputAppWatchTimer.Start();
             Log.Information("Windows default playback device: {Defaults}", OutputDeviceAppWatcher.DescribeWindowsDefaults());
@@ -1453,11 +1455,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         };
         _outputAppWatcher?.Poll();
         Log.Information(
-            "Marker sources: music {Music}, ignores push-to-talk {IgnoresPushToTalk}; other apps playing to the cable: {OtherApps}; Windows default playback device: {Defaults}",
+            "Marker sources: music {Music}, ignores push-to-talk {IgnoresPushToTalk}; other apps playing to the cable: {OtherApps}; Windows default playback device: {Defaults}; cable recording {Recording}",
             music,
             _router.MusicIgnoresPushToTalk,
             _outputAppWatcher?.DescribePlaying() ?? "routing stopped",
-            OutputDeviceAppWatcher.DescribeWindowsDefaults());
+            OutputDeviceAppWatcher.DescribeWindowsDefaults(),
+            _outputAppWatcher?.DescribeRecordingPosition() ?? "routing stopped");
     }
 
     private void OnLongerAnalysisWindowChanged(object sender, RoutedEventArgs e)

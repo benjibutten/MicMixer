@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MicMixer.Audio;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 using Serilog;
@@ -9,8 +10,10 @@ namespace MicMixer.Diagnostics;
 /// Logs when another process starts or stops playing audio to the device MicMixer
 /// sends to. A virtual cable mixes every app that plays to it into the signal the
 /// game hears as the mic, and none of that passes through MicMixer's gates.
+/// Also records the cable's recording end (see <see cref="CableRecorder"/>) and logs
+/// every period in which it carried sound while MicMixer sent silence.
 /// </summary>
-public sealed class OutputDeviceAppWatcher : IDisposable
+internal sealed class OutputDeviceAppWatcher : IDisposable
 {
     // -60 dBFS. Browsers, Discord and games keep sessions active while they play
     // silence, so an active session alone does not mean the game hears anything.
@@ -21,23 +24,36 @@ public sealed class OutputDeviceAppWatcher : IDisposable
     private static readonly TimeSpan SilenceBeforeStopped = TimeSpan.FromSeconds(2);
 
     // MicMixer's own stream still plays its buffered audio (about 50 ms) after the
-    // push-to-talk gate closes; the cable is judged only once that has drained.
+    // push-to-talk gate closes, and the recording lags the output; the cable is
+    // judged only once both have passed.
     private static readonly TimeSpan OwnOutputTail = TimeSpan.FromMilliseconds(300);
 
     private readonly string _deviceId;
     private readonly string _deviceName;
+    private readonly string? _recordingDeviceName;
+    private readonly CableRecorder? _recorder;
     private readonly List<(int ProcessId, AudioSessionControl Session)> _sessions = new();
     private readonly Dictionary<int, PlayingApp> _playing = new();
-    private MMDevice? _endpoint;
-    private bool _endpointFailed;
     private bool _sessionReadFailing;
     private DateTime? _micMixerSilentSince;
     private CableSound? _cableSound;
 
-    public OutputDeviceAppWatcher(string deviceId, string deviceName)
+    /// <param name="recordingEnd">
+    /// The cable's recording end, which the game listens to; null when the cable has
+    /// none, and then nothing is recorded and no cable periods are logged.
+    /// </param>
+    public OutputDeviceAppWatcher(string deviceId, string deviceName, AudioDeviceOption? recordingEnd)
     {
         _deviceId = deviceId;
         _deviceName = deviceName;
+        if (recordingEnd == null)
+        {
+            Log.Warning("No recording end found for {Device}; the cable is not recorded.", deviceName);
+            return;
+        }
+
+        _recordingDeviceName = recordingEnd.FriendlyName;
+        _recorder = CableRecorder.TryStart(recordingEnd.Id);
     }
 
     /// <summary>
@@ -164,11 +180,13 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
     }
 
+    /// <summary>Where the recording is right now, for a marker line.</summary>
+    public string DescribeRecordingPosition() => _recorder?.DescribePosition() ?? "not recording";
+
     public void Dispose()
     {
         DisposeSessions();
-        _endpoint?.Dispose();
-        _endpoint = null;
+        _recorder?.Dispose();
     }
 
     /// <summary>
@@ -206,6 +224,12 @@ public sealed class OutputDeviceAppWatcher : IDisposable
     /// </summary>
     private void SampleCable(DateTime now, bool micMixerSilent)
     {
+        // Taken on every call, so a later period never inherits MicMixer's own sound.
+        if (_recorder?.TakePeak() is not { } peak)
+        {
+            return;
+        }
+
         if (!micMixerSilent)
         {
             _micMixerSilentSince = null;
@@ -214,7 +238,7 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
 
         _micMixerSilentSince ??= now;
-        if (now - _micMixerSilentSince < OwnOutputTail || ReadEndpointPeak() is not { } peak)
+        if (now - _micMixerSilentSince < OwnOutputTail)
         {
             return;
         }
@@ -223,7 +247,7 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         {
             if (_cableSound == null)
             {
-                _cableSound = new CableSound(now);
+                _cableSound = new CableSound(now, _recorder.DescribePosition());
                 // A short sound may come from a stream opened since the last poll.
                 Poll();
             }
@@ -245,42 +269,17 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
 
         Log.Information(
-            "{Device} carried sound while MicMixer sent silence: {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0} dBFS, apps: {Apps}; open streams from other apps: {OpenStreams}",
-            _deviceName,
+            "{Device} carried sound while MicMixer sent silence: {Start:HH:mm:ss.fff} for {Seconds:0.00} s, peak {PeakDb:0} dBFS, recording {Recording}, apps: {Apps}; open streams from other apps: {OpenStreams}",
+            _recordingDeviceName,
             sound.Start,
             (sound.LastAudible - sound.Start).TotalSeconds,
             ToDecibels(sound.Peak),
+            sound.RecordingPosition,
             sound.Apps.Count == 0 ? "none measured audible" : string.Join(", ", sound.Apps),
             sound.OpenStreamProcessIds.Count == 0
                 ? "none"
                 : string.Join(", ", sound.OpenStreamProcessIds.Select(id => $"{DescribeProcess(id)} (pid {id})")));
         _cableSound = null;
-    }
-
-    private float? ReadEndpointPeak()
-    {
-        if (_endpointFailed)
-        {
-            return null;
-        }
-
-        try
-        {
-            if (_endpoint == null)
-            {
-                using var enumerator = new MMDeviceEnumerator();
-                _endpoint = enumerator.GetDevice(_deviceId);
-            }
-
-            return _endpoint.AudioMeterInformation.MasterPeakValue;
-        }
-        catch (Exception ex)
-        {
-            // Not retried: the device is gone or has no meter until routing restarts.
-            _endpointFailed = true;
-            Log.Debug(ex, "Failed to read the level of {Device}.", _deviceName);
-            return null;
-        }
     }
 
     /// <summary>
@@ -382,9 +381,10 @@ public sealed class OutputDeviceAppWatcher : IDisposable
         }
     }
 
-    private sealed class CableSound(DateTime start)
+    private sealed class CableSound(DateTime start, string recordingPosition)
     {
         public DateTime Start { get; } = start;
+        public string RecordingPosition { get; } = recordingPosition;
         public DateTime LastAudible { get; set; } = start;
         public float Peak { get; set; }
         public HashSet<string> Apps { get; } = new();
