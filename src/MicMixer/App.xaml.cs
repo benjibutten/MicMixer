@@ -112,6 +112,22 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+        if (VirtualCableNamer.IsNameMode(e.Args))
+        {
+            base.OnStartup(e);
+            try
+            {
+                AppLogger.Initialize();
+                await Task.Run(VirtualCableNamer.Run);
+            }
+            catch (Exception ex)
+            {
+                // The installer carries on either way; the cable keeps VB-CABLE's names.
+                Log.Warning(ex, "Could not rename the VB-CABLE ends.");
+            }
+            Shutdown();
+            return;
+        }
         UpdateInstaller.ScheduleCleanup(e.Args);
         Elevation.WaitForPreviousInstance(e.Args);
 

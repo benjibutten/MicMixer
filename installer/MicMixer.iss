@@ -1,5 +1,6 @@
-; The MicMixer installer. scripts\Build-Installer.ps1 builds it from the published app:
-;   ISCC.exe /DAppVersion=<version> /DPublishDir=<publish folder> /O<output folder> installer\MicMixer.iss
+; The MicMixer installer. scripts\Build-Installer.ps1 builds it from the published app and
+; VB-Audio's VB-CABLE driver package:
+;   ISCC.exe /DAppVersion=<version> /DPublishDir=<publish folder> /DVBCableDir=<VB-CABLE files> /O<output folder> installer\MicMixer.iss
 ; plus /DSign and /Smicmixer=<sign command> when the release is signed.
 ;
 ; MicMixer's own updater runs it silently with two extra parameters:
@@ -11,6 +12,9 @@
 #endif
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish\win-x64"
+#endif
+#ifndef VBCableDir
+  #error Pass /DVBCableDir=<folder with the extracted VB-CABLE driver package>; scripts\Build-Installer.ps1 does.
 #endif
 
 [Setup]
@@ -60,6 +64,7 @@ Name: "runasadmin"; Description: "Run MicMixer as administrator, so its hotkeys 
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#VBCableDir}\*"; DestDir: "{tmp}\vbcable"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\MicMixer"; Filename: "{app}\MicMixer.exe"; AppUserModelID: "BenjiButten.MicMixer"
@@ -83,6 +88,17 @@ const
   SYNCHRONIZE = $00100000;
   EVENT_MODIFY_STATE = $0002;
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  RenderKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render';
+  // PKEY_DeviceInterface_FriendlyName: the driver's name, which a user cannot rename.
+  InterfaceNameValue = '{b3f8fa53-0004-438e-9003-51a46e139bfc},6';
+  CableInterfaceName = 'VB-Audio Virtual Cable';
+  DEVICE_STATEMASK = $F;
+  DEVICE_STATE_NOTPRESENT = 4;
+
+var
+  CablePage: TInputOptionWizardPage;
+  CableWasInstalled: Boolean;
+  CableNeedsRestart: Boolean;
 
 function OpenProcess(DesiredAccess: Cardinal; InheritHandle: Boolean; ProcessId: Cardinal): THandle;
   external 'OpenProcess@kernel32.dll stdcall';
@@ -94,6 +110,97 @@ function OpenEvent(DesiredAccess: Cardinal; InheritHandle: Boolean; Name: String
   external 'OpenEventW@kernel32.dll stdcall';
 function SetEvent(Handle: THandle): Boolean;
   external 'SetEvent@kernel32.dll stdcall';
+
+// True when Windows has a VB-CABLE playback end that is not left over from an
+// uninstalled driver.
+function IsVBCableInstalled: Boolean;
+var
+  Endpoints: TArrayOfString;
+  I: Integer;
+  Name: String;
+  State: Cardinal;
+begin
+  Result := False;
+  if not RegGetSubkeyNames(HKLM64, RenderKey, Endpoints) then
+    Exit;
+
+  for I := 0 to GetArrayLength(Endpoints) - 1 do
+  begin
+    if RegQueryStringValue(HKLM64, RenderKey + '\' + Endpoints[I] + '\Properties', InterfaceNameValue, Name)
+      and (Name = CableInterfaceName)
+      and RegQueryDWordValue(HKLM64, RenderKey + '\' + Endpoints[I], 'DeviceState', State)
+      and ((State and DEVICE_STATEMASK) <> DEVICE_STATE_NOTPRESENT) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+procedure CableOptionClickCheck(Sender: TObject);
+begin
+  CablePage.CheckListBox.ItemEnabled[1] := CablePage.Values[0];
+end;
+
+procedure InitializeWizard;
+begin
+  CableWasInstalled := IsVBCableInstalled;
+
+  CablePage := CreateInputOptionPage(wpSelectTasks,
+    'Virtual audio cable',
+    'MicMixer sends your mix through a virtual audio cable.',
+    'Your game or chat app picks up the mix from a virtual audio cable, which it sees as a microphone. '
+      + 'This installer can install VB-CABLE for you.' + #13#10#13#10
+      + 'VB-CABLE is made by VB-Audio Software, not by MicMixer. The origin of VB-CABLE: www.vb-cable.com. '
+      + 'VB-CABLE is a donationware, all participations are welcome.' + #13#10#13#10
+      + 'Untick it if you already have a virtual audio cable or would rather install one yourself. '
+      + 'Uninstalling MicMixer leaves VB-CABLE in place. Windows sometimes makes a new audio device '
+      + 'the default one; if you hear nothing afterwards, choose your speakers again in the Windows sound settings.',
+    False, False);
+  CablePage.Add('Install VB-CABLE');
+  CablePage.Add('Name its two ends "MicMixer Input" and "MicMixer Output", so they are easy to find in your game and chat app');
+  CablePage.Values[0] := True;
+  CablePage.Values[1] := True;
+  CablePage.CheckListBox.OnClickCheck := @CableOptionClickCheck;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = CablePage.ID) and CableWasInstalled;
+end;
+
+procedure InstallCable;
+var
+  CableFolder: String;
+  ResultCode: Integer;
+begin
+  WizardForm.StatusLabel.Caption := 'Installing VB-CABLE from VB-Audio Software...';
+  ExtractTemporaryFiles('{tmp}\vbcable\*');
+  CableFolder := ExpandConstant('{tmp}\vbcable');
+  // VB-Audio documents no exit codes, so whether it worked is read from Windows afterwards.
+  Exec(CableFolder + '\VBCABLE_Setup_x64.exe', '-i -h', CableFolder, SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  if CablePage.Values[1] then
+  begin
+    WizardForm.StatusLabel.Caption := 'Naming the virtual cable...';
+    Exec(ExpandConstant('{app}\MicMixer.exe'), '--name-virtual-cable', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+
+  // VB-CABLE usually works at once. When Windows shows no cable yet, it needs a restart.
+  CableNeedsRestart := not IsVBCableInstalled;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  // Updates run silently and never touch the cable.
+  if (CurStep = ssPostInstall) and not WizardSilent and not CableWasInstalled and CablePage.Values[0] then
+    InstallCable;
+end;
+
+function NeedRestart: Boolean;
+begin
+  Result := CableNeedsRestart;
+end;
 
 function IsUpdateFromMicMixer: Boolean;
 begin

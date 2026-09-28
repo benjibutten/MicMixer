@@ -67,6 +67,17 @@ components under additional licenses; see the license information supplied by
 the Deno project.
 Source and license information: https://github.com/denoland/deno
 
+Included with the MicMixer installer
+------------------------------------
+
+VB-CABLE Virtual Audio Device (driver package 45)
+Copyright (c) VB-Audio Software, V.Burel
+The origin of VB-CABLE: www.vb-cable.com. VB-CABLE is a donationware, all
+participations are welcome.
+The installer installs it only when the user leaves that option ticked; it is
+not part of MicMixer and is not removed when MicMixer is uninstalled.
+License and distribution terms: https://vb-audio.com/Services/licensing.htm
+
 License texts
 -------------
 
