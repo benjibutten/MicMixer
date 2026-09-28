@@ -23,5 +23,7 @@
   as mic or music reaches the virtual cable. Bind another app's push-to-talk to
   that key and it transmits exactly when MicMixer does. **Send key once** helps
   bind a key that is not on your keyboard.
-- **Save** in the settings window keeps your changes and closes the window.
-- After an update, MicMixer shows what's new once, like this.
+- **Save** in the settings window keeps your changes and closes the window;
+  **Cancel** undoes the unsaved ones and closes it.
+- After an update, MicMixer shows what's new once, like this. **What's new…** in
+  **Settings → General** shows it again.

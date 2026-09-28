@@ -205,7 +205,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ApplyConfiguration();
         // ApplyConfiguration writes the hotkeys back without duplicates and in their
         // current form. The saved copy takes that form too, or an older one would count
-        // as an unsaved change that Discard can never clear.
+        // as an unsaved change that Cancel can never clear.
         _savedSettings.HotkeyId = _settings.HotkeyId;
         _savedSettings.ExtraHotkeyIds = [.. _settings.ExtraHotkeyIds];
         ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
@@ -1649,6 +1649,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         dialog.ShowDialog();
     }
 
+    private void OnWhatsNewClick(object sender, RoutedEventArgs e) =>
+        ShowWhatsNew(Window.GetWindow((DependencyObject)sender));
+
+    private static void ShowWhatsNew(Window owner) =>
+        new WhatsNewDialog(AppVersion.DisplayText, WhatsNewDialog.ReadBuiltInItems()) { Owner = owner }.ShowDialog();
+
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         PersistWindowBounds();
@@ -1837,16 +1843,27 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         if (WhatsNewDialog.ShouldShow(current, _settings.WhatsNewShownForVersion, isSetUp)
-            && WhatsNewDialog.ReadBuiltInItems() is { Count: > 0 } items)
+            && WhatsNewDialog.ReadBuiltInItems().Count > 0)
         {
-            new WhatsNewDialog(AppVersion.DisplayText, items) { Owner = this }.ShowDialog();
+            ShowWhatsNew(this);
         }
 
         _settings.WhatsNewShownForVersion = current.ToString();
         SaveSettings();
     }
 
-    private void OnDiscardSettingsClick(object sender, RoutedEventArgs e)
+    /// <summary>Undoes the settings-window changes that are not saved, and closes the window.</summary>
+    private void OnCancelSettingsClick(object sender, RoutedEventArgs e)
+    {
+        if (_hasUnsavedConfiguration)
+        {
+            DiscardConfiguration();
+        }
+
+        _settingsWindow?.Close();
+    }
+
+    private void DiscardConfiguration()
     {
         // Like Refresh devices: the route was started with the devices being discarded.
         if (_router.IsRouting)

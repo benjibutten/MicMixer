@@ -203,7 +203,10 @@ Secondary output, Music folders and General.
   Modified voice, red Muted), what the hotkey does right now, and where the mix
   goes.
 - Settings changes apply immediately, but are kept for the next start only after
-  **Save**. **Discard changes** returns to the saved settings.
+  **Save**, which also closes the window. **Cancel** returns to the saved settings
+  and closes it. Closing it with its **×** leaves unsaved changes in use until
+  MicMixer restarts.
+- **Settings › General › What's new…** shows the release notes of the running version.
 - While routing is on, the microphones, the virtual cable and the secondary output
   are locked because they are in use; a banner at the top of the settings window
   says so and offers **Stop routing**.
