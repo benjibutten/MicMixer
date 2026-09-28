@@ -2830,6 +2830,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return false;
         }
 
+        // The playlist is read from disk only on refresh, so a track can be deleted after it is listed.
+        if (!File.Exists(path))
+        {
+            Log.Warning("Track {TrackPath} no longer exists.", path);
+            RefreshPlaylist(null);
+            MusicStatusText.Text = $"{Path.GetFileNameWithoutExtension(path)} no longer exists and was removed from the playlist.";
+            return false;
+        }
+
         try
         {
             _music.Play(path);
