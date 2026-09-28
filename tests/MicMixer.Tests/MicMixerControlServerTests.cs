@@ -1,5 +1,7 @@
 using System.IO.Pipes;
+using System.Security.Principal;
 using System.Text.Json;
+using MicMixer.Admin;
 using MicMixer.Remote;
 using Xunit;
 
@@ -15,11 +17,7 @@ public sealed class MicMixerControlServerTests
         await using var server = new MicMixerControlServer(host, pipeName);
         server.Start();
 
-        await using var pipe = new NamedPipeClientStream(
-            ".",
-            pipeName,
-            PipeDirection.InOut,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var pipe = CreateClient(pipeName);
         await pipe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
         using var reader = new StreamReader(pipe, leaveOpen: true);
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
@@ -37,6 +35,22 @@ public sealed class MicMixerControlServerTests
             @"C:\Music",
             response.RootElement.GetProperty("data").GetProperty("folders")[0].GetProperty("path").GetString());
         Assert.Equal("getState", host.LastCommand);
+    }
+
+    [Fact]
+    public async Task Server_ShouldBeOwnedByTheWindowsAccount_AlsoWhenElevated()
+    {
+        // StreamDecky never runs elevated and connects with PipeOptions.CurrentUserOnly,
+        // which requires the pipe's owner to be the account. Created elevated with the
+        // default owner, the pipe would belong to the Administrators group instead.
+        string pipeName = $"MicMixer.Tests.{Guid.NewGuid():N}";
+        await using var server = new MicMixerControlServer(new FakeControlHost(), pipeName);
+        server.Start();
+
+        await using var pipe = CreateClient(pipeName);
+        await pipe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Elevation.CurrentUser(), pipe.GetAccessControl().GetOwner(typeof(SecurityIdentifier)));
     }
 
     [Fact]
@@ -59,11 +73,7 @@ public sealed class MicMixerControlServerTests
         await using var server = new MicMixerControlServer(new FakeControlHost(), pipeName);
         server.Start();
 
-        await using var pipe = new NamedPipeClientStream(
-            ".",
-            pipeName,
-            PipeDirection.InOut,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var pipe = CreateClient(pipeName);
         await pipe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
         using var reader = new StreamReader(pipe, leaveOpen: true);
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
@@ -100,11 +110,7 @@ public sealed class MicMixerControlServerTests
         await Task.Delay(500, TestContext.Current.CancellationToken);
         await blocker.DisposeAsync();
 
-        await using var pipe = new NamedPipeClientStream(
-            ".",
-            pipeName,
-            PipeDirection.InOut,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var pipe = CreateClient(pipeName);
         await pipe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
         using var reader = new StreamReader(pipe, leaveOpen: true);
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
@@ -121,20 +127,12 @@ public sealed class MicMixerControlServerTests
         await using var server = new MicMixerControlServer(new FakeControlHost(), pipeName);
         server.Start();
 
-        await using (var probe = new NamedPipeClientStream(
-                         ".",
-                         pipeName,
-                         PipeDirection.InOut,
-                         PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
+        await using (var probe = CreateClient(pipeName))
         {
             await probe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
         }
 
-        await using var pipe = new NamedPipeClientStream(
-            ".",
-            pipeName,
-            PipeDirection.InOut,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var pipe = CreateClient(pipeName);
         await pipe.ConnectAsync(5_000, TestContext.Current.CancellationToken);
         using var reader = new StreamReader(pipe, leaveOpen: true);
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
@@ -203,4 +201,9 @@ public sealed class MicMixerControlServerTests
             string.Empty,
             "Idle");
     }
+
+    // Without CurrentUserOnly: the test process may run elevated, where that check expects
+    // the Administrators group as owner. The owner test above covers what StreamDecky checks.
+    private static NamedPipeClientStream CreateClient(string pipeName) =>
+        new(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 }
