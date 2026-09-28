@@ -85,9 +85,18 @@ internal static class AudioDevices
     public static AudioDeviceOption? SelectCableOutput(IReadOnlyList<AudioDeviceOption> devices, string? preferredId)
     {
         return devices.FirstOrDefault(device => device.Id == preferredId)
-            ?? devices.FirstOrDefault(LooksLikeVirtualCable)
+            ?? FindCablePlaybackEnd(devices)
             ?? devices.FirstOrDefault();
     }
+
+    /// <summary>
+    /// The end of a virtual cable to play the mix into. An end named "Input" comes first,
+    /// so VB-CABLE's "CABLE Input" wins over its "CABLE In 16ch" whatever order Windows lists them in.
+    /// </summary>
+    public static AudioDeviceOption? FindCablePlaybackEnd(IEnumerable<AudioDeviceOption> outputs) =>
+        outputs.Where(LooksLikeVirtualCable)
+            .OrderByDescending(device => device.FriendlyName.Contains("Input", StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault();
 
     public static AudioDeviceOption? SelectMonitor(IReadOnlyList<AudioDeviceOption> devices, string? preferredId)
     {

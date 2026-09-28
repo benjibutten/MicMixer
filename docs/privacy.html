@@ -34,7 +34,7 @@
 </header>
 <main class="wrap">
   <h1>Privacy policy</h1>
-  <p class="updated">Effective and last updated: July 19, 2026</p>
+  <p class="updated">Effective and last updated: September 28, 2026</p>
 
   <h2>Overview</h2>
   <p>
@@ -50,7 +50,7 @@
     <li>audio-device choices, hotkeys, volumes, routing options, folders, and window state;</li>
     <li>the user's local music library and any media the user chooses to download;</li>
     <li>downloaded copies of yt-dlp, FFmpeg, and, for YouTube downloads, Deno and their version markers;</li>
-    <li>the time of the most recent update check; and</li>
+    <li>the time of the most recent update check, and the version whose "What's new" notes were last shown; and</li>
     <li>diagnostic logs, which may contain device names, local file paths, operational errors, and media URLs entered by the user.</li>
   </ul>
   <p>
@@ -78,8 +78,14 @@
       receives normal connection information such as the user's IP address and request metadata.
     </li>
     <li>
-      If the user accepts an offered update, MicMixer downloads the release archive and checksum
-      from GitHub, verifies the SHA-256 checksum, and installs the update.
+      If the user accepts an offered update, MicMixer downloads the release installer (or, for a
+      copy extracted from the ZIP, the release archive) and its checksum from GitHub, verifies the
+      SHA-256 checksum, and installs the update.
+    </li>
+    <li>
+      The MicMixer installer contains VB-Audio's VB-CABLE driver package and installs it only if
+      the user leaves that option ticked. Installing it does not contact VB-Audio. VB-CABLE's own
+      terms are at <a href="https://vb-audio.com/Services/licensing.htm">vb-audio.com</a>.
     </li>
     <li>
       When the user first requests a media download, MicMixer downloads pinned copies of yt-dlp

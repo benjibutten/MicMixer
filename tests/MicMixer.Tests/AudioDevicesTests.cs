@@ -21,6 +21,7 @@ public sealed class AudioDevicesTests
 
     [Theory]
     [InlineData("CABLE Input (VB-Audio Virtual Cable)", "CABLE Output (VB-Audio Virtual Cable)")]
+    [InlineData("MicMixer Input (VB-Audio Virtual Cable)", "MicMixer Output (VB-Audio Virtual Cable)")]
     [InlineData("Line 1 (Virtual Audio Cable)", "Line 1 (Virtual Audio Cable)")]
     public void FindRecordingEnd_ShouldPairThePlaybackEndWithItsMicrophone(string playback, string expected)
     {
@@ -28,10 +29,24 @@ public sealed class AudioDevicesTests
         {
             new("mic", "Microphone (Realtek(R) Audio)"),
             new("vb", "CABLE Output (VB-Audio Virtual Cable)"),
+            new("renamed", "MicMixer Output (VB-Audio Virtual Cable)"),
             new("vac", "Line 1 (Virtual Audio Cable)")
         };
 
         AudioDevices.FindRecordingEnd(new AudioDeviceOption("out", playback), inputs)!.FriendlyName.Should().Be(expected);
+    }
+
+    [Fact]
+    public void SelectCableOutput_ShouldPreferTheInputEnd_OverVbCables16ChannelEnd()
+    {
+        var outputs = new List<AudioDeviceOption>
+        {
+            new("speakers", "Speakers (Realtek(R) Audio)"),
+            new("16ch", "CABLE In 16ch (VB-Audio Virtual Cable)"),
+            new("input", "MicMixer Input (VB-Audio Virtual Cable)")
+        };
+
+        AudioDevices.SelectCableOutput(outputs, null)!.Id.Should().Be("input");
     }
 
     [Fact]

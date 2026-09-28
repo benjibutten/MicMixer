@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
+using MicMixer.Admin;
 using MicMixer.Overlay;
 using MicMixer.UI;
 using Serilog;
@@ -192,7 +192,7 @@ public partial class MainWindow
 
         try
         {
-            Process.Start(new ProcessStartInfo(server.OverlayUrl) { UseShellExecute = true });
+            ShellLauncher.Open(server.OverlayUrl);
         }
         catch (Exception ex)
         {

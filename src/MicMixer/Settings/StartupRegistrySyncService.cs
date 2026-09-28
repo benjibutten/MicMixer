@@ -26,7 +26,7 @@ internal sealed class StartupRegistrySyncService
         _storeFactory = storeFactory ?? new RegistryStartupStoreFactory();
     }
 
-    internal static string BuildStartupCommand(string exePath) => $"\"{exePath}\" --minimized";
+    internal static string BuildStartupCommand(string exePath) => $"\"{exePath}\" {App.MinimizedArgument}";
 
     internal bool Sync(bool startWithWindows, string? exePath)
     {

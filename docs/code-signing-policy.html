@@ -34,15 +34,17 @@
 </header>
 <main class="wrap">
   <h1>Code signing policy</h1>
-  <p class="updated">Effective and last updated: August 18, 2026</p>
+  <p class="updated">Effective and last updated: September 28, 2026</p>
 
   <h2>Signing service and scope</h2>
   <p><strong>Current releases are unsigned.</strong></p>
   <p>
     This policy covers official Windows release builds of <code>MicMixer.exe</code> published through
-    <a href="https://github.com/benjibutten/MicMixer/releases">GitHub Releases</a>. The ZIP archive
-    is accompanied by a SHA-256 checksum. The executable inside the archive is the artifact whose
-    signing status is reported; ZIP archives themselves are not Authenticode-signable.
+    <a href="https://github.com/benjibutten/MicMixer/releases">GitHub Releases</a>, and of the
+    installer that installs it. The installer and the ZIP archive are each accompanied by a SHA-256
+    checksum. When releases are signed, <code>MicMixer.exe</code>, the installer and the uninstaller
+    it installs are signed; ZIP archives themselves are not Authenticode-signable. The VB-CABLE
+    driver package the installer carries keeps VB-Audio's own signatures.
   </p>
   <p class="status">
     Each release's notes state its actual signing status and are authoritative for that release.

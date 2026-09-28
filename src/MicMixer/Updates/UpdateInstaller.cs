@@ -9,6 +9,11 @@ namespace MicMixer.Updates;
 
 internal static class UpdateInstaller
 {
+    /// <summary>Name of every download folder; the cleanup deletes nothing else.</summary>
+    public const string WorkDirectoryPrefix = "MicMixer-update-";
+
+    public const string ArchiveName = "update.zip";
+
     private const int FileOperationAttempts = 20;
     private static readonly TimeSpan FileOperationDelay = TimeSpan.FromMilliseconds(250);
 
@@ -23,9 +28,9 @@ internal static class UpdateInstaller
         try
         {
             int processId = int.Parse(GetRequiredArgument(args, "--process-id"));
-            string workDirectory = GetValidatedWorkDirectory(Path.Combine(
+            string workDirectory = GetValidatedWorkDirectory(
                 GetRequiredArgument(args, "--work-directory"),
-                "update.zip"));
+                AppContext.BaseDirectory);
             await Task.Run(() => WaitForProcessToExit(processId));
             await DeleteWorkDirectoryAsync(workDirectory);
         }
@@ -66,7 +71,7 @@ internal static class UpdateInstaller
         string expectedHash = GetRequiredArgument(args, "--expected-hash");
         string installDirectory = Path.GetFullPath(GetRequiredArgument(args, "--install-directory"));
         string executablePath = Path.GetFullPath(GetRequiredArgument(args, "--executable-path"));
-        string workDirectory = GetValidatedWorkDirectory(zipPath);
+        string workDirectory = GetValidatedWorkDirectory(Path.GetDirectoryName(zipPath)!, installDirectory);
 
         progress.Report(new UpdateProgress("Waiting for MicMixer to close…"));
         WaitForProcessToExit(processId);
@@ -207,23 +212,28 @@ internal static class UpdateInstaller
         return args[index + 1];
     }
 
-    private static string GetValidatedWorkDirectory(string zipPath)
+    /// <summary>
+    /// Returns <paramref name="workDirectory"/> when it is a MicMixer download folder
+    /// directly inside %TEMP% or <paramref name="installDirectory"/>, and throws otherwise,
+    /// so a crafted argument can never make the cleanup delete anything else.
+    /// </summary>
+    internal static string GetValidatedWorkDirectory(string workDirectory, string installDirectory)
     {
-        string workDirectory = Path.GetDirectoryName(Path.GetFullPath(zipPath))
-            ?? throw new InvalidOperationException("The update work directory is invalid.");
-        string tempDirectory = Path.GetFullPath(Path.GetTempPath())
-            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        string expectedPrefix = Path.Combine(tempDirectory, "MicMixer-update-");
-        if (!workDirectory.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(
-                Path.GetDirectoryName(workDirectory)?.TrimEnd(Path.DirectorySeparatorChar),
-                tempDirectory.TrimEnd(Path.DirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase))
+        string fullPath = Path.GetFullPath(workDirectory).TrimEnd(Path.DirectorySeparatorChar);
+        string? parent = Path.GetDirectoryName(fullPath);
+        bool isInTrustedParent = IsSameDirectory(parent, Path.GetTempPath()) || IsSameDirectory(parent, installDirectory);
+        if (!isInTrustedParent || !Path.GetFileName(fullPath).StartsWith(WorkDirectoryPrefix, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("The update work directory is not trusted.");
         }
-        return workDirectory;
+        return fullPath;
     }
+
+    private static bool IsSameDirectory(string? left, string right) =>
+        left != null && string.Equals(
+            Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar),
+            Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
 
     private static void LaunchCleanupProcess(string[] args)
     {
@@ -231,7 +241,9 @@ internal static class UpdateInstaller
         {
             string executablePath = Path.GetFullPath(GetRequiredArgument(args, "--executable-path"));
             string zipPath = Path.GetFullPath(GetRequiredArgument(args, "--zip-path"));
-            string workDirectory = GetValidatedWorkDirectory(zipPath);
+            string workDirectory = GetValidatedWorkDirectory(
+                Path.GetDirectoryName(zipPath)!,
+                GetRequiredArgument(args, "--install-directory"));
             var cleanup = new ProcessStartInfo(executablePath)
             {
                 UseShellExecute = true,
@@ -278,7 +290,7 @@ internal static class UpdateInstaller
         string workDirectory;
         try
         {
-            workDirectory = GetValidatedWorkDirectory(Path.Combine(args[index + 1], "update.zip"));
+            workDirectory = GetValidatedWorkDirectory(args[index + 1], AppContext.BaseDirectory);
         }
         catch
         {

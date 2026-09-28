@@ -64,78 +64,6 @@
         <!-- Chain link icon (volume sync) -->
         <Geometry x:Key="LinkIcon">M3.9,12C3.9,10.29 5.29,8.9 7,8.9H11V7H7A5,5 0 0,0 2,12A5,5 0 0,0 7,17H11V15.1H7C5.29,15.1 3.9,13.71 3.9,12M8,13H16V11H8V13M17,7H13V8.9H17C18.71,8.9 20.1,10.29 20.1,12C20.1,13.71 18.71,15.1 17,15.1H13V17H17A5,5 0 0,0 22,12A5,5 0 0,0 17,7Z</Geometry>
 
-        <!-- Slim scrollbar: 8 px rounded thumb, no arrow buttons, transparent track.
-             Implicit style, so every scrollbar (settings pages, playlist, queue,
-             dropdowns) gets the same look; the settings window shares these resources. -->
-        <Style x:Key="SlimScrollPageButton" TargetType="RepeatButton">
-            <Setter Property="OverridesDefaultStyle" Value="True"/>
-            <Setter Property="Focusable" Value="False"/>
-            <Setter Property="IsTabStop" Value="False"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RepeatButton">
-                        <Rectangle Fill="Transparent"/>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <ControlTemplate x:Key="SlimScrollThumb" TargetType="Thumb">
-            <Border x:Name="ThumbBg" Background="#C9D2DD" CornerRadius="4"/>
-            <ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="ThumbBg" Property="Background" Value="#A9B6C6"/>
-                </Trigger>
-                <Trigger Property="IsDragging" Value="True">
-                    <Setter TargetName="ThumbBg" Property="Background" Value="#8B9BAE"/>
-                </Trigger>
-            </ControlTemplate.Triggers>
-        </ControlTemplate>
-        <ControlTemplate x:Key="SlimScrollBarVertical" TargetType="ScrollBar">
-            <Grid Background="Transparent">
-                <Track x:Name="PART_Track" IsDirectionReversed="True">
-                    <Track.DecreaseRepeatButton>
-                        <RepeatButton Style="{StaticResource SlimScrollPageButton}" Command="ScrollBar.PageUpCommand"/>
-                    </Track.DecreaseRepeatButton>
-                    <Track.IncreaseRepeatButton>
-                        <RepeatButton Style="{StaticResource SlimScrollPageButton}" Command="ScrollBar.PageDownCommand"/>
-                    </Track.IncreaseRepeatButton>
-                    <Track.Thumb>
-                        <Thumb Template="{StaticResource SlimScrollThumb}" Margin="1,0" MinHeight="24"/>
-                    </Track.Thumb>
-                </Track>
-            </Grid>
-        </ControlTemplate>
-        <ControlTemplate x:Key="SlimScrollBarHorizontal" TargetType="ScrollBar">
-            <Grid Background="Transparent">
-                <Track x:Name="PART_Track">
-                    <Track.DecreaseRepeatButton>
-                        <RepeatButton Style="{StaticResource SlimScrollPageButton}" Command="ScrollBar.PageLeftCommand"/>
-                    </Track.DecreaseRepeatButton>
-                    <Track.IncreaseRepeatButton>
-                        <RepeatButton Style="{StaticResource SlimScrollPageButton}" Command="ScrollBar.PageRightCommand"/>
-                    </Track.IncreaseRepeatButton>
-                    <Track.Thumb>
-                        <Thumb Template="{StaticResource SlimScrollThumb}" Margin="0,1" MinWidth="24"/>
-                    </Track.Thumb>
-                </Track>
-            </Grid>
-        </ControlTemplate>
-        <Style TargetType="ScrollBar">
-            <Setter Property="OverridesDefaultStyle" Value="True"/>
-            <Setter Property="Width" Value="8"/>
-            <Setter Property="MinWidth" Value="8"/>
-            <Setter Property="Template" Value="{StaticResource SlimScrollBarVertical}"/>
-            <Style.Triggers>
-                <Trigger Property="Orientation" Value="Horizontal">
-                    <Setter Property="Width" Value="Auto"/>
-                    <Setter Property="MinWidth" Value="0"/>
-                    <Setter Property="Height" Value="8"/>
-                    <Setter Property="MinHeight" Value="8"/>
-                    <Setter Property="Template" Value="{StaticResource SlimScrollBarHorizontal}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
         <!-- Segmented mode switch (music source) -->
         <Style x:Key="ModeSegment" TargetType="RadioButton">
             <Setter Property="Foreground" Value="#5B6B7C"/>
@@ -230,11 +158,12 @@
         <Style x:Key="SettingsNavItem" TargetType="TabItem">
             <Setter Property="Foreground" Value="#5B6B7C"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="NavBg" Background="Transparent" CornerRadius="6" Padding="10,6" Margin="0,0,0,2">
+                        <!-- The hand goes on the template, not the TabItem: the page is the
+                             TabItem's logical child and would show the TabItem's cursor too. -->
+                        <Border x:Name="NavBg" Background="Transparent" CornerRadius="6" Padding="10,6" Margin="0,0,0,2" Cursor="Hand">
                             <ContentPresenter ContentSource="Header"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -1127,14 +1056,14 @@
                                             <TextBlock Style="{StaticResource FlowArrow}"/>
                                             <Border Style="{StaticResource FlowStep}"><TextBlock Text="MicMixer" FontSize="11.5"/></Border>
                                             <TextBlock Style="{StaticResource FlowArrow}"/>
-                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="CABLE Input" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
+                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="Cable Input" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
                                             <TextBlock Style="{StaticResource FlowArrow}" Text="⇢"/>
-                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="CABLE Output" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
+                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="Cable Output" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
                                             <TextBlock Style="{StaticResource FlowArrow}"/>
                                             <Border Style="{StaticResource FlowStep}"><TextBlock Text="Game or chat" FontSize="11.5"/></Border>
                                         </WrapPanel>
                                         <TextBlock Style="{StaticResource SettingsDesc}" Margin="0"
-                                                   Text="A virtual cable is a pipe with two ends. Whatever is played into CABLE Input comes out of CABLE Output, which apps see as a microphone. MicMixer only uses the input end; the output end is chosen in your game or chat."/>
+                                                   Text="A virtual cable is a pipe with two ends. Whatever is played into its Input end comes out of its Output end, which apps see as a microphone. With VB-CABLE they are called CABLE Input and CABLE Output, or MicMixer Input and MicMixer Output when the MicMixer installer named them. MicMixer only uses the Input end; the Output end is chosen in your game or chat."/>
                                     </StackPanel>
                                 </Border>
 
@@ -1235,13 +1164,13 @@
                                         <TextBlock Text="Virtual cable" Style="{StaticResource SettingsHeading}" Margin="0"/>
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource SettingsDesc}"
-                                               Text="Where MicMixer sends the finished mix. Choose CABLE Input here, then choose CABLE Output as the microphone in your game or chat."/>
+                                               Text="Where MicMixer sends the finished mix. Choose the cable's Input end here, such as MicMixer Input or CABLE Input, then choose its Output end as the microphone in your game or chat."/>
                                     <TextBlock Text="Send the mix to" FontSize="11" Foreground="#6B7280" Margin="0,0,0,3"/>
                                     <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"
                                               AutomationProperties.Name="Send the mix to"/>
                                     <TextBlock x:Name="OutputCableWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
                                                Foreground="#B45309" Visibility="Collapsed"
-                                               Text="⚠ This does not look like a virtual cable. A game or chat can only pick up the mix from a device such as CABLE Input."/>
+                                               Text="⚠ This does not look like a virtual cable. A game or chat can only pick up the mix from a cable's Input end, such as MicMixer Input or CABLE Input."/>
                                 </StackPanel>
 
                                 <StackPanel Style="{StaticResource SettingsSection}">
@@ -1279,17 +1208,29 @@
                             <StackPanel>
                                 <StackPanel x:Name="HotkeyConfigPanel">
                                     <StackPanel Style="{StaticResource SettingsSection}">
-                                        <TextBlock Text="Hotkey" Style="{StaticResource SettingsHeading}"/>
+                                        <TextBlock Text="Hotkeys" Style="{StaticResource SettingsHeading}"/>
                                         <TextBlock Style="{StaticResource SettingsDesc}"
-                                                   Text="Hold it to switch to the modified voice. With push-to-talk on, you are heard only while you hold it. Works everywhere, also while a game has focus."/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <Border Padding="8,5" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="100">
-                                                <TextBlock x:Name="HotkeyValueText" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
-                                            </Border>
-                                            <Button x:Name="CaptureHotkeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
-                                                    Click="OnCaptureHotkeyClick" Content="Change" FontSize="11.5"
-                                                    Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
-                                        </StackPanel>
+                                                   Text="Hold a hotkey to switch to the modified voice. With push-to-talk on, you are heard only while you hold one. Add more hotkeys to let several keys or buttons do the same. Works everywhere, also while a game has focus."/>
+                                        <ItemsControl x:Name="HotkeyList" Focusable="False">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                        <Border Padding="8,5" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="100">
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <Button Margin="8,0,0,0" Height="28" Padding="10,0"
+                                                                Click="OnCaptureHotkeyClick" Content="{Binding ChangeText}" FontSize="11.5"
+                                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                                        <Button Margin="6,0,0,0" Height="28" Padding="10,0"
+                                                                Click="OnRemoveHotkeyClick" Content="Remove" FontSize="11.5" Visibility="{Binding RemoveVisibility}"
+                                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button x:Name="AddHotkeyButton" HorizontalAlignment="Left" Height="28" Padding="10,0"
+                                                Click="OnAddHotkeyClick" Content="Add hotkey" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
                                         <TextBlock x:Name="HotkeyCaptureHintText" Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"/>
                                     </StackPanel>
 
@@ -1316,6 +1257,27 @@
                                               Checked="OnPushToTalkChanged" Unchecked="OnPushToTalkChanged">
                                         <TextBlock Text="Use push-to-talk" VerticalAlignment="Center"/>
                                     </CheckBox>
+                                </StackPanel>
+
+                                <StackPanel Style="{StaticResource SettingsSection}">
+                                    <TextBlock Text="Hold a key while sending" Style="{StaticResource SettingsHeading}"/>
+                                    <TextBlock Style="{StaticResource SettingsDesc}"
+                                               Text="Holds the chosen key down for as long as mic or music reaches the virtual cable, and lets go shortly after. Bind another app's push-to-talk to this key and it transmits exactly when MicMixer does, also in the background."/>
+                                    <CheckBox x:Name="HoldKeyWhileSendingCheck" FontSize="11.5" Foreground="#10233A"
+                                              Checked="OnHoldKeyWhileSendingChanged" Unchecked="OnHoldKeyWhileSendingChanged">
+                                        <TextBlock Text="Hold a key while sending" VerticalAlignment="Center"/>
+                                    </CheckBox>
+                                    <StackPanel Orientation="Horizontal" Margin="22,8,0,0">
+                                        <ComboBox x:Name="HeldKeyCombo" Width="72" FontSize="11.5" DisplayMemberPath="Name"
+                                                  SelectionChanged="OnHeldKeyChanged" AutomationProperties.Name="Key to hold"/>
+                                        <Button x:Name="SendHeldKeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
+                                                Click="OnSendHeldKeyClick" Content="Send key once" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="HeldKeyConflictText" Margin="22,5,0,0" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="#B45309" Visibility="Collapsed"/>
+                                    <TextBlock Margin="22,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
+                                               Text="F13–F24 are not on a normal keyboard. To bind one in another app, click Send key once, switch to that app and start the key binding there: the key is sent after 5 seconds. Click again to cancel."/>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -1578,6 +1540,17 @@
                                 </StackPanel>
 
                                 <StackPanel Style="{StaticResource SettingsSection}">
+                                    <TextBlock Text="Run as administrator" Style="{StaticResource SettingsHeading}"/>
+                                    <TextBlock Style="{StaticResource SettingsDesc}"
+                                               Text="While a game or program running as administrator has focus, Windows keeps your hotkey from reaching MicMixer and drops the keys it holds. Running MicMixer as administrator too lets them through. MicMixer restarts as administrator when you save."/>
+                                    <CheckBox x:Name="RunAsAdministratorCheck" FontSize="11.5" Foreground="#10233A"
+                                              Checked="OnRunAsAdministratorChanged" Unchecked="OnRunAsAdministratorChanged">
+                                        <TextBlock Text="Run MicMixer as administrator" VerticalAlignment="Center"/>
+                                    </CheckBox>
+                                    <TextBlock x:Name="StartupHintText" Style="{StaticResource SettingsDesc}" Margin="0,6,0,0" Visibility="Collapsed"/>
+                                </StackPanel>
+
+                                <StackPanel Style="{StaticResource SettingsSection}">
                                     <TextBlock Text="Setup guide" Style="{StaticResource SettingsHeading}"/>
                                     <TextBlock Style="{StaticResource SettingsDesc}"
                                                Text="Walks through what MicMixer does, the virtual cable, your devices and the hotkey. Your current choices are filled in, and nothing changes unless you click Finish."/>
@@ -1598,9 +1571,13 @@
                                 <StackPanel Style="{StaticResource SettingsSection}">
                                     <TextBlock Text="About" Style="{StaticResource SettingsHeading}"/>
                                     <TextBlock Style="{StaticResource SettingsDesc}"
-                                               Text="License, source code, third-party notices and update checks."/>
-                                    <Button Content="About MicMixer…" Click="OnAboutClick" HorizontalAlignment="Left" Padding="10,4" FontSize="11.5"
-                                            Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                               Text="What changed in this version, license, source code, third-party notices and update checks."/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="About MicMixer…" Click="OnAboutClick" Padding="10,4" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                        <Button Content="What's new…" Click="OnWhatsNewClick" Margin="8,0,0,0" Padding="10,4" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
@@ -1617,7 +1594,8 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock x:Name="SettingsSaveStateText" FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                        <Button x:Name="DiscardSettingsButton" Grid.Column="1" Content="Discard changes" Click="OnDiscardSettingsClick"
+                        <Button Grid.Column="1" Content="Cancel" Click="OnCancelSettingsClick"
+                                ToolTip="Closes the settings and undoes the changes that are not saved"
                                 Margin="12,0,0,0" Height="30" Padding="12,0" FontSize="11.5"
                                 Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
                         <Button x:Name="SaveSettingsButton" Grid.Column="2" Content="Save" Click="OnSaveSettingsClick"

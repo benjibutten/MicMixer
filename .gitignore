@@ -181,3 +181,5 @@ recording/
 /recording/
 /legacy-voice-profile.json
 *private-manifest*.json
+
+mumbleissuelogs/*

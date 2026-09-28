@@ -9,6 +9,7 @@ using System.Windows.Navigation;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using System.IO;
+using MicMixer.Admin;
 using MicMixer.Audio;
 using MicMixer.Diagnostics;
 using MicMixer.Dsp;
@@ -26,6 +27,7 @@ namespace MicMixer;
 public partial class MainWindow : Window, IMicMixerControlHost
 {
     private const int MaxReleaseDelayMilliseconds = 5_000;
+    private const int SendHeldKeyCountdownSeconds = 5;
     private const float ExternalSignalActivationThreshold = 0.005f;
     private static readonly TimeSpan ExternalSignalHoldDuration = TimeSpan.FromSeconds(2);
 
@@ -34,6 +36,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly GlobalHotkeyListener _hotkeyListener;
     private readonly SettingsStore _settingsStore;
     private readonly StartupRegistrySyncService _startupRegistrySyncService;
+    private readonly StartupTaskService _startupTaskService = new();
+    private readonly ElevatedFocusWatcher? _elevatedFocusWatcher;
     private readonly DispatcherTimer _levelTimer;
     private readonly DispatcherTimer _releaseDelayTimer;
     private readonly System.Windows.Forms.NotifyIcon _trayIcon;
@@ -46,6 +50,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _delayedStartTimer;
     private readonly DispatcherTimer _settingsSaveTimer;
     private readonly DispatcherTimer _deviceChangeTimer;
+    private readonly DispatcherTimer _sendHeldKeyTimer;
+    private readonly SendingKeyHolder _sendingKey = new((key, down) => key.Send(down), key => key.IsDown);
+    private int _sendHeldKeyCountdown;
     private MMDeviceEnumerator? _deviceEnumerator;
     private MMDeviceNotificationClient? _deviceNotifications;
     private readonly SignalActivityTracker _externalSignalActivity = new(
@@ -85,10 +92,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private List<Problem> _problems = [];
     private string? _secondaryOutputError;
     private OverlayIndicatorWindow? _overlayIndicator;
-    private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
+    private List<HotkeyBinding> _hotkeyBindings = [HotkeyBinding.Default];
     private int _releaseDelayMilliseconds;
     private float _noiseGatePeakHold;
-    private bool _isCapturingHotkey;
+    /// <summary>Index of the hotkey the next key or click replaces; the hotkey count adds one, -1 captures nothing.</summary>
+    private int _capturingHotkeyIndex = -1;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
     private bool _isDevicesLoading;
@@ -141,6 +149,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.MeterSensitivityDb = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
         _settings.DelayedStartSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
         _settings.ObsOverlayPort = Overlay.ObsOverlayServer.ClampPort(_settings.ObsOverlayPort);
+        _settings.HeldKey = FunctionKey.Parse(_settings.HeldKey).Name;
+        // A run that ended while holding the key would otherwise leave it down.
+        FunctionKey.Parse(_settings.HeldKey).Send(down: false);
         _releaseDelayTimer = new DispatcherTimer();
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         _delayedStartTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -154,6 +165,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // Plugging one headset in fires several endpoint callbacks; wait for the burst to settle.
         _deviceChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _deviceChangeTimer.Tick += OnDeviceChangeSettled;
+        _sendHeldKeyTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _sendHeldKeyTimer.Tick += OnSendHeldKeyTick;
         _singleTrackAnnounceTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(System.Windows.Forms.SystemInformation.DoubleClickTime + 50)
@@ -181,6 +194,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ExternalModdedInputCombo.IsEnabled = false;
         OutputDeviceCombo.IsEnabled = false;
         SecondaryOutputCombo.IsEnabled = false;
+        HeldKeyCombo.ItemsSource = FunctionKey.All;
 
         _isUpdatingUi = true;
         LoadVoiceProfiles();
@@ -189,6 +203,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.LongerAnalysisWindow = _settings.LongerAnalysisWindow && alternateWindowAvailable;
         _savedSettings = _settings.Clone();
         ApplyConfiguration();
+        // ApplyConfiguration writes the hotkeys back without duplicates and in their
+        // current form. The saved copy takes that form too, or an older one would count
+        // as an unsaved change that Cancel can never clear.
+        _savedSettings.WriteHotkeys(_hotkeyBindings);
         ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
         RenderVoiceChoice();
         SyncStartWithWindows();
@@ -237,6 +255,24 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _levelTimer.Tick += OnLevelTimerTick;
         _levelTimer.Start();
+
+        RunAsAdministratorCheck.IsEnabled = Elevation.CanRunAsAdministrator;
+
+        // Running as administrator, nothing can hide the keyboard from MicMixer. A
+        // standard account cannot get there, so there is nothing to offer it.
+        if (!Elevation.IsElevated && Elevation.CanRunAsAdministrator)
+        {
+            _elevatedFocusWatcher = new ElevatedFocusWatcher();
+            var elevatedFocusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            elevatedFocusTimer.Tick += (_, _) =>
+            {
+                if (_elevatedFocusWatcher.Poll())
+                {
+                    UpdateProblems();
+                }
+            };
+            elevatedFocusTimer.Start();
+        }
 
         OnConfigurationChanged();
         Closing += OnClosing;
@@ -515,7 +551,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (!AudioDevices.LooksLikeVirtualCable(output) && _acknowledgedNonCableOutputId != output.Id)
         {
             _acknowledgedNonCableOutputId = output.Id;
-            StatusText.Text = $"\"{output.FriendlyName}\" does not appear to be a virtual cable — the game can hear the mix only through a device such as CABLE Input. Click Enable again to start anyway.";
+            StatusText.Text = $"\"{output.FriendlyName}\" does not appear to be a virtual cable — the game can hear the mix only through a cable's Input end, such as MicMixer Input or CABLE Input. Click Enable again to start anyway.";
             return;
         }
 
@@ -579,6 +615,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
+            Log.Information("Routing started. HeldKey={HeldKey}", _sendingKey.Key?.Name ?? "off");
             ToggleBtnText.Text = "Stop";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             // Devices are opened for the whole route. The voice changer choice stays
@@ -645,6 +682,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SetHotkeyMonitoringEnabled(false);
         CancelPendingReleaseDelay();
         _router.Stop();
+        _sendingKey.Release();
         PauseMusicIfClockLost();
         ToggleBtnText.Text = "Enable";
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
@@ -726,6 +764,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         UpdateNoiseGateStateText();
+        // Also picks up music starting and stopping, which changes no routing state, and
+        // releases again a key Windows dropped the release of after routing stopped.
+        UpdateSendingKey();
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
@@ -1318,6 +1359,100 @@ public partial class MainWindow : Window, IMicMixerControlHost
         bool engaged = IsHotkeyEngaged();
         _router.SetUseModdedInput(!IsModdedMicSkipped && engaged);
         _router.SetOutputGateOpen(!IsPushToTalk || engaged);
+        UpdateSendingKey();
+    }
+
+    /// <summary>Holds the chosen key while mic or music reaches the cable.</summary>
+    private void UpdateSendingKey()
+    {
+        // NoiseGateOpen is also true while the noise gate is off.
+        bool sending = _router.IsRouting
+            && ((_router.OutputGateOpen && _router.NoiseGateOpen) || ComputeOverlayMusicState() == OverlayMusicState.Sending);
+        _sendingKey.Update(sending, _uptime.Elapsed);
+    }
+
+    /// <summary>
+    /// Sends a key-up for the chosen key, held or pressed once, without touching any
+    /// other state. Safe from any thread, including a crash handler.
+    /// </summary>
+    internal void ReleaseHeldKey() => FunctionKey.Parse(_settings.HeldKey).Send(down: false);
+
+    private void OnHoldKeyWhileSendingChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.HoldKeyWhileSending = HoldKeyWhileSendingCheck.IsChecked == true;
+        ApplyHeldKeySetting();
+        OnConfigurationChanged();
+    }
+
+    private void OnHeldKeyChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || HeldKeyCombo.SelectedItem is not FunctionKey key)
+        {
+            return;
+        }
+
+        _settings.HeldKey = key.Name;
+        ApplyHeldKeySetting();
+        OnConfigurationChanged();
+    }
+
+    private void ApplyHeldKeySetting()
+    {
+        FunctionKey key = FunctionKey.Parse(_settings.HeldKey);
+        // The hotkey listener sees injected keys too, so holding a hotkey would keep
+        // the push-to-talk gate open for good.
+        bool isHotkey = _hotkeyBindings.Any(binding => binding.MatchesKeyboard(key.VirtualKey));
+        _sendingKey.Key = _settings.HoldKeyWhileSending && !isHotkey ? key : null;
+        HeldKeyConflictText.Text = $"{key.Name} is also a hotkey, so MicMixer does not hold it. Choose another key here or on the hotkey list.";
+        HeldKeyConflictText.Visibility = _settings.HoldKeyWhileSending && isHotkey ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSendingKey();
+    }
+
+    private void OnSendHeldKeyClick(object sender, RoutedEventArgs e)
+    {
+        if (_sendHeldKeyTimer.IsEnabled)
+        {
+            _sendHeldKeyTimer.Stop();
+        }
+        else
+        {
+            _sendHeldKeyCountdown = SendHeldKeyCountdownSeconds;
+            _sendHeldKeyTimer.Start();
+        }
+
+        UpdateSendHeldKeyButton();
+    }
+
+    private async void OnSendHeldKeyTick(object? sender, EventArgs e)
+    {
+        // The countdown leaves time to switch to the other app, which usually takes
+        // key bindings only while it has focus.
+        if (--_sendHeldKeyCountdown > 0)
+        {
+            UpdateSendHeldKeyButton();
+            return;
+        }
+
+        _sendHeldKeyTimer.Stop();
+        UpdateSendHeldKeyButton();
+
+        FunctionKey key = FunctionKey.Parse(_settings.HeldKey);
+        key.Send(down: true);
+        // Games read the key state once per frame and can miss a shorter press.
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        key.Send(down: false);
+    }
+
+    private void UpdateSendHeldKeyButton()
+    {
+        SendHeldKeyButton.Content = _sendHeldKeyTimer.IsEnabled
+            ? $"Sending in {_sendHeldKeyCountdown} s (cancel)"
+            : "Send key once";
     }
 
     private void OnMusicRoutingModeChanged(object sender, RoutedEventArgs e)
@@ -1421,16 +1556,32 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnCaptureHotkeyClick(object sender, RoutedEventArgs e)
     {
-        _isCapturingHotkey = true;
+        StartHotkeyCapture(((HotkeyRow)((FrameworkElement)sender).DataContext).Index, sender);
+    }
+
+    private void OnAddHotkeyClick(object sender, RoutedEventArgs e)
+    {
+        StartHotkeyCapture(_hotkeyBindings.Count, sender);
+    }
+
+    private void StartHotkeyCapture(int index, object sender)
+    {
+        _capturingHotkeyIndex = index;
         UpdateHotkeyUi();
-        Window window = Window.GetWindow(CaptureHotkeyButton);
+        Window window = Window.GetWindow((DependencyObject)sender);
         window.Activate();
         window.Focus();
     }
 
+    private void OnRemoveHotkeyClick(object sender, RoutedEventArgs e)
+    {
+        int index = ((HotkeyRow)((FrameworkElement)sender).DataContext).Index;
+        SetHotkeyBindings(_hotkeyBindings.Where((_, i) => i != index));
+    }
+
     private void OnPreviewHotkeyKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (!_isCapturingHotkey)
+        if (_capturingHotkeyIndex < 0)
         {
             return;
         }
@@ -1447,7 +1598,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnPreviewHotkeyMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_isCapturingHotkey)
+        if (_capturingHotkeyIndex < 0)
         {
             return;
         }
@@ -1496,6 +1647,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         };
         dialog.ShowDialog();
     }
+
+    private void OnWhatsNewClick(object sender, RoutedEventArgs e) =>
+        ShowWhatsNew(Window.GetWindow((DependencyObject)sender));
+
+    private static void ShowWhatsNew(Window owner) =>
+        new WhatsNewDialog(AppVersion.DisplayText, WhatsNewDialog.ReadBuiltInItems()) { Owner = owner }.ShowDialog();
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
@@ -1580,9 +1737,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private static readonly System.Windows.Media.Brush ProblemInkBrush = CreateFrozenBrush(0x9A, 0x34, 0x12);
     private static readonly System.Windows.Media.Brush MutedInkBrush = CreateFrozenBrush(0x6B, 0x72, 0x80);
 
-    private void OnSaveSettingsClick(object sender, RoutedEventArgs e) => SaveConfiguration();
+    private void OnSaveSettingsClick(object sender, RoutedEventArgs e)
+    {
+        // A failed save stays open so its error in the save bar is seen.
+        if (SaveConfiguration())
+        {
+            _settingsWindow?.Hide();
+        }
+    }
 
-    private void SaveConfiguration()
+    /// <summary>Writes the settings-window values to disk. Returns false and shows the error when that fails.</summary>
+    private bool SaveConfiguration()
     {
         AppSettings saved = _settings.Clone();
         try
@@ -1594,12 +1759,20 @@ public partial class MainWindow : Window, IMicMixerControlHost
             Log.Warning(ex, "Failed to save settings.");
             SettingsSaveStateText.Text = $"Could not save: {ex.Message}";
             StatusText.Text = $"Could not save settings: {ex.Message}";
-            return;
+            return false;
         }
 
+        bool runAsAdministratorTurnedOn = saved.RunAsAdministrator && !_savedSettings.RunAsAdministrator;
         _savedSettings = saved;
         SyncStartWithWindows();
         OnConfigurationChanged();
+
+        if (runAsAdministratorTurnedOn && !Elevation.IsElevated)
+        {
+            RestartAsAdministrator();
+        }
+
+        return true;
     }
 
     private void OnRunSetupGuideClick(object sender, RoutedEventArgs e) => ShowSetupGuide();
@@ -1648,13 +1821,48 @@ public partial class MainWindow : Window, IMicMixerControlHost
         await RefreshDevicesAsync();
 
         // Nothing saved yet and the guide never skipped: this is a first run.
-        if (IsVisible && _devicesLoaded && _savedSettings.OutputDeviceId == null && !_settings.SetupGuideDismissed)
+        bool isFirstRun = _savedSettings.OutputDeviceId == null && !_settings.SetupGuideDismissed;
+        if (IsVisible && _devicesLoaded && isFirstRun)
         {
             ShowSetupGuide();
         }
+
+        OfferWhatsNew(isSetUp: !isFirstRun);
     }
 
-    private void OnDiscardSettingsClick(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Shows the release notes of this version once, after an update. A first run only
+    /// records the version, so the notes wait for the next update.
+    /// </summary>
+    private void OfferWhatsNew(bool isSetUp)
+    {
+        if (!IsVisible || AppVersion.Current is not { } current || _settings.WhatsNewShownForVersion == current.ToString())
+        {
+            return;
+        }
+
+        if (WhatsNewDialog.ShouldShow(current, _settings.WhatsNewShownForVersion, isSetUp)
+            && WhatsNewDialog.ReadBuiltInItems().Count > 0)
+        {
+            ShowWhatsNew(this);
+        }
+
+        _settings.WhatsNewShownForVersion = current.ToString();
+        SaveSettings();
+    }
+
+    /// <summary>Undoes the settings-window changes that are not saved, and closes the window.</summary>
+    private void OnCancelSettingsClick(object sender, RoutedEventArgs e)
+    {
+        if (_hasUnsavedConfiguration)
+        {
+            DiscardConfiguration();
+        }
+
+        _settingsWindow?.Close();
+    }
+
+    private void DiscardConfiguration()
     {
         // Like Refresh devices: the route was started with the devices being discarded.
         if (_router.IsRouting)
@@ -1678,6 +1886,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         try
         {
             StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
+            RunAsAdministratorCheck.IsChecked = _settings.RunAsAdministrator;
             VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
             LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
             ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
@@ -1686,6 +1895,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             NoiseGateThresholdSlider.Value = _settings.NoiseGateThresholdDb;
             ReleaseDelayTextBox.Text = _settings.ReleaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
             PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
+            HoldKeyWhileSendingCheck.IsChecked = _settings.HoldKeyWhileSending;
+            HeldKeyCombo.SelectedItem = FunctionKey.Parse(_settings.HeldKey);
             SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
             SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
             SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
@@ -1712,9 +1923,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _releaseDelayMilliseconds = _settings.ReleaseDelayMilliseconds;
         CancelPendingReleaseDelay();
-        _hotkeyBinding = HotkeyBinding.Parse(_settings.HotkeyId);
-        _hotkeyListener.UpdateBinding(_hotkeyBinding);
-        UpdateHotkeyUi();
+        UseHotkeyBindings(_settings.ReadHotkeys());
 
         UpdateMeterSensitivityText();
         ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
@@ -1779,7 +1988,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                     closing.Cancel = true;
                     ((Window)window!).Hide();
                     // An armed capture would otherwise take the next key or click for the hotkey.
-                    _isCapturingHotkey = false;
+                    _capturingHotkeyIndex = -1;
                     UpdateHotkeyUi();
                 }
             };
@@ -1806,18 +2015,139 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OnConfigurationChanged();
     }
 
+    private void OnRunAsAdministratorChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.RunAsAdministrator = RunAsAdministratorCheck.IsChecked == true;
+        OnConfigurationChanged();
+    }
+
+    private const string StartupHintElevated =
+        "Starts as administrator when you sign in, without asking.";
+    private const string StartupHintTaskPending =
+        "Starts as administrator at sign-in once MicMixer has run as administrator.";
+    private const string StartupHintTaskPendingRemoval =
+        "Still starts as administrator at sign-in until MicMixer runs as administrator again.";
+    private const string StartupHintNotProtected =
+        "From this folder, MicMixer starts without administrator rights at sign-in. Installed with the MicMixer installer, it starts as administrator at sign-in too.";
+    private const string StartupHintNoAdministratorAccount =
+        "Running as administrator needs a Windows account with administrator rights.";
+
+    /// <summary>
+    /// Mirrors "Start with Windows" into whichever of the two startup mechanisms
+    /// applies, never both, and shows what that means under "Run as administrator".
+    /// </summary>
     private void SyncStartWithWindows()
     {
+        // Both at once would start MicMixer twice at sign-in, and the second copy would
+        // hand over to the first.
+        string? exePath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(exePath))
+        {
+            return;
+        }
+
+        bool startElevated = _settings.StartWithWindows && _settings.RunAsAdministrator;
+        // Starting as administrator with no prompt needs an exe that nothing without
+        // administrator rights can swap out; from anywhere else it would hand those
+        // rights to whoever replaced the file.
+        bool isProtected = _settings.RunAsAdministrator && Elevation.IsProtectedFromNonAdministrators(exePath);
+        string hint = string.Empty;
+
         try
         {
-            if (!_startupRegistrySyncService.Sync(_settings.StartWithWindows, Environment.ProcessPath))
+            if (Elevation.IsElevated)
             {
-                Log.Warning("Could not open the Windows startup registry key.");
+                bool useTask = startElevated && isProtected;
+                try
+                {
+                    _startupTaskService.Sync(useTask, exePath);
+                }
+                catch (Exception ex)
+                {
+                    // Task Scheduler can be turned off or blocked by policy; the Run key still starts MicMixer.
+                    Log.Warning(ex, "Could not update the startup task; using the Run key instead.");
+                    useTask = false;
+                }
+
+                SyncRunKey(_settings.StartWithWindows && !useTask, exePath);
+                hint = useTask ? StartupHintElevated : string.Empty;
+            }
+            else if (_startupTaskService.Exists())
+            {
+                // Registered by MicMixer running as administrator; only such a copy may change it.
+                SyncRunKey(false, exePath);
+                hint = startElevated ? StartupHintElevated : StartupHintTaskPendingRemoval;
+            }
+            else
+            {
+                SyncRunKey(_settings.StartWithWindows, exePath);
+                hint = startElevated && isProtected ? StartupHintTaskPending : string.Empty;
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to synchronize the Start with Windows registry setting.");
+            Log.Warning(ex, "Failed to synchronize the Start with Windows setting.");
+        }
+
+        if (startElevated && !isProtected)
+        {
+            hint = StartupHintNotProtected;
+        }
+
+        if (!Elevation.CanRunAsAdministrator)
+        {
+            hint = StartupHintNoAdministratorAccount;
+        }
+
+        StartupHintText.Text = hint;
+        StartupHintText.Visibility = hint.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SyncRunKey(bool startWithWindows, string exePath)
+    {
+        if (!_startupRegistrySyncService.Sync(startWithWindows, exePath))
+        {
+            Log.Warning("Could not open the Windows startup registry key.");
+        }
+    }
+
+    private void RestartAsAdministrator()
+    {
+        if (_hasUnsavedConfiguration)
+        {
+            MessageBoxResult answer = System.Windows.MessageBox.Show(this,
+                "Some settings are changed but not saved. Save them before MicMixer restarts?",
+                "Restart as administrator", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            bool runAsAdministratorWasSaved = _savedSettings.RunAsAdministrator;
+            if (answer == MessageBoxResult.Cancel || (answer == MessageBoxResult.Yes && !SaveConfiguration()))
+            {
+                return;
+            }
+
+            // Saving "Run as administrator" has already asked Windows to restart MicMixer,
+            // whatever the answer was.
+            if (!runAsAdministratorWasSaved && _savedSettings.RunAsAdministrator)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            if (Elevation.TryStartElevatedCopy())
+            {
+                ExitApplication();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not restart MicMixer as administrator.");
+            StatusText.Text = $"Could not restart as administrator: {ex.Message}";
         }
     }
 
@@ -1857,7 +2187,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private string DescribeHotkeyState()
     {
-        string key = _hotkeyBinding.DisplayName;
+        string key = HotkeyNames;
+        // The listener does not say which hotkey is down, so the held state cannot name it.
+        string heldKey = _hotkeyBindings.Count == 1 ? key : "Hotkey";
         if (!_router.IsRouting)
         {
             return IsPushToTalk
@@ -1867,14 +2199,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (IsPushToTalk)
         {
-            return _hotkeyListener.IsPressed ? $"{key} held, you are heard"
-                : _isReleaseDelayPending ? $"{key} released, muting in {_releaseDelayMilliseconds} ms"
+            return _hotkeyListener.IsPressed ? $"{heldKey} held, you are heard"
+                : _isReleaseDelayPending ? $"{heldKey} released, muting in {_releaseDelayMilliseconds} ms"
                 : $"Hold {key} to be heard";
         }
 
         return IsModdedMicSkipped ? "Your normal mic is live"
-            : _hotkeyListener.IsPressed ? $"{key} held, modified voice is live"
-            : _isReleaseDelayPending ? $"{key} released, switching back in {_releaseDelayMilliseconds} ms"
+            : _hotkeyListener.IsPressed ? $"{heldKey} held, modified voice is live"
+            : _isReleaseDelayPending ? $"{heldKey} released, switching back in {_releaseDelayMilliseconds} ms"
             : $"Normal mic is live, hold {key} for the modified voice";
     }
 
@@ -1925,7 +2257,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     }
 
     /// <summary>Something that differs from how MicMixer was set up, and the settings page (or the setup guide) that fixes it.</summary>
-    private sealed record Problem(string Message, string ActionText, TabItem? Page, bool OpensSetupGuide = false);
+    private sealed record Problem(
+        string Message, string ActionText, TabItem? Page, bool OpensSetupGuide = false, bool RestartsAsAdministrator = false);
 
     /// <summary>
     /// Compares what is running and connected with the settings. Shows nothing when
@@ -1964,6 +2297,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
             problems.Add(new Problem(
                 $"Secondary output stopped: {_secondaryOutputError} Routing to the virtual cable continues.",
                 "Secondary output…", SecondaryOutputPage));
+        }
+
+        if (_elevatedFocusWatcher?.ElevatedAppName is { } elevatedApp
+            && (!IsModdedMicSkipped || IsPushToTalk || _settings.HoldKeyWhileSending))
+        {
+            string blocked = _settings.HoldKeyWhileSending
+                ? "keeps your hotkey from reaching MicMixer and drops the key it holds"
+                : "keeps your hotkey from reaching MicMixer";
+            problems.Add(new Problem(
+                $"{elevatedApp} is running as administrator. While it has focus, Windows {blocked}.",
+                "Restart as administrator", null, RestartsAsAdministrator: true));
         }
 
         if (_hasUnsavedConfiguration && _savedSettings.OutputDeviceId != null)
@@ -2057,6 +2401,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             ShowSetupGuide();
         }
+        else if (problem.RestartsAsAdministrator)
+        {
+            RestartAsAdministrator();
+        }
         else
         {
             ShowSettings(problem.Page);
@@ -2065,24 +2413,53 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void ApplyHotkeyBinding(HotkeyBinding binding)
     {
-        _hotkeyBinding = binding;
-        _isCapturingHotkey = false;
+        var bindings = new List<HotkeyBinding>(_hotkeyBindings);
+        if (_capturingHotkeyIndex < bindings.Count)
+        {
+            bindings[_capturingHotkeyIndex] = binding;
+        }
+        else
+        {
+            bindings.Add(binding);
+        }
+
+        SetHotkeyBindings(bindings);
+    }
+
+    /// <summary>Applies hotkeys the user just changed.</summary>
+    private void SetHotkeyBindings(IEnumerable<HotkeyBinding> bindings)
+    {
+        UseHotkeyBindings(bindings);
         CancelPendingReleaseDelay();
-        _hotkeyListener.UpdateBinding(binding);
-        _settings.HotkeyId = binding.SerializedValue;
         ApplyEffectiveRoutingStates();
-        UpdateHotkeyUi();
         OnConfigurationChanged();
+    }
+
+    /// <summary>
+    /// Makes <paramref name="bindings"/> the hotkeys, without duplicates, in _settings,
+    /// the listener and the settings window, and ends any capture in progress.
+    /// </summary>
+    private void UseHotkeyBindings(IEnumerable<HotkeyBinding> bindings)
+    {
+        _hotkeyBindings = [.. bindings.DistinctBy(binding => binding.SerializedValue)];
+        _settings.WriteHotkeys(_hotkeyBindings);
+        _capturingHotkeyIndex = -1;
+        _hotkeyListener.UpdateBindings(_hotkeyBindings);
+        UpdateHotkeyUi();
+        ApplyHeldKeySetting();
     }
 
     private void UpdateHotkeyUi()
     {
-        HotkeyValueText.Text = _hotkeyBinding.DisplayName;
-        CaptureHotkeyButton.Content = _isCapturingHotkey ? "Press now..." : "Change";
-        HotkeyCaptureHintText.Text = _isCapturingHotkey
+        HotkeyList.ItemsSource = HotkeyRow.For(_hotkeyBindings, _capturingHotkeyIndex);
+        AddHotkeyButton.Content = _capturingHotkeyIndex == _hotkeyBindings.Count ? HotkeyRow.CapturingText : "Add hotkey";
+        HotkeyCaptureHintText.Text = _capturingHotkeyIndex >= 0
             ? "Press any keyboard key or mouse button now."
-            : "Click Change, then press any keyboard key or mouse button.";
+            : "Click Change or Add hotkey, then press any keyboard key or mouse button.";
     }
+
+    /// <summary>All hotkeys by name, for text that tells the user what to hold.</summary>
+    private string HotkeyNames => HotkeyRow.Names(_hotkeyBindings);
 
     private void ApplyHotkeyPressedState(bool isPressed)
     {
@@ -2195,14 +2572,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         return Math.Clamp(releaseDelayMilliseconds, 0, MaxReleaseDelayMilliseconds);
     }
 
-    private static void OpenUrl(string url)
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = url,
-            UseShellExecute = true
-        });
-    }
+    private static void OpenUrl(string url) => ShellLauncher.Open(url);
 
     // --- Music player ---
 
@@ -2880,11 +3250,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         try
         {
             Directory.CreateDirectory(folder);
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = folder,
-                UseShellExecute = true
-            });
+            ShellLauncher.Open(folder);
         }
         catch (Exception ex)
         {
@@ -3396,7 +3762,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ExternalCaptureRouteState.MonitorOnly =>
                 "Turn off Monitor only to send music to the mic channel.",
             ExternalCaptureRouteState.BlockedByPushToTalk =>
-                $"Hold {_hotkeyBinding.DisplayName}, or enable Music ignores push-to-talk, to let others hear the music.",
+                $"Hold {HotkeyNames}, or enable Music ignores push-to-talk, to let others hear the music.",
             _ => "Audio is being received and routed to the virtual mic."
         };
 
@@ -3431,7 +3797,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ExternalCaptureRouteState.RoutingStopped => "App audio is being received — enable routing so others can hear it.",
             ExternalCaptureRouteState.MonitorOnly => "App audio is being received, but Monitor only is active.",
             ExternalCaptureRouteState.BlockedByPushToTalk =>
-                $"App audio is being received but blocked by push-to-talk — hold {_hotkeyBinding.DisplayName} or let music ignore push-to-talk.",
+                $"App audio is being received but blocked by push-to-talk — hold {HotkeyNames} or let music ignore push-to-talk.",
             _ => $"{target.DisplayName} is being sent to the virtual mic."
         };
     }
@@ -4354,7 +4720,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         Focus();
     }
 
-    internal void ExitForUpdate()
+    /// <summary>Quits MicMixer instead of hiding it in the tray.</summary>
+    internal void ExitApplication()
     {
         _isReallyClosing = true;
         System.Windows.Application.Current.Shutdown();

@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using CliWrap;
+using MicMixer.Admin;
 using Serilog;
 
 namespace MicMixer.Music;
@@ -121,46 +122,77 @@ public sealed partial class YouTubeDownloader
 
         arguments.Add(url);
 
-        var command = Cli.Wrap(_tools.YtDlpPath)
-            // yt-dlp (Python) writes piped output in the ANSI code page by default,
-            // which mangles titles like "I'm Fine" (U+2019). Force UTF-8 end to end.
-            .WithEnvironmentVariables(env => env.Set("PYTHONIOENCODING", "utf-8"))
-            .WithArguments(arguments)
-            .WithValidation(CommandResultValidation.None)
-            .WithStandardOutputPipe(PipeTarget.ToDelegate(line =>
+        void OnOutputLine(string line)
+        {
+            if (line.StartsWith("[download]", StringComparison.Ordinal))
             {
-                if (line.StartsWith("[download]", StringComparison.Ordinal))
+                var match = DownloadPercentRegex().Match(line);
+                if (match.Success && double.TryParse(
+                        match.Groups[1].Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out double percent))
                 {
-                    var match = DownloadPercentRegex().Match(line);
-                    if (match.Success && double.TryParse(
-                            match.Groups[1].Value,
-                            System.Globalization.NumberStyles.Float,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            out double percent))
-                    {
-                        progress?.Report(new DownloadProgress(percent, "Downloading..."));
-                    }
+                    progress?.Report(new DownloadProgress(percent, "Downloading..."));
                 }
-                else if (line.StartsWith("[ExtractAudio]", StringComparison.Ordinal))
-                {
-                    progress?.Report(new DownloadProgress(null, "Converting to MP3..."));
-                }
-                else if (line.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) && Path.IsPathRooted(line))
-                {
-                    resultPath = line.Trim();
-                }
-            }, Encoding.UTF8))
-            .WithStandardErrorPipe(PipeTarget.ToDelegate(line =>
+            }
+            else if (line.StartsWith("[ExtractAudio]", StringComparison.Ordinal))
             {
-                errorOutput.AppendLine(line);
-                Log.Debug("yt-dlp stderr: {Line}", line);
-            }, Encoding.UTF8));
+                progress?.Report(new DownloadProgress(null, "Converting to MP3..."));
+            }
+            else if (line.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) && Path.IsPathRooted(line))
+            {
+                resultPath = line.Trim();
+            }
+        }
 
-        var result = await command.ExecuteAsync(cancellationToken);
+        void OnErrorLine(string line)
+        {
+            errorOutput.AppendLine(line);
+            Log.Debug("yt-dlp stderr: {Line}", line);
+        }
 
-        return result.ExitCode == 0
+        int exitCode = await RunToolAsync(_tools.YtDlpPath, arguments, OnOutputLine, OnErrorLine, cancellationToken);
+
+        return exitCode == 0
             ? (resultPath, null)
             : (null, ExtractErrorMessage(errorOutput.ToString()));
+    }
+
+    private static async Task<int> RunToolAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        Action<string> onOutputLine,
+        Action<string> onErrorLine,
+        CancellationToken cancellationToken)
+    {
+        // yt-dlp (Python) writes piped output in the ANSI code page by default,
+        // which mangles titles like "I'm Fine" (U+2019). Force UTF-8 end to end.
+        var environment = new Dictionary<string, string> { ["PYTHONIOENCODING"] = "utf-8" };
+
+        // The tools live in the user's profile, where any program the user runs can
+        // replace them, and yt-dlp unpacks the libraries it loads into %TEMP%. Run as
+        // administrator, any of those programs could get administrator rights through it.
+        if (Elevation.IsElevated)
+        {
+            return await UnelevatedProcess.RunAsync(
+                fileName, arguments, environment, onOutputLine, onErrorLine, cancellationToken);
+        }
+
+        var result = await Cli.Wrap(fileName)
+            .WithEnvironmentVariables(env =>
+            {
+                foreach ((string name, string value) in environment)
+                {
+                    env.Set(name, value);
+                }
+            })
+            .WithArguments(arguments)
+            .WithValidation(CommandResultValidation.None)
+            .WithStandardOutputPipe(PipeTarget.ToDelegate(onOutputLine, Encoding.UTF8))
+            .WithStandardErrorPipe(PipeTarget.ToDelegate(onErrorLine, Encoding.UTF8))
+            .ExecuteAsync(cancellationToken);
+        return result.ExitCode;
     }
 
     private static string ExtractErrorMessage(string stderr)

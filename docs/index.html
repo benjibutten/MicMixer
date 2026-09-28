@@ -70,6 +70,38 @@
   .download:hover { filter: brightness(0.88); }
   .actions .alt { font-size: 0.93rem; }
   .fineprint { color: var(--muted); font-size: 0.87rem; }
+  .winget { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; font-size: 0.93rem; }
+  .winget-label { color: var(--muted); }
+  .winget-command {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    overflow: hidden;
+    background: var(--bg-soft);
+  }
+  .winget-command code {
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    padding: 7px 12px;
+  }
+  .copy {
+    flex: none;
+    border: 0;
+    border-left: 1px solid var(--line);
+    background: #fff;
+    color: var(--accent-dark);
+    font: inherit;
+    font-weight: 600;
+    padding: 0 14px;
+    cursor: pointer;
+  }
+  .copy:hover { background: var(--bg-soft); }
 
   figure.shot { margin: 30px 0 10px; }
   figure.shot img { border: 1px solid var(--line); border-radius: 8px; }
@@ -122,13 +154,20 @@
     <a class="download" data-release-download href="https://github.com/benjibutten/MicMixer/releases/latest">Download for Windows</a>
     <a class="alt" href="https://github.com/benjibutten/MicMixer">Source on GitHub</a>
   </div>
+  <div class="winget">
+    <span class="winget-label">Or install with winget:</span>
+    <span class="winget-command">
+      <code id="winget-command">winget install --id BenjiButten.MicMixer --exact</code>
+      <button type="button" class="copy" data-copy-target="winget-command" aria-label="Copy the winget command">Copy</button>
+    </span>
+  </div>
   <p class="fineprint">
-    Download the versioned <code>MicMixer-&lt;version&gt;-win-x64.zip</code> from the
-    <a href="https://github.com/benjibutten/MicMixer/releases/latest">latest release</a>.
+    The button downloads the installer, <code>MicMixer-&lt;version&gt;-win-x64-setup.exe</code>.
+    The <a href="https://github.com/benjibutten/MicMixer/releases/latest">latest release</a>
+    also has the same app as a zip, without an installer; winget installs that one, and
+    keeps it updated with <code>winget upgrade</code>.
     Windows 10/11, x64. Self-contained, no .NET install needed. Apache-2.0.
     Every release is built automatically from the source in this repository.
-    Prefer a package manager? Run
-    <code>winget install --id BenjiButten.MicMixer --exact</code> in a terminal.
     Windows shows a warning the first time you run it —
     <a href="#first-run">here's what to click</a>.
   </p>
@@ -169,8 +208,16 @@
   <p>
     Select your real mic and a modified one (for example Voicemod's virtual device). While
     the hotkey is held, the modified mic is routed; on release you're back to normal. The
-    hotkey can be any key or mouse button, including side buttons. A configurable release delay stops the
+    hotkey can be any key or mouse button, including side buttons, and you can add several
+    that all do the same. A configurable release delay stops the
     modified voice from clipping off mid-sentence.
+  </p>
+
+  <h3>Letting another app transmit exactly when MicMixer does</h3>
+  <p>
+    <em>Hold a key while sending</em> holds a spare key (F13–F24) down for as long as mic or
+    music reaches the virtual cable. Bind another app's push-to-talk to that key and it
+    transmits in step with MicMixer, also while MicMixer is in the background.
   </p>
 
   <h3>Previewing a track before anyone else hears it</h3>
@@ -222,24 +269,32 @@
 
 <section class="wrap" id="setup">
   <h2>Setup</h2>
-  <p>You need a virtual audio cable driver. The free <a href="https://vb-audio.com/Cable/">VB-CABLE</a> works well.</p>
+  <p>
+    You need a virtual audio cable driver. The free <a href="https://vb-audio.com/Cable/">VB-CABLE</a>
+    by VB-Audio Software works well, and the MicMixer installer can install it for you.
+    VB-CABLE is donationware: if you find it useful, consider supporting VB-Audio at
+    <a href="https://vb-audio.com/Cable/">www.vb-cable.com</a>.
+  </p>
   <ol class="setup">
-    <li>Install VB-CABLE and reboot if the installer asks.</li>
-    <li>Download the <a data-release-download href="https://github.com/benjibutten/MicMixer/releases/latest">versioned <code>MicMixer-&lt;version&gt;-win-x64.zip</code></a>, extract it, and run <code>MicMixer.exe</code>.</li>
-    <li>In <em>Settings › Devices</em>, pick your mic (and optionally a modded mic), set <em>Send the mix to</em> to <em>CABLE Input</em>, and click <em>Save</em>. On the first start, the built-in setup guide walks you through this.</li>
-    <li>In the game or chat app, select <em>CABLE Output</em> as the microphone. Click <em>Enable</em> in MicMixer.</li>
+    <li>Download the <a data-release-download href="https://github.com/benjibutten/MicMixer/releases/latest">MicMixer installer</a> and run it. It installs MicMixer into Program Files and adds it to the Start menu.</li>
+    <li>Without a virtual cable, the installer offers to install VB-CABLE and to name its two ends <em>MicMixer Input</em> and <em>MicMixer Output</em>. Untick it if you have another cable or would rather install VB-CABLE yourself; its own names are <em>CABLE Input</em> and <em>CABLE Output</em>. Restart Windows if the installer asks.</li>
+    <li>Tick <em>Run MicMixer as administrator</em> if a game or program you use runs as administrator: while it has focus, Windows otherwise keeps your hotkey from reaching MicMixer. You can change this later in <em>Settings › General</em>.</li>
+    <li>In <em>Settings › Devices</em>, pick your mic (and optionally a modded mic), set <em>Send the mix to</em> to <em>MicMixer Input</em> (or <em>CABLE Input</em>), and click <em>Save</em>. On the first start, the built-in setup guide walks you through this.</li>
+    <li>In the game or chat app, select <em>MicMixer Output</em> (or <em>CABLE Output</em>) as the microphone. Click <em>Enable</em> in MicMixer.</li>
   </ol>
   <h3 id="first-run">The Windows warning on first run</h3>
   <p>
-    MicMixer is not code-signed yet, so the first time you run it Windows shows a blue or red
+    MicMixer is not code-signed yet, so the first time you run the installer Windows shows a blue or red
     <em>"Windows protected your PC"</em> box with the Run button hidden. Click
     <em>More info</em>, then <em>Run anyway</em>. Any new app from a small publisher gets
     this: it means Windows hasn't seen the file often enough yet, not that it found
-    anything wrong with it.
+    anything wrong with it. Windows then asks for permission to install into Program Files,
+    listing the publisher as unknown for the same reason. It asks again when an update
+    installs, unless MicMixer runs as administrator.
   </p>
   <p>
     If you'd rather check the download yourself first, each release ships a
-    <code>.sha256</code> checksum next to the ZIP, and the
+    <code>.sha256</code> checksum next to the installer and the ZIP, and the
     <a href="code-signing-policy.html">code signing policy</a> covers how releases are built
     and where signing currently stands.
   </p>
@@ -287,10 +342,11 @@
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(release => {
         const assets = release.assets || [];
-        const zip = assets.find(asset =>
-          /^MicMixer-\d+\.\d+\.\d+-win-x64\.zip$/i.test(asset.name))
-          || assets.find(asset => /^MicMixer-win-x64\.zip$/i.test(asset.name));
-        return zip?.browser_download_url;
+        // Releases from before the installer only have the zip.
+        const download = assets.find(asset =>
+          /^MicMixer-\d+\.\d+\.\d+-win-x64-setup\.exe$/i.test(asset.name))
+          || assets.find(asset => /^MicMixer-\d+\.\d+\.\d+-win-x64\.zip$/i.test(asset.name));
+        return download?.browser_download_url;
       })
       .catch(() => null);
 
@@ -308,6 +364,21 @@
       window.location.assign(await downloadUrl || fallbackUrl);
     }));
   })();
+
+  document.querySelectorAll('[data-copy-target]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const command = document.getElementById(button.dataset.copyTarget);
+      try {
+        await navigator.clipboard.writeText(command.textContent);
+        button.textContent = 'Copied';
+      } catch {
+        // Without clipboard access, select the command so Ctrl+C copies it.
+        window.getSelection().selectAllChildren(command);
+        button.textContent = 'Press Ctrl+C';
+      }
+      setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+    });
+  });
 </script>
 
 </body>

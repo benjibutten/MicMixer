@@ -16,6 +16,7 @@ public sealed class AppSettings
     public void CopyConfigurationFrom(AppSettings source)
     {
         StartWithWindows = source.StartWithWindows;
+        RunAsAdministrator = source.RunAsAdministrator;
         NormalInputDeviceId = source.NormalInputDeviceId;
         ModdedInputDeviceId = source.ModdedInputDeviceId;
         NormalMicVolume = source.NormalMicVolume;
@@ -24,8 +25,11 @@ public sealed class AppSettings
         ProcessedVoiceVolume = source.ProcessedVoiceVolume;
         OutputDeviceId = source.OutputDeviceId;
         HotkeyId = source.HotkeyId;
+        ExtraHotkeyIds = [.. source.ExtraHotkeyIds];
         ReleaseDelayMilliseconds = source.ReleaseDelayMilliseconds;
         PushToTalkMode = source.PushToTalkMode;
+        HoldKeyWhileSending = source.HoldKeyWhileSending;
+        HeldKey = source.HeldKey;
         MusicMonitorDeviceId = source.MusicMonitorDeviceId;
         SecondaryOutputEnabled = source.SecondaryOutputEnabled;
         SecondaryOutputDeviceId = source.SecondaryOutputDeviceId;
@@ -49,6 +53,15 @@ public sealed class AppSettings
     }
 
     public bool StartWithWindows { get; set; }
+
+    /// <summary>
+    /// Runs MicMixer as administrator, so its hotkeys and held key also work while a
+    /// program running as administrator has focus.
+    /// </summary>
+    public bool RunAsAdministrator { get; set; }
+
+    /// <summary>The version whose "What's new" notes were last shown, or recorded on a first run.</summary>
+    public string? WhatsNewShownForVersion { get; set; }
 
     public string? NormalInputDeviceId { get; set; }
 
@@ -76,11 +89,33 @@ public sealed class AppSettings
 
     public string? OutputDeviceId { get; set; }
 
+    /// <summary>The first hotkey.</summary>
+    // Older builds read only this one, so it stays a single value.
     public string HotkeyId { get; set; } = Input.HotkeyBinding.Default.SerializedValue;
+
+    /// <summary>Further hotkeys that do exactly what <see cref="HotkeyId"/> does.</summary>
+    public List<string> ExtraHotkeyIds { get; set; } = [];
+
+    /// <summary>Every hotkey, <see cref="HotkeyId"/> first, without duplicates.</summary>
+    public List<Input.HotkeyBinding> ReadHotkeys() =>
+        [.. new[] { HotkeyId }.Concat(ExtraHotkeyIds).Select(Input.HotkeyBinding.Parse).DistinctBy(binding => binding.SerializedValue)];
+
+    /// <summary>Stores <paramref name="hotkeys"/>, which must hold at least one, the first as <see cref="HotkeyId"/>.</summary>
+    public void WriteHotkeys(IReadOnlyList<Input.HotkeyBinding> hotkeys)
+    {
+        HotkeyId = hotkeys[0].SerializedValue;
+        ExtraHotkeyIds = [.. hotkeys.Skip(1).Select(binding => binding.SerializedValue)];
+    }
 
     public int ReleaseDelayMilliseconds { get; set; }
 
     public bool PushToTalkMode { get; set; }
+
+    /// <summary>Holds <see cref="HeldKey"/> down while MicMixer sends to the virtual cable.</summary>
+    public bool HoldKeyWhileSending { get; set; }
+
+    /// <summary>Name of the function key (F13–F24) that <see cref="HoldKeyWhileSending"/> holds.</summary>
+    public string HeldKey { get; set; } = Input.FunctionKey.Default.Name;
 
     /// <summary>Music keeps flowing to the virtual cable while push-to-talk holds the mic silent.</summary>
     public bool MusicIgnoresPushToTalk { get; set; }
