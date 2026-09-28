@@ -36,6 +36,8 @@
     <!-- The stream overlay page ships inside the assembly so the local overlay
          server never depends on loose files next to the exe. -->
     <EmbeddedResource Include="Overlay\ObsOverlay.html" />
+    <!-- Shown by the "What's new" dialog after an update. -->
+    <EmbeddedResource Include="..\..\RELEASE_NOTES.md" LogicalName="MicMixer.RELEASE_NOTES.md" />
   </ItemGroup>
 
   <ItemGroup>

@@ -60,6 +60,9 @@ public sealed class AppSettings
     /// </summary>
     public bool RunAsAdministrator { get; set; }
 
+    /// <summary>The version whose "What's new" notes were last shown, or recorded on a first run.</summary>
+    public string? WhatsNewShownForVersion { get; set; }
+
     public string? NormalInputDeviceId { get; set; }
 
     public string? ModdedInputDeviceId { get; set; }

@@ -1815,10 +1815,34 @@ public partial class MainWindow : Window, IMicMixerControlHost
         await RefreshDevicesAsync();
 
         // Nothing saved yet and the guide never skipped: this is a first run.
-        if (IsVisible && _devicesLoaded && _savedSettings.OutputDeviceId == null && !_settings.SetupGuideDismissed)
+        bool isFirstRun = _savedSettings.OutputDeviceId == null && !_settings.SetupGuideDismissed;
+        if (IsVisible && _devicesLoaded && isFirstRun)
         {
             ShowSetupGuide();
         }
+
+        OfferWhatsNew(isSetUp: !isFirstRun);
+    }
+
+    /// <summary>
+    /// Shows the release notes of this version once, after an update. A first run only
+    /// records the version, so the notes wait for the next update.
+    /// </summary>
+    private void OfferWhatsNew(bool isSetUp)
+    {
+        if (!IsVisible || AppVersion.Current is not { } current || _settings.WhatsNewShownForVersion == current.ToString())
+        {
+            return;
+        }
+
+        if (WhatsNewDialog.ShouldShow(current, _settings.WhatsNewShownForVersion, isSetUp)
+            && WhatsNewDialog.ReadBuiltInItems() is { Count: > 0 } items)
+        {
+            new WhatsNewDialog(AppVersion.DisplayText, items) { Owner = this }.ShowDialog();
+        }
+
+        _settings.WhatsNewShownForVersion = current.ToString();
+        SaveSettings();
     }
 
     private void OnDiscardSettingsClick(object sender, RoutedEventArgs e)
