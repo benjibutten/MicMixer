@@ -100,9 +100,32 @@ Release archives are self-contained, so users normally do not need to install
 
 ## Download
 
-Download the versioned `MicMixer-<version>-win-x64.zip` archive from
-[GitHub Releases](https://github.com/benjibutten/MicMixer/releases/latest), extract
-it, and run `MicMixer.exe`.
+Download the installer, `MicMixer-<version>-win-x64-setup.exe`, from
+[GitHub Releases](https://github.com/benjibutten/MicMixer/releases/latest) and run
+it. It installs MicMixer into Program Files and adds it to the Start menu and to
+Apps in Windows Settings. The same release has the app as a zip,
+`MicMixer-<version>-win-x64.zip`, to extract and run from a folder of your choice.
+
+When Windows has no VB-CABLE yet, the installer offers to install it and to name
+its two ends **MicMixer Input** and **MicMixer Output**. VB-CABLE is made by
+VB-Audio Software: the origin of VB-CABLE is [www.vb-cable.com](https://vb-audio.com/Cable/),
+and VB-CABLE is a donationware, all participations are welcome. The option can be
+unticked for another cable or a manual install, and uninstalling MicMixer leaves
+VB-CABLE in place.
+
+The installer offers **Run MicMixer as administrator**, also in **Settings →
+General**. While a game or program running as administrator has focus, Windows
+keeps the hotkey from reaching a MicMixer that is not, and drops the keys it
+holds. When MicMixer notices such a program taking focus, it says so in the main
+window with a button that restarts it as administrator. Installed with the
+installer and set to start with Windows, it then starts as administrator at
+sign-in through Task Scheduler, without a UAC prompt. From any other folder it
+does not: Windows would start whatever program replaced `MicMixer.exe` there as
+administrator. Running as administrator, MicMixer still starts yt-dlp, the
+browser and File Explorer without administrator rights, and on Windows 11 it does
+not follow folder junctions made without administrator rights, so a music folder
+reached through such a junction stays empty. The option needs a Windows account
+with administrator rights.
 
 Alternatively, install MicMixer with Windows Package Manager:
 
@@ -121,8 +144,11 @@ for verification commands and details.
 Release builds check GitHub for updates at most once every 12 hours while the
 main window is open. When a newer version is available, MicMixer can download,
 verify, install, and restart itself. You can also run a manual check from
-**About → Check for updates**. Installs in protected folders may trigger a UAC
-prompt, and Windows may show a security warning when a new build restarts.
+**About → Check for updates**. A copy installed with the installer updates by
+running the new installer, which asks for UAC approval unless MicMixer runs as
+administrator; a copy extracted from the zip replaces its own files. Windows may
+show a security warning when a new build restarts. After an update, MicMixer
+shows the new version's release notes once.
 Installations made through winget are updated through winget instead of the
 built-in updater. Development builds do not perform update checks.
 
@@ -195,7 +221,9 @@ Secondary output, Music folders and General.
 ## Hotkey and push-to-talk
 
 In **Settings › Hotkey**, click **Change**, then press the keyboard key or mouse
-button that should select the modified mic while routing is active:
+button that should select the modified mic while routing is active. **Add hotkey**
+adds more keys or buttons that do exactly the same; the hotkey counts as held
+while any of them is held.
 
 - Hotkey held: the modified mic is routed.
 - Hotkey released: the normal mic is routed.
@@ -228,6 +256,13 @@ cable receives silence. Neither microphone audio nor music is sent.
 - With **Music ignores push-to-talk** enabled (music card), push-to-talk gates
   only the microphone: the music keeps flowing into the virtual cable as long as
   it plays. See [Music routing](#music-routing).
+
+**Hold a key while sending** (same page) holds a chosen key, F13–F24, down for
+as long as mic or music reaches the virtual cable, and lets go shortly after. Bind
+another app's push-to-talk to that key and it transmits exactly when MicMixer
+does, also while MicMixer is in the background. F13–F24 are not on a normal
+keyboard: click **Send key once**, switch to the other app and start its key
+binding, and MicMixer sends the key after 5 seconds.
 
 **Noise gate** mutes the mic whenever its level stays below the threshold, so
 the cable carries true digital silence between phrases instead of room noise

@@ -17,7 +17,9 @@ receiving app changes.
 
 ## Step 1 — Route MicMixer into Discord
 
-1. Install VB-CABLE and reboot if asked.
+1. Install VB-CABLE and reboot if asked. The MicMixer installer can do this for
+   you; if it also named the cable, its ends are *MicMixer Input* and
+   *MicMixer Output* instead of *CABLE Input* and *CABLE Output* below.
 2. In MicMixer's **Settings › Devices**, set **Normal mic** to your real
    microphone and **Send the mix to** to *CABLE Input*, then click **Save**.
    Set **Voice changer** to **Off** if you don't use one.

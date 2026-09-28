@@ -24,7 +24,9 @@ continuously.
 
 ## Step 1 — Route MicMixer into the game and open its voice gate
 
-1. Install VB-CABLE and reboot if the installer asks.
+1. Install VB-CABLE and reboot if the installer asks. The MicMixer installer can
+   do this for you; if it also named the cable, its ends are *MicMixer Input* and
+   *MicMixer Output* instead of *CABLE Input* and *CABLE Output* below.
 2. In MicMixer's **Settings › Devices**, set **Normal mic** to your real microphone
    and **Send the mix to** to *CABLE Input (VB-Audio Virtual Cable)*, then click
    **Save**. If you don't use a voice changer, set **Voice changer** to **Off**.
