@@ -9,6 +9,7 @@ using System.Windows.Navigation;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using System.IO;
+using MicMixer.Admin;
 using MicMixer.Audio;
 using MicMixer.Diagnostics;
 using MicMixer.Dsp;
@@ -35,6 +36,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly GlobalHotkeyListener _hotkeyListener;
     private readonly SettingsStore _settingsStore;
     private readonly StartupRegistrySyncService _startupRegistrySyncService;
+    private readonly StartupTaskService _startupTaskService = new();
+    private readonly ElevatedFocusWatcher? _elevatedFocusWatcher;
     private readonly DispatcherTimer _levelTimer;
     private readonly DispatcherTimer _releaseDelayTimer;
     private readonly System.Windows.Forms.NotifyIcon _trayIcon;
@@ -248,6 +251,24 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _levelTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _levelTimer.Tick += OnLevelTimerTick;
         _levelTimer.Start();
+
+        RunAsAdministratorCheck.IsEnabled = Elevation.CanRunAsAdministrator;
+
+        // Running as administrator, nothing can hide the keyboard from MicMixer. A
+        // standard account cannot get there, so there is nothing to offer it.
+        if (!Elevation.IsElevated && Elevation.CanRunAsAdministrator)
+        {
+            _elevatedFocusWatcher = new ElevatedFocusWatcher();
+            var elevatedFocusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            elevatedFocusTimer.Tick += (_, _) =>
+            {
+                if (_elevatedFocusWatcher.Poll())
+                {
+                    UpdateProblems();
+                }
+            };
+            elevatedFocusTimer.Start();
+        }
 
         OnConfigurationChanged();
         Closing += OnClosing;
@@ -1735,9 +1756,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return false;
         }
 
+        bool runAsAdministratorTurnedOn = saved.RunAsAdministrator && !_savedSettings.RunAsAdministrator;
         _savedSettings = saved;
         SyncStartWithWindows();
         OnConfigurationChanged();
+
+        if (runAsAdministratorTurnedOn && !Elevation.IsElevated)
+        {
+            RestartAsAdministrator();
+        }
+
         return true;
     }
 
@@ -1817,6 +1845,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         try
         {
             StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
+            RunAsAdministratorCheck.IsChecked = _settings.RunAsAdministrator;
             VoiceProfileCombo.SelectedValue = _settings.SelectedVoiceProfileId;
             LongerAnalysisWindowCheck.IsChecked = _settings.LongerAnalysisWindow;
             ProcessedVoiceVolumeSlider.Value = _settings.ProcessedVoiceVolume;
@@ -1945,18 +1974,136 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OnConfigurationChanged();
     }
 
+    private void OnRunAsAdministratorChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.RunAsAdministrator = RunAsAdministratorCheck.IsChecked == true;
+        OnConfigurationChanged();
+    }
+
+    private const string StartupHintElevated =
+        "Starts as administrator when you sign in, without asking.";
+    private const string StartupHintTaskPending =
+        "Starts as administrator at sign-in once MicMixer has run as administrator.";
+    private const string StartupHintTaskPendingRemoval =
+        "Still starts as administrator at sign-in until MicMixer runs as administrator again.";
+    private const string StartupHintNotProtected =
+        "From this folder, MicMixer starts without administrator rights at sign-in. Installed with the MicMixer installer, it starts as administrator at sign-in too.";
+    private const string StartupHintNoAdministratorAccount =
+        "Running as administrator needs a Windows account with administrator rights.";
+
+    /// <summary>
+    /// Mirrors "Start with Windows" into whichever of the two startup mechanisms
+    /// applies, and never both: MicMixer started twice at sign-in would have the
+    /// second copy hand over to the first.
+    /// </summary>
     private void SyncStartWithWindows()
     {
+        string? exePath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(exePath))
+        {
+            return;
+        }
+
+        bool startElevated = _settings.StartWithWindows && _settings.RunAsAdministrator;
+        // Starting as administrator with no prompt needs an exe that nothing without
+        // administrator rights can swap out; from anywhere else it would hand those
+        // rights to whoever replaced the file.
+        bool isProtected = _settings.RunAsAdministrator && Elevation.IsProtectedFromNonAdministrators(exePath);
+        string hint = string.Empty;
+
         try
         {
-            if (!_startupRegistrySyncService.Sync(_settings.StartWithWindows, Environment.ProcessPath))
+            if (Elevation.IsElevated)
             {
-                Log.Warning("Could not open the Windows startup registry key.");
+                bool useTask = startElevated && isProtected;
+                try
+                {
+                    _startupTaskService.Sync(useTask, exePath);
+                }
+                catch (Exception ex)
+                {
+                    // Task Scheduler can be turned off or blocked by policy; the Run key still starts MicMixer.
+                    Log.Warning(ex, "Could not update the startup task; using the Run key instead.");
+                    useTask = false;
+                }
+
+                SyncRunKey(_settings.StartWithWindows && !useTask, exePath);
+                hint = useTask ? StartupHintElevated : string.Empty;
+            }
+            else if (_startupTaskService.Exists())
+            {
+                // Registered by MicMixer running as administrator; only such a copy may change it.
+                SyncRunKey(false, exePath);
+                hint = startElevated ? StartupHintElevated : StartupHintTaskPendingRemoval;
+            }
+            else
+            {
+                SyncRunKey(_settings.StartWithWindows, exePath);
+                hint = startElevated && isProtected ? StartupHintTaskPending : string.Empty;
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to synchronize the Start with Windows registry setting.");
+            Log.Warning(ex, "Failed to synchronize the Start with Windows setting.");
+        }
+
+        if (startElevated && !isProtected)
+        {
+            hint = StartupHintNotProtected;
+        }
+
+        if (!Elevation.CanRunAsAdministrator)
+        {
+            hint = StartupHintNoAdministratorAccount;
+        }
+
+        StartupHintText.Text = hint;
+        StartupHintText.Visibility = hint.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SyncRunKey(bool startWithWindows, string exePath)
+    {
+        if (!_startupRegistrySyncService.Sync(startWithWindows, exePath))
+        {
+            Log.Warning("Could not open the Windows startup registry key.");
+        }
+    }
+
+    private void RestartAsAdministrator()
+    {
+        if (_hasUnsavedConfiguration)
+        {
+            MessageBoxResult answer = System.Windows.MessageBox.Show(this,
+                "Some settings are changed but not saved. Save them before MicMixer restarts?",
+                "Restart as administrator", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel || (answer == MessageBoxResult.Yes && !SaveConfiguration()))
+            {
+                return;
+            }
+
+            // Saving "Run as administrator" restarts MicMixer by itself.
+            if (_isReallyClosing)
+            {
+                return;
+            }
+        }
+
+        try
+        {
+            if (Elevation.TryStartElevatedCopy())
+            {
+                ExitApplication();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not restart MicMixer as administrator.");
+            StatusText.Text = $"Could not restart as administrator: {ex.Message}";
         }
     }
 
@@ -2066,7 +2213,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
     }
 
     /// <summary>Something that differs from how MicMixer was set up, and the settings page (or the setup guide) that fixes it.</summary>
-    private sealed record Problem(string Message, string ActionText, TabItem? Page, bool OpensSetupGuide = false);
+    private sealed record Problem(
+        string Message, string ActionText, TabItem? Page, bool OpensSetupGuide = false, bool RestartsAsAdministrator = false);
 
     /// <summary>
     /// Compares what is running and connected with the settings. Shows nothing when
@@ -2105,6 +2253,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
             problems.Add(new Problem(
                 $"Secondary output stopped: {_secondaryOutputError} Routing to the virtual cable continues.",
                 "Secondary output…", SecondaryOutputPage));
+        }
+
+        if (_elevatedFocusWatcher?.ElevatedAppName is { } elevatedApp
+            && (!IsModdedMicSkipped || IsPushToTalk || _settings.HoldKeyWhileSending))
+        {
+            string blocked = _settings.HoldKeyWhileSending
+                ? "keeps your hotkey from reaching MicMixer and drops the key it holds"
+                : "keeps your hotkey from reaching MicMixer";
+            problems.Add(new Problem(
+                $"{elevatedApp} is running as administrator. While it has focus, Windows {blocked}.",
+                "Restart as administrator", null, RestartsAsAdministrator: true));
         }
 
         if (_hasUnsavedConfiguration && _savedSettings.OutputDeviceId != null)
@@ -2197,6 +2356,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (problem.OpensSetupGuide)
         {
             ShowSetupGuide();
+        }
+        else if (problem.RestartsAsAdministrator)
+        {
+            RestartAsAdministrator();
         }
         else
         {
@@ -2374,14 +2537,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         return Math.Clamp(releaseDelayMilliseconds, 0, MaxReleaseDelayMilliseconds);
     }
 
-    private static void OpenUrl(string url)
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = url,
-            UseShellExecute = true
-        });
-    }
+    private static void OpenUrl(string url) => ShellLauncher.Open(url);
 
     // --- Music player ---
 
@@ -3059,11 +3215,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         try
         {
             Directory.CreateDirectory(folder);
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = folder,
-                UseShellExecute = true
-            });
+            ShellLauncher.Open(folder);
         }
         catch (Exception ex)
         {
@@ -4533,7 +4685,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         Focus();
     }
 
-    internal void ExitForUpdate()
+    /// <summary>Quits MicMixer instead of hiding it in the tray.</summary>
+    internal void ExitApplication()
     {
         _isReallyClosing = true;
         System.Windows.Application.Current.Shutdown();

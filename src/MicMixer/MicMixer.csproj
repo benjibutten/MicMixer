@@ -15,6 +15,9 @@
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeNativeLibrariesForSelfExtract>
+    <!-- DOTNET_STARTUP_HOOKS comes from the user's environment, which any program the
+         user runs can set, and would load its code into MicMixer running as administrator. -->
+    <StartupHookSupport>false</StartupHookSupport>
     <EnableCompressionInSingleFile Condition="'$(PublishSingleFile)' == 'true'">false</EnableCompressionInSingleFile>
     <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
   </PropertyGroup>

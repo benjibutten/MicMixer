@@ -1612,6 +1612,17 @@
                                 </StackPanel>
 
                                 <StackPanel Style="{StaticResource SettingsSection}">
+                                    <TextBlock Text="Run as administrator" Style="{StaticResource SettingsHeading}"/>
+                                    <TextBlock Style="{StaticResource SettingsDesc}"
+                                               Text="While a game or program running as administrator has focus, Windows keeps your hotkey from reaching MicMixer and drops the keys it holds. Running MicMixer as administrator too lets them through. MicMixer restarts as administrator when you save."/>
+                                    <CheckBox x:Name="RunAsAdministratorCheck" FontSize="11.5" Foreground="#10233A"
+                                              Checked="OnRunAsAdministratorChanged" Unchecked="OnRunAsAdministratorChanged">
+                                        <TextBlock Text="Run MicMixer as administrator" VerticalAlignment="Center"/>
+                                    </CheckBox>
+                                    <TextBlock x:Name="StartupHintText" Style="{StaticResource SettingsDesc}" Margin="0,6,0,0" Visibility="Collapsed"/>
+                                </StackPanel>
+
+                                <StackPanel Style="{StaticResource SettingsSection}">
                                     <TextBlock Text="Setup guide" Style="{StaticResource SettingsHeading}"/>
                                     <TextBlock Style="{StaticResource SettingsDesc}"
                                                Text="Walks through what MicMixer does, the virtual cable, your devices and the hotkey. Your current choices are filled in, and nothing changes unless you click Finish."/>

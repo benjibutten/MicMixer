@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -8,6 +7,7 @@ using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
 using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using MicMixer.Admin;
 using MicMixer.Updates;
 
 namespace MicMixer.UI;
@@ -109,7 +109,7 @@ internal sealed class AboutDialog : Window
         };
         hyperlink.RequestNavigate += (_, e) =>
         {
-            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+            ShellLauncher.Open(e.Uri.AbsoluteUri);
             e.Handled = true;
         };
         sourceLink.Inlines.Add(hyperlink);
@@ -228,7 +228,7 @@ internal sealed class AboutDialog : Window
         };
         pixlexiLink.RequestNavigate += (_, e) =>
         {
-            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+            ShellLauncher.Open(e.Uri.AbsoluteUri);
             e.Handled = true;
         };
         supportText.Inlines.Add(pixlexiLink);

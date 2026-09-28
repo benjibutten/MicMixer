@@ -75,7 +75,7 @@ internal static class UpdateCoordinator
                 var progress = new Progress<UpdateProgress>(progressWindow.Report);
                 await Service.LaunchInstallerAsync(update, progress);
                 if (Application.Current.MainWindow is MainWindow mainWindow)
-                    mainWindow.ExitForUpdate();
+                    mainWindow.ExitApplication();
                 else
                     Application.Current.Shutdown();
             }

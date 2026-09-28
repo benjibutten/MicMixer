@@ -1,8 +1,10 @@
 using System.IO;
 using System.IO.Pipes;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Text;
 using System.Threading.Channels;
+using MicMixer.Admin;
 using Serilog;
 
 namespace MicMixer.Remote;
@@ -37,12 +39,15 @@ internal sealed class MicMixerControlServer : IAsyncDisposable
         {
             try
             {
-                await using var pipe = new NamedPipeServerStream(
+                await using var pipe = NamedPipeServerStreamAcl.Create(
                     _pipeName,
                     PipeDirection.InOut,
                     1,
                     PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                    PipeOptions.Asynchronous,
+                    0,
+                    0,
+                    CreatePipeSecurity());
 
                 await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
                 Log.Information("StreamDecky control client connected to MicMixer.");
@@ -63,6 +68,19 @@ internal sealed class MicMixerControlServer : IAsyncDisposable
                 await DelayBeforeRetryAsync(cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>A pipe only this Windows account can open, and that it owns.</summary>
+    private static PipeSecurity CreatePipeSecurity()
+    {
+        // PipeOptions.CurrentUserOnly would use the token's default owner instead of the
+        // account. Running as administrator, that owner is the Administrators group, which
+        // would lock StreamDecky out and fail its own CurrentUserOnly check of the owner.
+        var user = Elevation.CurrentUser();
+        var security = new PipeSecurity();
+        security.AddAccessRule(new PipeAccessRule(user, PipeAccessRights.FullControl, AccessControlType.Allow));
+        security.SetOwner(user);
+        return security;
     }
 
     private async Task RunSessionAsync(NamedPipeServerStream pipe, CancellationToken cancellationToken)

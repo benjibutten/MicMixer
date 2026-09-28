@@ -1,9 +1,11 @@
 ﻿using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
+using MicMixer.Admin;
 using MicMixer.Audio;
 using MicMixer.Diagnostics;
 using MicMixer.Music;
@@ -19,6 +21,12 @@ public partial class App : System.Windows.Application
     private const string AppUserModelId = "BenjiButten.MicMixer";
     private const string MutexName = "MicMixer_SingleInstance_B7E3A1F0";
     private const string EventName = "MicMixer_ShowExisting_B7E3A1F0";
+
+    /// <summary>Starts MicMixer hidden in the tray, as Windows does at sign-in.</summary>
+    internal const string MinimizedArgument = "--minimized";
+
+    /// <summary>Turns on "Run as administrator" and exits; the installer passes it when that box is ticked.</summary>
+    internal const string RunAsAdministratorArgument = "--run-as-administrator";
 
     internal static readonly Stopwatch StartupStopwatch = Stopwatch.StartNew();
     private static readonly object StartupLogSync = new();
@@ -70,6 +78,11 @@ public partial class App : System.Windows.Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        if (Elevation.IsElevated)
+        {
+            Elevation.RefuseUntrustedJunctions();
+        }
+
         if (UpdateInstaller.IsCleanupMode(e.Args))
         {
             base.OnStartup(e);
@@ -84,7 +97,23 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+        if (e.Args.Contains(RunAsAdministratorArgument, StringComparer.OrdinalIgnoreCase))
+        {
+            base.OnStartup(e);
+            try
+            {
+                AppLogger.Initialize();
+                TurnOnRunAsAdministrator();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not turn on Run as administrator.");
+            }
+            Shutdown();
+            return;
+        }
         UpdateInstaller.ScheduleCleanup(e.Args);
+        Elevation.WaitForPreviousInstance(e.Args);
 
         try
         {
@@ -118,7 +147,20 @@ public partial class App : System.Windows.Application
 
         base.OnStartup(e);
 
-        _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
+        bool createdNew;
+        try
+        {
+            _instanceMutex = MutexAcl.Create(true, MutexName, out createdNew, CreateMutexSecurity());
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Held by a MicMixer running as administrator that does not grant this
+            // account access. It is still running, so this launch must not become a
+            // second instance.
+            Log.Warning("Another MicMixer is running as administrator and cannot be reached; exiting.");
+            Shutdown();
+            return;
+        }
 
         if (!createdNew)
         {
@@ -144,7 +186,31 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, EventName);
+        var settingsStore = new SettingsStore();
+        bool handedOver = false;
+        if (ShouldRestartAsAdministrator(settingsStore))
+        {
+            try
+            {
+                handedOver = Elevation.TryStartElevatedCopy();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Could not restart MicMixer as administrator; running without administrator rights.");
+            }
+        }
+
+        if (handedOver)
+        {
+            Log.Information("Handing over to a copy of MicMixer running as administrator.");
+            _instanceMutex.ReleaseMutex();
+            _instanceMutex.Dispose();
+            _instanceMutex = null;
+            Shutdown();
+            return;
+        }
+
+        _showEvent = EventWaitHandleAcl.Create(false, EventResetMode.AutoReset, EventName, out _, CreateEventSecurity());
         _listenerThread = new Thread(ListenForActivationSignal)
         {
             IsBackground = true,
@@ -160,7 +226,6 @@ public partial class App : System.Windows.Application
         var session = new MusicSession();
         _router = new AudioRouter();
         _music = new MusicPlaybackEngine();
-        var settingsStore = new SettingsStore();
         var playlist = new PlaylistManager();
         var mainWindow = new MainWindow(session, _router, _music, settingsStore, playlist);
         _mainWindow = mainWindow;
@@ -212,7 +277,45 @@ public partial class App : System.Windows.Application
     }
 
     internal static bool HasStartHiddenInTrayArgument(IEnumerable<string> args) =>
-        args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
+        args.Contains(MinimizedArgument, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when this launch should hand over to a copy running as administrator.
+    /// Never at sign-in: a UAC prompt there would stand between the user and the desktop.
+    /// </summary>
+    private static bool ShouldRestartAsAdministrator(SettingsStore settingsStore) =>
+        !Elevation.IsElevated && Elevation.CanRunAsAdministrator && !StartHiddenInTray && !StartupBenchmarkMode
+        && settingsStore.Load().RunAsAdministrator;
+
+    private static void TurnOnRunAsAdministrator()
+    {
+        var settingsStore = new SettingsStore();
+        AppSettings settings = settingsStore.Load();
+        if (settings.RunAsAdministrator)
+        {
+            return;
+        }
+
+        settings.RunAsAdministrator = true;
+        settingsStore.Save(settings);
+    }
+
+    // The instance that creates these may run as administrator, and then Windows
+    // gives its named objects a default permission that shuts every process without
+    // administrator rights out, including a second MicMixer launched from the Start menu.
+    private static MutexSecurity CreateMutexSecurity()
+    {
+        var security = new MutexSecurity();
+        security.AddAccessRule(new MutexAccessRule(Elevation.CurrentUser(), MutexRights.FullControl, AccessControlType.Allow));
+        return security;
+    }
+
+    private static EventWaitHandleSecurity CreateEventSecurity()
+    {
+        var security = new EventWaitHandleSecurity();
+        security.AddAccessRule(new EventWaitHandleAccessRule(Elevation.CurrentUser(), EventWaitHandleRights.FullControl, AccessControlType.Allow));
+        return security;
+    }
 
     protected override void OnExit(ExitEventArgs e)
     {

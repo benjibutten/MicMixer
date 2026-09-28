@@ -16,6 +16,7 @@ public sealed class AppSettings
     public void CopyConfigurationFrom(AppSettings source)
     {
         StartWithWindows = source.StartWithWindows;
+        RunAsAdministrator = source.RunAsAdministrator;
         NormalInputDeviceId = source.NormalInputDeviceId;
         ModdedInputDeviceId = source.ModdedInputDeviceId;
         NormalMicVolume = source.NormalMicVolume;
@@ -52,6 +53,12 @@ public sealed class AppSettings
     }
 
     public bool StartWithWindows { get; set; }
+
+    /// <summary>
+    /// Runs MicMixer as administrator, so its hotkeys and held key also work while a
+    /// program running as administrator has focus.
+    /// </summary>
+    public bool RunAsAdministrator { get; set; }
 
     public string? NormalInputDeviceId { get; set; }
 

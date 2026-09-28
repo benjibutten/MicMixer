@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using MicMixer.Admin;
 using MicMixer.Audio;
 using MicMixer.Input;
 using MicMixer.Settings;
@@ -210,7 +210,7 @@ internal partial class SetupGuideWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo("https://vb-audio.com/Cable/") { UseShellExecute = true });
+            ShellLauncher.Open("https://vb-audio.com/Cable/");
         }
         catch (Exception ex)
         {
