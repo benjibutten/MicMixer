@@ -182,21 +182,32 @@ begin
   // VB-Audio documents no exit codes, so whether it worked is read from Windows afterwards.
   Exec(CableFolder + '\VBCABLE_Setup_x64.exe', '-i -h', CableFolder, SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
-  if CablePage.Values[1] then
-  begin
-    WizardForm.StatusLabel.Caption := 'Naming the virtual cable...';
-    Exec(ExpandConstant('{app}\MicMixer.exe'), '--name-virtual-cable', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
-
   // VB-CABLE usually works at once. When Windows shows no cable yet, it needs a restart.
   CableNeedsRestart := not IsVBCableInstalled;
+end;
+
+procedure NameCable;
+var
+  ResultCode: Integer;
+begin
+  WizardForm.StatusLabel.Caption := 'Naming the virtual cable...';
+  Exec(ExpandConstant('{app}\MicMixer.exe'), '--name-virtual-cable', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   // Updates run silently and never touch the cable.
-  if (CurStep = ssPostInstall) and not WizardSilent and not CableWasInstalled and CablePage.Values[0] then
-    InstallCable;
+  if WizardSilent or CableWasInstalled or not CablePage.Values[0] then
+    Exit;
+
+  // Setup asks NeedRestart right after ssInstall, before the files are copied, so
+  // the cable is installed here to know by then. Naming it needs MicMixer.exe,
+  // which is in place only at ssPostInstall, and a cable that still needs a
+  // restart has no ends to name.
+  if CurStep = ssInstall then
+    InstallCable
+  else if (CurStep = ssPostInstall) and CablePage.Values[1] and not CableNeedsRestart then
+    NameCable;
 end;
 
 function NeedRestart: Boolean;
