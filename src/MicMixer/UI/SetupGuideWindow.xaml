@@ -157,7 +157,7 @@
                         </Grid>
                     </Border>
                     <TextBlock Style="{StaticResource Small}"
-                               Text="Whatever goes into one end comes out of the other, unchanged. The names describe the cable, not MicMixer, which is why MicMixer uses the Input end while the game uses the Output end."/>
+                               Text="Whatever goes into one end comes out of the other, unchanged. The names describe the cable's ends: MicMixer plays into the Input end, and the game picks up the Output end."/>
 
                     <!-- Detection result -->
                     <Border x:Name="CableFoundCard" Style="{StaticResource Card}" Background="#F0FDF4" BorderBrush="#86EFAC" Margin="0,10,0,0">

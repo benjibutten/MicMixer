@@ -106,7 +106,7 @@ internal partial class SetupGuideWindow : Window
     {
         AudioDeviceOption? playbackEnd = OutputCombo.SelectedItem is AudioDeviceOption chosen && AudioDevices.LooksLikeVirtualCable(chosen)
             ? chosen
-            : _outputs.FirstOrDefault(AudioDevices.LooksLikeVirtualCable);
+            : AudioDevices.FindCablePlaybackEnd(_outputs);
         AudioDeviceOption? recordingEnd = playbackEnd != null ? AudioDevices.FindRecordingEnd(playbackEnd, _inputs) : null;
 
         bool found = playbackEnd != null;
