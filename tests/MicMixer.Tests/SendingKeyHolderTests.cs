@@ -14,10 +14,11 @@ public sealed class SendingKeyHolderTests
     private readonly SendingKeyHolder _holder;
     /// <summary>When set, Windows loses injected events, as it does under UIPI.</summary>
     private bool _dropEvents;
+    private nint _foregroundWindow = 1;
 
     public SendingKeyHolderTests()
     {
-        _holder = new SendingKeyHolder(Inject, key => _keysDownInWindows.Contains(key.Name)) { Key = F24 };
+        _holder = new SendingKeyHolder(Inject, key => _keysDownInWindows.Contains(key.Name), () => _foregroundWindow) { Key = F24 };
     }
 
     private void Inject(FunctionKey key, bool down)
@@ -170,6 +171,78 @@ public sealed class SendingKeyHolderTests
         _holder.Update(sending: true, Ms(1_000));
 
         _sent.Should().Equal(("F24", true), ("F24", true));
+    }
+
+    [Fact]
+    public void Update_ShouldPressAgainWithoutReleasing_WhenAnotherWindowTakesFocus()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _foregroundWindow = 2;
+        _holder.Update(sending: true, Ms(50));
+        _holder.Update(sending: true, Ms(100));
+
+        _sent.Should().Equal(("F24", true), ("F24", true));
+    }
+
+    [Fact]
+    public void Update_ShouldReleaseAgainOnce_WhenAnotherWindowTakesFocusAfterARelease()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _holder.Update(sending: false, Ms(500));
+        _holder.Update(sending: false, Ms(600));
+        _foregroundWindow = 2;
+        _holder.Update(sending: false, Ms(650));
+        _foregroundWindow = 3;
+        _holder.Update(sending: false, Ms(700));
+
+        _sent.Should().Equal(("F24", true), ("F24", false), ("F24", false));
+    }
+
+    [Fact]
+    public void Update_ShouldReleaseTheOldKeyAndPressTheNewOne_WhenFocusMovesAfterAKeyChange()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _holder.Key = F15;
+        _holder.Update(sending: true, Ms(50));
+        _foregroundWindow = 2;
+        _holder.Update(sending: true, Ms(100));
+
+        _sent.Should().Equal(("F24", true), ("F24", false), ("F15", true), ("F24", false), ("F15", true));
+    }
+
+    [Fact]
+    public void Update_ShouldNotReleaseAgain_AKeyTheUserNowHolds()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _holder.Key = null;
+        _keysDownInWindows.Add("F24");
+        _foregroundWindow = 2;
+        _holder.Update(sending: false, Ms(50));
+
+        _sent.Should().Equal(("F24", true), ("F24", false));
+    }
+
+    [Fact]
+    public void Update_ShouldPressInTheSameUpdate_WhenSendingStartsAsFocusMovesAfterARelease()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _holder.Update(sending: false, Ms(500));
+        _holder.Update(sending: false, Ms(600));
+        _foregroundWindow = 2;
+        _holder.Update(sending: true, Ms(650));
+
+        _sent.Should().EndWith(("F24", true));
+        _keysDownInWindows.Should().Contain("F24");
+    }
+
+    [Fact]
+    public void Update_ShouldInjectNothing_WhenFocusMovesWhileNotSending()
+    {
+        _holder.Update(sending: false, Ms(0));
+        _foregroundWindow = 2;
+        _holder.Update(sending: false, Ms(50));
+
+        _sent.Should().BeEmpty();
     }
 
     [Fact]

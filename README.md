@@ -23,9 +23,9 @@ can switch live, mid-session.
   example Voicemod's virtual device); hold the hotkey to switch to the modified
   voice, release to go back, with a configurable release delay.
 - **A separate mix for streaming or recording.** The secondary output plays the
-  full mic-plus-music mix — taken before the push-to-talk gate — on an extra
-  device that OBS or Streamlabs can capture, so your stream hears everything
-  while the game only hears what you let through the gate.
+  full mic-plus-music mix on an extra device that OBS or Streamlabs can capture,
+  with its own push-to-talk rule (by default it ignores push-to-talk), so your
+  stream hears everything while the game only hears what you let through the gate.
 
 ## Quick setup
 
@@ -70,7 +70,8 @@ The rest of this document is the detailed reference.
 - Downloads audio from YouTube links and converts it to MP3.
 - Provides optional local monitoring with independent output and volume controls.
 - Provides an optional secondary output that plays the complete mix (mic + music)
-  on an extra device — before the push-to-talk gate — for recording or streaming.
+  on an extra device for recording or streaming, with its own push-to-talk rule
+  (by default it ignores push-to-talk).
 - Includes playlist search, multiple music folders, a queue, and transport controls.
 - Provides a click-through status overlay with mic state, music animation, and an
   optional outgoing level meter.

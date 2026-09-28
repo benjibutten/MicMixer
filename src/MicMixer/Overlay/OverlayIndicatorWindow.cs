@@ -158,7 +158,7 @@ public sealed class OverlayIndicatorWindow : Window
 
     public OverlayIndicatorWindow()
     {
-        Title = "MicMixer-indikator";
+        Title = "MicMixer indicator";
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true;

@@ -13,7 +13,7 @@ Copyright (c) Alexey Golub and contributors
 License: MIT
 Source: https://github.com/Tyrrrz/CliWrap
 
-NAudio 2.3.0 (including its NAudio subpackages)
+NAudio 3.0.0 (including its NAudio subpackages)
 Copyright (c) Mark Heath and contributors
 License: MIT
 Source: https://github.com/naudio/NAudio

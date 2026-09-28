@@ -169,7 +169,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
->>>>>>> origin/main
 # Private local voice recordings and offline comparison renders.
 recording/
 

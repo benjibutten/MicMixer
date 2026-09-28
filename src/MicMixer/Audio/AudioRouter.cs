@@ -108,17 +108,20 @@ public sealed class AudioRouter : IDisposable
     public Func<WaveFormat, ISampleProvider>? MusicSourceFactory { get; set; }
 
     /// <summary>
-    /// Optional secondary output that receives the finished mix before the
-    /// push-to-talk gate. Owned by the caller; the router only starts/stops it
-    /// alongside the routing session and feeds it via a pre-gate tap.
+    /// Optional secondary output. Owned by the caller; the router starts and stops
+    /// it with the routing session and feeds it a mix with its own gates (see
+    /// <see cref="MixFanoutSampleProvider"/>).
     /// </summary>
     public SecondaryOutputEngine? SecondaryOutput { get; set; }
 
     public event EventHandler<string>? Error;
 
     /// <summary>
-    /// Starts routing. When <paramref name="moddedInputDevice"/> is null only the normal
-    /// mic is routed and hotkey switching has no effect.
+    /// Starts routing, replacing any running session. When
+    /// <paramref name="moddedInputDevice"/> is null only the normal mic is routed and
+    /// hotkey switching has no effect. The output gate and modded-input state set
+    /// before the call apply from the first sample; if the start fails, both are
+    /// reset as by <see cref="Stop"/>.
     /// </summary>
     public void Start(
         MMDevice normalInputDevice,
@@ -126,7 +129,7 @@ public sealed class AudioRouter : IDisposable
         MMDevice outputDevice,
         Func<int, int, IVoiceProcessor>? voiceProcessorFactory = null)
     {
-        Stop();
+        TearDownSession();
 
         if (moddedInputDevice != null && voiceProcessorFactory != null)
         {
@@ -432,7 +435,20 @@ public sealed class AudioRouter : IDisposable
         Volatile.Write(ref _outputGateOpen, isOpen);
     }
 
+    /// <summary>Stops routing and reopens the output gate and the normal mic selection.</summary>
     public void Stop()
+    {
+        TearDownSession();
+
+        // The music routing flags survive Stop(): they are user configuration,
+        // not transient session state like the gate.
+        Volatile.Write(ref _useModdedInput, false);
+        Volatile.Write(ref _outputGateOpen, true);
+    }
+
+    // Leaves the gate and modded-input flags alone, so Start can replace a running
+    // session without discarding the state the caller set for the new one.
+    private void TearDownSession()
     {
         WasapiPlayer? player;
         InputRoute? normalRoute;
@@ -489,10 +505,6 @@ public sealed class AudioRouter : IDisposable
         moddedRoute?.Dispose();
         SecondaryOutput?.Stop();
 
-        // The music routing flags survive Stop(): they are user configuration,
-        // not transient session state like the gate.
-        Volatile.Write(ref _useModdedInput, false);
-        Volatile.Write(ref _outputGateOpen, true);
         Volatile.Write(ref _outputPeak, 0f);
         Volatile.Write(ref _outputRms, 0f);
         Volatile.Write(ref _musicPeak, 0f);

@@ -406,7 +406,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid>
-                        <TextBox x:Name="YoutubeUrlBox" Height="28" Padding="5,0,3,0" VerticalContentAlignment="Center" FontSize="11.5"
+                        <TextBox x:Name="YoutubeUrlBox" AutomationProperties.Name="Link to download" Height="28" Padding="5,0,3,0" VerticalContentAlignment="Center" FontSize="11.5"
                                  KeyDown="OnYoutubeUrlKeyDown" TextChanged="OnYoutubeUrlChanged"/>
                         <TextBlock x:Name="YoutubeUrlHintText" Text="Paste a YouTube link here..." FontSize="11.5"
                                    Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
@@ -460,7 +460,7 @@
                     </Grid.ColumnDefinitions>
                     <Path Data="{StaticResource SearchIcon}" Fill="#9CA3AF" Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,6,0"/>
                     <Grid Grid.Column="1">
-                        <TextBox x:Name="PlaylistFilterBox" Height="26" Padding="5,0,3,0" VerticalContentAlignment="Center" FontSize="11.5"
+                        <TextBox x:Name="PlaylistFilterBox" AutomationProperties.Name="Search the playlist" Height="26" Padding="5,0,3,0" VerticalContentAlignment="Center" FontSize="11.5"
                                  TextChanged="OnPlaylistFilterChanged"/>
                         <TextBlock x:Name="PlaylistFilterHintText" Text="Search the playlist..." FontSize="11.5"
                                    Foreground="#9CA3AF" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
@@ -540,15 +540,15 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                     <StackPanel x:Name="PlaylistButtonsPanel" Grid.Column="1" Margin="8,0,0,0">
-                        <Button Height="28" Width="28" Padding="0" Click="OnQueueClick" ToolTip="Add the selected track to the queue"
+                        <Button Height="28" Width="28" Padding="0" Click="OnQueueClick" ToolTip="Add the selected track to the queue" AutomationProperties.Name="Add to the queue"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource QueueIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
-                        <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnPlaylistRefreshClick" ToolTip="Refresh the playlist"
+                        <Button Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnPlaylistRefreshClick" ToolTip="Refresh the playlist" AutomationProperties.Name="Refresh the playlist"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                         </Button>
-                        <Button x:Name="OpenMusicFolderBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Open the music folder"
+                        <Button x:Name="OpenMusicFolderBtn" Height="28" Width="28" Padding="0" Margin="0,6,0,0" Click="OnOpenMusicFolderClick" ToolTip="Open the music folder" AutomationProperties.Name="Open the music folder"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource FolderIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                         </Button>
@@ -575,7 +575,7 @@
                                   ToolTipService.ShowDuration="60000"
                                   ToolTip="The list shows apps that have created an audio session in Windows. A newly started app therefore appears only after it has played audio."/>
                         <Button Grid.Column="1" Height="28" Width="28" Margin="6,0,0,0" Padding="0"
-                                Click="OnRefreshAudioAppsClick" ToolTip="Refresh after the app has played audio"
+                                Click="OnRefreshAudioAppsClick" ToolTip="Refresh after the app has played audio" AutomationProperties.Name="Refresh the app list"
                                 Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                             <Path Data="{StaticResource RefreshIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                         </Button>
@@ -644,20 +644,20 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Button Height="30" Width="30" Padding="0" Click="OnPrevTrackClick" ToolTip="Previous / restart"
+                    <Button Height="30" Width="30" Padding="0" Click="OnPrevTrackClick" ToolTip="Previous / restart" AutomationProperties.Name="Previous track"
                             Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                         <Path Data="{StaticResource SkipPrevIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                     </Button>
-                    <Button Grid.Column="1" Height="30" Width="38" Padding="0" Margin="6,0,0,0" Click="OnPlayPauseClick" ToolTip="Play / pause"
+                    <Button Grid.Column="1" Height="30" Width="38" Padding="0" Margin="6,0,0,0" Click="OnPlayPauseClick" ToolTip="Play / pause" AutomationProperties.Name="Play or pause"
                             Background="#10233A" BorderThickness="0">
                         <Path x:Name="PlayPauseIcon" Data="{StaticResource PlayIcon}" Fill="White" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                     </Button>
-                    <Button Grid.Column="2" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnStopPlaybackClick"
+                    <Button Grid.Column="2" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnStopPlaybackClick" AutomationProperties.Name="Stop"
                             ToolTip="Stop and deselect the active track"
                             Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                         <Path Data="{StaticResource StopIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="12" Height="12"/>
                     </Button>
-                    <Button Grid.Column="3" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Next track"
+                    <Button Grid.Column="3" Height="30" Width="30" Padding="0" Margin="6,0,0,0" Click="OnNextTrackClick" ToolTip="Next track" AutomationProperties.Name="Next track"
                             Background="#E8EEF5" BorderBrush="#D7DEE7" BorderThickness="1">
                         <Path Data="{StaticResource SkipNextIcon}" Fill="#10233A" Style="{StaticResource SectionIcon}" Width="13" Height="13"/>
                     </Button>
@@ -698,7 +698,7 @@
                     <!-- Single-track mode: stop when the current track ends instead of auto-advancing.
                          Three states driven by Tag from code-behind: Off, Once (tinted — resets
                          itself after the track), Always (solid purple — double-click, stays on). -->
-                    <Button x:Name="SingleTrackBtn" Grid.Column="5" Height="30" Width="30" Margin="6,0,0,0" Cursor="Hand"
+                    <Button x:Name="SingleTrackBtn" AutomationProperties.Name="Single-track mode" Grid.Column="5" Height="30" Width="30" Margin="6,0,0,0" Cursor="Hand"
                             Tag="Off" PreviewMouseLeftButtonDown="OnSingleTrackMouseDown"
                             ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True">
                         <Button.Template>
@@ -742,7 +742,7 @@
                             </ToolTip>
                         </Button.ToolTip>
                     </Button>
-                    <Slider x:Name="SeekSlider" Grid.Column="6" Margin="12,0,8,0" VerticalAlignment="Center"
+                    <Slider x:Name="SeekSlider" AutomationProperties.Name="Playback position" Grid.Column="6" Margin="12,0,8,0" VerticalAlignment="Center"
                             Minimum="0" Maximum="1" IsMoveToPointEnabled="True"
                             Thumb.DragStarted="OnSeekDragStarted" Thumb.DragCompleted="OnSeekDragCompleted" ValueChanged="OnSeekValueChanged"/>
                     <TextBlock x:Name="ExternalTransportHint" Grid.Column="6" Margin="12,0,8,0" VerticalAlignment="Center"
@@ -769,12 +769,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <TextBlock x:Name="MusicVolumeLabel" Text="Music volume" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Slider x:Name="MusicVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                    <Slider x:Name="MusicVolumeSlider" AutomationProperties.Name="Music volume" Grid.Column="1" Minimum="0" Maximum="1" VerticalAlignment="Center"
                             LargeChange="0" SmallChange="0.05"
                             ValueChanged="OnMusicVolumeChanged" ToolTip="How loud others hear the music (in the mic channel)"/>
                     <TextBlock x:Name="MusicVolumePercentText" Grid.Column="2" Text="50 %" FontSize="11" Foreground="#10233A"
                                FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="34" TextAlignment="Right"/>
-                    <ToggleButton x:Name="VolumeLinkToggle" Grid.Column="3" Width="24" Height="24" Margin="6,0" Cursor="Hand"
+                    <ToggleButton x:Name="VolumeLinkToggle" AutomationProperties.Name="Link the two volumes" Grid.Column="3" Width="24" Height="24" Margin="6,0" Cursor="Hand"
                                   Checked="OnVolumeLinkChanged" Unchecked="OnVolumeLinkChanged"
                                   ToolTipService.ShowDuration="60000" ToolTipService.ShowOnDisabled="True"
                                   ToolTip="Link volumes — drag one slider and the other follows while preserving the difference between them. If a slider reaches 0 or maximum, it stays there, but the difference returns when you drag the other way.">
@@ -800,7 +800,7 @@
                         </ToggleButton.Template>
                     </ToggleButton>
                     <TextBlock x:Name="MonitorVolumeLabel" Grid.Column="4" Text="Monitoring" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <Slider x:Name="MonitorVolumeSlider" Grid.Column="5" Minimum="0" Maximum="1" VerticalAlignment="Center"
+                    <Slider x:Name="MonitorVolumeSlider" AutomationProperties.Name="Monitor volume" Grid.Column="5" Minimum="0" Maximum="1" VerticalAlignment="Center"
                             LargeChange="0" SmallChange="0.05"
                             ValueChanged="OnMonitorVolumeChanged" ToolTip="How loud the music is in your own headphones"/>
                     <TextBlock x:Name="MonitorVolumePercentText" Grid.Column="6" Text="50 %" FontSize="11" Foreground="#10233A"
@@ -898,7 +898,7 @@
                             </ToggleButton.Template>
                         </ToggleButton>
                         <Button x:Name="ClearQueueBtn" Height="18" Width="18" Padding="0" Margin="4,0,0,0" Visibility="Collapsed"
-                                Click="OnClearQueueClick" ToolTip="Clear the queue" Background="Transparent" BorderThickness="0">
+                                Click="OnClearQueueClick" ToolTip="Clear the queue" AutomationProperties.Name="Clear the queue" Background="Transparent" BorderThickness="0">
                             <Path Data="{StaticResource CloseIcon}" Fill="#7C3AED" Style="{StaticResource SectionIcon}" Width="10" Height="10"/>
                         </Button>
                         <Popup x:Name="QueuePopup" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
@@ -956,7 +956,7 @@
                                                         <TextBlock Grid.Column="2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                         <Button Grid.Column="3" Width="18" Height="18" Padding="0" Margin="6,0,0,0"
                                                                 Background="Transparent" BorderThickness="0" Cursor="Hand"
-                                                                Click="OnQueueRemoveClick" Tag="{Binding}" ToolTip="Remove from the queue">
+                                                                Click="OnQueueRemoveClick" Tag="{Binding}" ToolTip="Remove from the queue" AutomationProperties.Name="Remove from the queue">
                                                             <Path Data="{StaticResource CloseIcon}" Fill="#9CA3AF" Width="9" Height="9" Stretch="Uniform"/>
                                                         </Button>
                                                     </Grid>
@@ -1073,7 +1073,7 @@
                                         <TextBlock Text="Normal mic" Style="{StaticResource SettingsHeading}" Margin="0"/>
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource SettingsDesc}" Text="The microphone you actually speak into."/>
-                                    <ComboBox x:Name="DryInputCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
+                                    <ComboBox x:Name="DryInputCombo" AutomationProperties.Name="Normal mic" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"/>
                                     <Grid Margin="0,8,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="56"/>
@@ -1421,8 +1421,7 @@
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- Secondary output: optional fanout of the finished mix, tapped before
-                         the push-to-talk gate. Off by default; the cable path is untouched. -->
+                    <!-- Secondary output: optional second device for the mix. Off by default; the cable path is untouched. -->
                     <TabItem x:Name="SecondaryOutputPage" Header="Secondary output">
                         <ScrollViewer Style="{StaticResource SettingsPage}">
                             <StackPanel Style="{StaticResource SettingsSection}">

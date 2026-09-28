@@ -20,6 +20,20 @@ public sealed class SettingsStoreTests : IDisposable
         new SettingsStore(path).Load().ProcessedVoiceVolume.Should().Be(expected);
     }
 
+    [Fact]
+    public void Load_ShouldKeepACopyOfAnUnreadableFile()
+    {
+        Directory.CreateDirectory(_root);
+        string path = Path.Combine(_root, "settings.json");
+        const string broken = "{ \"OutputDeviceId\": ";
+        File.WriteAllText(path, broken);
+
+        AppSettings settings = new SettingsStore(path).Load();
+
+        settings.OutputDeviceId.Should().BeNull();
+        File.ReadAllText(path + ".bad").Should().Be(broken);
+    }
+
     [Theory]
     [InlineData("{}", 1f, -45f)]
     [InlineData("{\"NormalMicVolume\":-1,\"NoiseGateThresholdDb\":-200}", 0f, -70f)]

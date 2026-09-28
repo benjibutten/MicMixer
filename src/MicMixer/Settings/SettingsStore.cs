@@ -80,10 +80,15 @@ public sealed class SettingsStore
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to load settings from {SettingsPath}; using defaults.", _settingsPath);
+            KeepUnreadableFile();
             return new AppSettings();
         }
     }
 
+    /// <summary>
+    /// Writes the settings through a temporary file, so an interrupted save leaves the
+    /// previous file intact. Also sets <see cref="AppSettings.SkipModdedMic"/>.
+    /// </summary>
     public void Save(AppSettings settings)
     {
         settings.SkipModdedMic = settings.ModifiedVoiceMode == ModifiedVoiceMode.None;
@@ -91,7 +96,30 @@ public sealed class SettingsStore
         Directory.CreateDirectory(directory);
 
         string tempPath = _settingsPath + ".tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(settings, SerializerOptions));
+        using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            JsonSerializer.Serialize(stream, settings, SerializerOptions);
+            // Without this, a power loss after the move can leave an empty file.
+            stream.Flush(flushToDisk: true);
+        }
+
         File.Move(tempPath, _settingsPath, overwrite: true);
+    }
+
+    // The next save replaces the file with defaults; the copy keeps the user's
+    // choices recoverable by hand.
+    private void KeepUnreadableFile()
+    {
+        try
+        {
+            if (File.Exists(_settingsPath))
+            {
+                File.Copy(_settingsPath, _settingsPath + ".bad", overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not keep a copy of the unreadable settings file.");
+        }
     }
 }

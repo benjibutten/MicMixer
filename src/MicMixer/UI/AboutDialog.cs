@@ -83,7 +83,7 @@ internal sealed class AboutDialog : Window
 
         content.Children.Add(CreateCard(
             "Third-party software",
-            "MicMixer uses NAudio and CliWrap (MIT), Serilog (Apache-2.0), and " +
+            "MicMixer uses NAudio, CliWrap and Signalsmith Stretch (MIT), Serilog (Apache-2.0), and " +
             "Material Design Icons (Apache-2.0). yt-dlp and a GPL build of FFmpeg " +
             "are downloaded separately when the download feature is used; YouTube downloads also use Deno. " +
             "These tools are covered by their own licenses. " +

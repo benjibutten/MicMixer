@@ -51,7 +51,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _settingsSaveTimer;
     private readonly DispatcherTimer _deviceChangeTimer;
     private readonly DispatcherTimer _sendHeldKeyTimer;
-    private readonly SendingKeyHolder _sendingKey = new((key, down) => key.Send(down), key => key.IsDown);
+    private readonly SendingKeyHolder _sendingKey = new((key, down) => key.Send(down), key => key.IsDown, KeyInjector.ForegroundWindow);
     private int _sendHeldKeyCountdown;
     private MMDeviceEnumerator? _deviceEnumerator;
     private MMDeviceNotificationClient? _deviceNotifications;
@@ -59,6 +59,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ExternalSignalActivationThreshold,
         ExternalSignalHoldDuration);
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
+    /// <summary>Cancelled when the app really closes, so running downloads and yt-dlp stop with it.</summary>
+    private readonly CancellationTokenSource _closingCancellation = new();
     private List<TrackItem> _allTracks = new();
     private readonly Dictionary<string, TrackItem> _trackByPath = new(StringComparer.OrdinalIgnoreCase);
     private TrackItem? _playingTrackItem;
@@ -822,7 +824,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OnConfigurationChanged();
     }
 
-    // --- Secondary output (pre-gate fanout, e.g. for recording or streaming) ---
+    // --- Secondary output ---
 
     /// <summary>
     /// Pushes the current UI state into the engine. The device takes effect at the
@@ -1566,9 +1568,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void StartHotkeyCapture(int index, object sender)
     {
+        // UpdateHotkeyUi regenerates the hotkey rows, which detaches a row's button from its window.
+        Window window = Window.GetWindow((DependencyObject)sender);
         _capturingHotkeyIndex = index;
         UpdateHotkeyUi();
-        Window window = Window.GetWindow((DependencyObject)sender);
         window.Activate();
         window.Focus();
     }
@@ -1678,6 +1681,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
+        _closingCancellation.Cancel();
         _levelTimer.Stop();
         _releaseDelayTimer.Stop();
         _musicTimer.Stop();
@@ -1742,7 +1746,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // A failed save stays open so its error in the save bar is seen.
         if (SaveConfiguration())
         {
-            _settingsWindow?.Hide();
+            _settingsWindow?.Close();
         }
     }
 
@@ -1976,8 +1980,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 Height = 660,
                 MinWidth = 620,
                 MinHeight = 440,
-                ShowInTaskbar = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
+                ShowInTaskbar = false
             };
             _settingsWindow.PreviewKeyDown += OnPreviewHotkeyKeyDown;
             _settingsWindow.PreviewMouseDown += OnPreviewHotkeyMouseDown;
@@ -1986,6 +1989,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 if (!_isReallyClosing)
                 {
                     closing.Cancel = true;
+                    // Hiding the active window lets Windows activate whichever window is next in
+                    // z-order, which can be another app, leaving the main window behind it.
+                    if (IsVisible)
+                    {
+                        Activate();
+                    }
+
                     ((Window)window!).Hide();
                     // An armed capture would otherwise take the next key or click for the hotkey.
                     _capturingHotkeyIndex = -1;
@@ -1997,6 +2007,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (page != null)
         {
             SettingsTabs.SelectedItem = page;
+        }
+
+        // Centered on every open, since the window is hidden rather than closed and
+        // WindowStartupLocation would place it only the first time.
+        if (!_settingsWindow.IsVisible)
+        {
+            var mainBounds = RestoreBounds;
+            _settingsWindow.Left = mainBounds.Left + (mainBounds.Width - _settingsWindow.Width) / 2;
+            // Not above the main window, which could push the title bar off the top of the screen.
+            _settingsWindow.Top = mainBounds.Top + Math.Max(0, (mainBounds.Height - _settingsWindow.Height) / 2);
         }
 
         _settingsWindow.Show();
@@ -2810,6 +2830,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return false;
         }
 
+        // The playlist is read from disk only on refresh, so a track can be deleted after it is listed.
+        if (!File.Exists(path))
+        {
+            Log.Warning("Track {TrackPath} no longer exists.", path);
+            RefreshPlaylist(null);
+            MusicStatusText.Text = $"{Path.GetFileNameWithoutExtension(path)} no longer exists and was removed from the playlist.";
+            return false;
+        }
+
         try
         {
             _music.Play(path);
@@ -3309,7 +3338,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private string GetFolderMenuLabel(string folder)
     {
-        return PlaylistManager.IsDefaultFolder(folder) ? $"Standard: {folder}" : folder;
+        return PlaylistManager.IsDefaultFolder(folder) ? $"Default: {folder}" : folder;
     }
 
     /// <summary>Small colored letter badge matching the playlist badges, for menu icons.</summary>
@@ -3630,7 +3659,6 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ExternalAppCombo.ItemsSource = apps;
             ExternalAppCombo.SelectedItem =
                 apps.FirstOrDefault(app => string.Equals(app.ProcessName, preferredName, StringComparison.OrdinalIgnoreCase))
-                ?? apps.FirstOrDefault(app => app.ProcessName.Contains("spotify", StringComparison.OrdinalIgnoreCase))
                 ?? apps.FirstOrDefault(app => app.IsPlaying)
                 ?? apps.FirstOrDefault();
         }
@@ -4393,7 +4421,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             var toolStatus = new Progress<string>(text => DownloadStatusText.Text = text);
             await _toolBootstrapper.EnsureToolsAsync(
                 toolStatus,
-                CancellationToken.None,
+                _closingCancellation.Token,
                 requireJavaScriptRuntime: DownloadUrlValidator.IsYouTubeUrl(url));
 
             var progress = new Progress<DownloadProgress>(update =>
@@ -4413,7 +4441,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             string downloadFolder = downloadFolderOverride
                 ?? (DownloadFolderCombo.SelectedItem as FolderInfo)?.Path
                 ?? _playlist.Folders[0];
-            string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, downloadFolder, progress, CancellationToken.None);
+            string? newFile = await _youTubeDownloader.DownloadAudioAsync(url, downloadFolder, progress, _closingCancellation.Token);
 
             YoutubeUrlBox.Text = "";
             RefreshPlaylist(newFile);
@@ -4422,6 +4450,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
             DownloadStatusText.Text = newFile != null
                 ? $"Finished: {Path.GetFileNameWithoutExtension(newFile)}"
                 : "Finished.";
+        }
+        catch (OperationCanceledException) when (_closingCancellation.IsCancellationRequested)
+        {
+            Log.Information("Download stopped because MicMixer is closing.");
         }
         catch (Exception ex)
         {
@@ -4500,7 +4532,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             Path = path;
             DisplayName = PlaylistManager.IsDefaultFolder(path)
-                ? "Standard"
+                ? "Default"
                 : System.IO.Path.GetFileName(path) is { Length: > 0 } leaf ? leaf : path;
             Letter = char.ToUpperInvariant(DisplayName[0]).ToString();
             Accent = accent;
