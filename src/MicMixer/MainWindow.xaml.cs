@@ -1568,9 +1568,10 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void StartHotkeyCapture(int index, object sender)
     {
+        // UpdateHotkeyUi regenerates the hotkey rows, which detaches a row's button from its window.
+        Window window = Window.GetWindow((DependencyObject)sender);
         _capturingHotkeyIndex = index;
         UpdateHotkeyUi();
-        Window window = Window.GetWindow((DependencyObject)sender);
         window.Activate();
         window.Focus();
     }
