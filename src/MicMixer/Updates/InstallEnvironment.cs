@@ -25,8 +25,8 @@ internal static class InstallEnvironment
     public static bool IsManagedByWinget => ManagedByWinget.Value;
 
     /// <summary>
-    /// True when MicMixer runs from a folder the MicMixer installer set up. Updates
-    /// then run the new installer, so Apps and features keeps the right version.
+    /// True when MicMixer runs from a folder the MicMixer installer set up, which
+    /// updates by running the new installer.
     /// </summary>
     public static bool IsInstalledWithSetup =>
         File.Exists(Path.Combine(AppContext.BaseDirectory, "unins000.exe"));

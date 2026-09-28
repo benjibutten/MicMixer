@@ -89,7 +89,8 @@ public sealed class AppSettings
 
     public string? OutputDeviceId { get; set; }
 
-    /// <summary>The first hotkey. Older builds read only this one, so it stays a single value.</summary>
+    /// <summary>The first hotkey.</summary>
+    // Older builds read only this one, so it stays a single value.
     public string HotkeyId { get; set; } = Input.HotkeyBinding.Default.SerializedValue;
 
     /// <summary>Further hotkeys that do exactly what <see cref="HotkeyId"/> does.</summary>

@@ -2023,11 +2023,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     /// <summary>
     /// Mirrors "Start with Windows" into whichever of the two startup mechanisms
-    /// applies, and never both: MicMixer started twice at sign-in would have the
-    /// second copy hand over to the first.
+    /// applies, never both, and shows what that means under "Run as administrator".
     /// </summary>
     private void SyncStartWithWindows()
     {
+        // Both at once would start MicMixer twice at sign-in, and the second copy would
+        // hand over to the first.
         string? exePath = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(exePath))
         {

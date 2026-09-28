@@ -7,14 +7,15 @@ namespace MicMixer.Settings;
 
 /// <summary>
 /// The elevated "start with Windows": a Task Scheduler task that starts MicMixer as
-/// administrator at the current user's sign-in, without a UAC prompt. The Run key
-/// cannot do this — Windows skips Run entries that need elevation.
+/// administrator at the current user's sign-in, without a UAC prompt.
 ///
 /// Registering, updating and deleting the task need an elevated process. Checking
 /// whether it exists does not.
 /// </summary>
 internal sealed class StartupTaskService
 {
+    // The Run key cannot do this: Windows skips Run entries that need elevation.
+
     private const int TASK_CREATE_OR_UPDATE = 6;
     private const int TASK_LOGON_INTERACTIVE_TOKEN = 3;
     private const int E_FILE_NOT_FOUND = unchecked((int)0x80070002);

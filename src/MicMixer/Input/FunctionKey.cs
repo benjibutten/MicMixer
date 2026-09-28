@@ -1,11 +1,10 @@
 namespace MicMixer.Input;
 
-/// <summary>
-/// One of the function keys F13–F24. They type no text and few programs react to
-/// them, so another app can bind them without clashing with anything.
-/// </summary>
+/// <summary>One of the function keys F13–F24.</summary>
 internal sealed record FunctionKey(string Name, ushort VirtualKey)
 {
+    // They type no text and few programs react to them, so another app can bind one
+    // without clashing with anything.
     private const ushort VkF13 = 0x7C;
 
     public static IReadOnlyList<FunctionKey> All { get; } =
