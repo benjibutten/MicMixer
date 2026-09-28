@@ -203,6 +203,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.LongerAnalysisWindow = _settings.LongerAnalysisWindow && alternateWindowAvailable;
         _savedSettings = _settings.Clone();
         ApplyConfiguration();
+        // ApplyConfiguration writes the hotkeys back without duplicates and in their
+        // current form. The saved copy takes that form too, or an older one would count
+        // as an unsaved change that Discard can never clear.
+        _savedSettings.HotkeyId = _settings.HotkeyId;
+        _savedSettings.ExtraHotkeyIds = [.. _settings.ExtraHotkeyIds];
         ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
         RenderVoiceChoice();
         SyncStartWithWindows();
