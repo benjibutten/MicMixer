@@ -41,6 +41,7 @@ public partial class App : System.Windows.Application
     private MicMixerControlServer? _controlServer;
     private AudioRouter? _router;
     private MusicPlaybackEngine? _music;
+    private MainWindow? _mainWindow;
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
@@ -162,6 +163,7 @@ public partial class App : System.Windows.Application
         var settingsStore = new SettingsStore();
         var playlist = new PlaylistManager();
         var mainWindow = new MainWindow(session, _router, _music, settingsStore, playlist);
+        _mainWindow = mainWindow;
         StartupTrace("MainWindow created");
         _controlServer = new MicMixerControlServer(mainWindow);
         _controlServer.Start();
@@ -217,6 +219,8 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException -= OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException -= OnCurrentDomainUnhandledException;
         TaskScheduler.UnobservedTaskException -= OnTaskSchedulerUnobservedTaskException;
+
+        _mainWindow?.ReleaseHeldKey();
 
         if (_controlServer != null)
         {
@@ -279,12 +283,15 @@ public partial class App : System.Windows.Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs args)
     {
         Log.Error(args.Exception, "Unhandled UI exception.");
+        _mainWindow?.ReleaseHeldKey();
         args.Handled = true;
         ShowUnhandledErrorDialog(args.Exception);
     }
 
     private void OnCurrentDomainUnhandledException(object? sender, UnhandledExceptionEventArgs args)
     {
+        _mainWindow?.ReleaseHeldKey();
+
         if (args.ExceptionObject is Exception ex)
         {
             Log.Fatal(ex, "Unhandled AppDomain exception. IsTerminating={IsTerminating}", args.IsTerminating);

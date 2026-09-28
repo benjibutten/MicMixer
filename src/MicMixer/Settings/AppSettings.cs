@@ -27,6 +27,8 @@ public sealed class AppSettings
         ExtraHotkeyIds = [.. source.ExtraHotkeyIds];
         ReleaseDelayMilliseconds = source.ReleaseDelayMilliseconds;
         PushToTalkMode = source.PushToTalkMode;
+        HoldKeyWhileSending = source.HoldKeyWhileSending;
+        HeldKey = source.HeldKey;
         MusicMonitorDeviceId = source.MusicMonitorDeviceId;
         SecondaryOutputEnabled = source.SecondaryOutputEnabled;
         SecondaryOutputDeviceId = source.SecondaryOutputDeviceId;
@@ -86,6 +88,12 @@ public sealed class AppSettings
     public int ReleaseDelayMilliseconds { get; set; }
 
     public bool PushToTalkMode { get; set; }
+
+    /// <summary>Holds <see cref="HeldKey"/> down while MicMixer sends to the virtual cable.</summary>
+    public bool HoldKeyWhileSending { get; set; }
+
+    /// <summary>Name of the function key (F13–F24) that <see cref="HoldKeyWhileSending"/> holds.</summary>
+    public string HeldKey { get; set; } = Input.FunctionKey.Default.Name;
 
     /// <summary>Music keeps flowing to the virtual cable while push-to-talk holds the mic silent.</summary>
     public bool MusicIgnoresPushToTalk { get; set; }

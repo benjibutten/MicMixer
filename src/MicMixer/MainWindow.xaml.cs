@@ -26,6 +26,7 @@ namespace MicMixer;
 public partial class MainWindow : Window, IMicMixerControlHost
 {
     private const int MaxReleaseDelayMilliseconds = 5_000;
+    private const int SendHeldKeyCountdownSeconds = 5;
     private const float ExternalSignalActivationThreshold = 0.005f;
     private static readonly TimeSpan ExternalSignalHoldDuration = TimeSpan.FromSeconds(2);
 
@@ -46,6 +47,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _delayedStartTimer;
     private readonly DispatcherTimer _settingsSaveTimer;
     private readonly DispatcherTimer _deviceChangeTimer;
+    private readonly DispatcherTimer _sendHeldKeyTimer;
+    private readonly SendingKeyHolder _sendingKey = new((key, down) => key.Send(down), key => key.IsDown);
+    private int _sendHeldKeyCountdown;
     private MMDeviceEnumerator? _deviceEnumerator;
     private MMDeviceNotificationClient? _deviceNotifications;
     private readonly SignalActivityTracker _externalSignalActivity = new(
@@ -142,6 +146,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _settings.MeterSensitivityDb = Math.Clamp(_settings.MeterSensitivityDb, -12f, 12f);
         _settings.DelayedStartSeconds = ClampDelayedStartSeconds(_settings.DelayedStartSeconds);
         _settings.ObsOverlayPort = Overlay.ObsOverlayServer.ClampPort(_settings.ObsOverlayPort);
+        _settings.HeldKey = FunctionKey.Parse(_settings.HeldKey).Name;
+        // A run that ended while holding the key would otherwise leave it down.
+        FunctionKey.Parse(_settings.HeldKey).Send(down: false);
         _releaseDelayTimer = new DispatcherTimer();
         _releaseDelayTimer.Tick += OnReleaseDelayTimerTick;
         _delayedStartTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -155,6 +162,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // Plugging one headset in fires several endpoint callbacks; wait for the burst to settle.
         _deviceChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _deviceChangeTimer.Tick += OnDeviceChangeSettled;
+        _sendHeldKeyTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _sendHeldKeyTimer.Tick += OnSendHeldKeyTick;
         _singleTrackAnnounceTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(System.Windows.Forms.SystemInformation.DoubleClickTime + 50)
@@ -182,6 +191,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ExternalModdedInputCombo.IsEnabled = false;
         OutputDeviceCombo.IsEnabled = false;
         SecondaryOutputCombo.IsEnabled = false;
+        HeldKeyCombo.ItemsSource = FunctionKey.All;
 
         _isUpdatingUi = true;
         LoadVoiceProfiles();
@@ -580,6 +590,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             }
 
             ApplyEffectiveRoutingStates();
+            Log.Information("Routing started. HeldKey={HeldKey}", _sendingKey.Key?.Name ?? "off");
             ToggleBtnText.Text = "Stop";
             ToggleBtnIcon.Data = (Geometry)FindResource("StopIcon");
             // Devices are opened for the whole route. The voice changer choice stays
@@ -646,6 +657,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         SetHotkeyMonitoringEnabled(false);
         CancelPendingReleaseDelay();
         _router.Stop();
+        _sendingKey.Release();
         PauseMusicIfClockLost();
         ToggleBtnText.Text = "Enable";
         ToggleBtnIcon.Data = (Geometry)FindResource("PlayIcon");
@@ -731,6 +743,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         {
             DryLevelMeter.Value = _router.NormalPeak;
             ModdedLevelMeter.Value = _router.ModdedPeak;
+            // Also picks up music starting and stopping, which changes no routing state.
+            UpdateSendingKey();
         }
         else
         {
@@ -1319,6 +1333,105 @@ public partial class MainWindow : Window, IMicMixerControlHost
         bool engaged = IsHotkeyEngaged();
         _router.SetUseModdedInput(!IsModdedMicSkipped && engaged);
         _router.SetOutputGateOpen(!IsPushToTalk || engaged);
+        UpdateSendingKey();
+    }
+
+    /// <summary>Holds the chosen key while mic or music reaches the cable.</summary>
+    private void UpdateSendingKey()
+    {
+        if (!_router.IsRouting)
+        {
+            return;
+        }
+
+        // NoiseGateOpen is also true while the noise gate is off.
+        bool micSending = _router.OutputGateOpen && _router.NoiseGateOpen;
+        bool sending = micSending || ComputeOverlayMusicState() == OverlayMusicState.Sending;
+        _sendingKey.Update(sending, _uptime.Elapsed);
+    }
+
+    /// <summary>
+    /// Sends a key-up for the chosen key, held or pressed once, without touching any
+    /// other state. Safe from any thread, including a crash handler.
+    /// </summary>
+    internal void ReleaseHeldKey() => FunctionKey.Parse(_settings.HeldKey).Send(down: false);
+
+    private void OnHoldKeyWhileSendingChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.HoldKeyWhileSending = HoldKeyWhileSendingCheck.IsChecked == true;
+        ApplyHeldKeySetting();
+        OnConfigurationChanged();
+    }
+
+    private void OnHeldKeyChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingUi || HeldKeyCombo.SelectedItem is not FunctionKey key)
+        {
+            return;
+        }
+
+        _settings.HeldKey = key.Name;
+        ApplyHeldKeySetting();
+        OnConfigurationChanged();
+    }
+
+    private void ApplyHeldKeySetting()
+    {
+        FunctionKey key = FunctionKey.Parse(_settings.HeldKey);
+        // The hotkey listener sees injected keys too, so holding a hotkey would keep
+        // the push-to-talk gate open for good.
+        bool isHotkey = _hotkeyBindings.Any(binding => binding.MatchesKeyboard(key.VirtualKey));
+        _sendingKey.Key = _settings.HoldKeyWhileSending && !isHotkey ? key : null;
+        HeldKeyConflictText.Text = $"{key.Name} is also a hotkey, so MicMixer does not hold it. Choose another key here or on the hotkey list.";
+        HeldKeyConflictText.Visibility = _settings.HoldKeyWhileSending && isHotkey ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSendingKey();
+    }
+
+    private void OnSendHeldKeyClick(object sender, RoutedEventArgs e)
+    {
+        if (_sendHeldKeyTimer.IsEnabled)
+        {
+            _sendHeldKeyTimer.Stop();
+        }
+        else
+        {
+            _sendHeldKeyCountdown = SendHeldKeyCountdownSeconds;
+            _sendHeldKeyTimer.Start();
+        }
+
+        UpdateSendHeldKeyButton();
+    }
+
+    private async void OnSendHeldKeyTick(object? sender, EventArgs e)
+    {
+        // The countdown leaves time to switch to the other app, which usually takes
+        // key bindings only while it has focus.
+        if (--_sendHeldKeyCountdown > 0)
+        {
+            UpdateSendHeldKeyButton();
+            return;
+        }
+
+        _sendHeldKeyTimer.Stop();
+        UpdateSendHeldKeyButton();
+
+        FunctionKey key = FunctionKey.Parse(_settings.HeldKey);
+        key.Send(down: true);
+        // Games read the key state once per frame and can miss a shorter press.
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        key.Send(down: false);
+    }
+
+    private void UpdateSendHeldKeyButton()
+    {
+        SendHeldKeyButton.Content = _sendHeldKeyTimer.IsEnabled
+            ? $"Sending in {_sendHeldKeyCountdown} s (cancel)"
+            : "Send key once";
     }
 
     private void OnMusicRoutingModeChanged(object sender, RoutedEventArgs e)
@@ -1712,6 +1825,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             NoiseGateThresholdSlider.Value = _settings.NoiseGateThresholdDb;
             ReleaseDelayTextBox.Text = _settings.ReleaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
             PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
+            HoldKeyWhileSendingCheck.IsChecked = _settings.HoldKeyWhileSending;
+            HeldKeyCombo.SelectedItem = FunctionKey.Parse(_settings.HeldKey);
             SecondaryOutputEnabledCheck.IsChecked = _settings.SecondaryOutputEnabled;
             SecondaryIgnorePttCheck.IsChecked = _settings.SecondaryOutputIgnorePushToTalk;
             SecondaryVolumeSlider.Value = _settings.SecondaryOutputVolume;
@@ -2125,6 +2240,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _capturingHotkeyIndex = -1;
         _hotkeyListener.UpdateBindings(_hotkeyBindings);
         UpdateHotkeyUi();
+        ApplyHeldKeySetting();
     }
 
     private void UpdateHotkeyUi()

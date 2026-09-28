@@ -1330,6 +1330,27 @@
                                         <TextBlock Text="Use push-to-talk" VerticalAlignment="Center"/>
                                     </CheckBox>
                                 </StackPanel>
+
+                                <StackPanel Style="{StaticResource SettingsSection}">
+                                    <TextBlock Text="Hold a key while sending" Style="{StaticResource SettingsHeading}"/>
+                                    <TextBlock Style="{StaticResource SettingsDesc}"
+                                               Text="Holds the chosen key down for as long as mic or music reaches the virtual cable, and lets go shortly after. Bind another app's push-to-talk to this key and it transmits exactly when MicMixer does, also in the background."/>
+                                    <CheckBox x:Name="HoldKeyWhileSendingCheck" FontSize="11.5" Foreground="#10233A"
+                                              Checked="OnHoldKeyWhileSendingChanged" Unchecked="OnHoldKeyWhileSendingChanged">
+                                        <TextBlock Text="Hold a key while sending" VerticalAlignment="Center"/>
+                                    </CheckBox>
+                                    <StackPanel Orientation="Horizontal" Margin="22,8,0,0">
+                                        <ComboBox x:Name="HeldKeyCombo" Width="72" FontSize="11.5" DisplayMemberPath="Name"
+                                                  SelectionChanged="OnHeldKeyChanged" AutomationProperties.Name="Key to hold"/>
+                                        <Button x:Name="SendHeldKeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
+                                                Click="OnSendHeldKeyClick" Content="Send key once" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="HeldKeyConflictText" Margin="22,5,0,0" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="#B45309" Visibility="Collapsed"/>
+                                    <TextBlock Margin="22,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"
+                                               Text="F13–F24 are not on a normal keyboard. To bind one in another app, click Send key once, switch to that app and start the key binding there: the key is sent after 5 seconds. Click again to cancel."/>
+                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>

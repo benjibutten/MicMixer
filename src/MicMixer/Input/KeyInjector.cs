@@ -37,6 +37,20 @@ internal static class KeyInjector
         SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
     }
 
+    /// <summary>The hardware scan code Windows assigns to <paramref name="virtualKey"/>.</summary>
+    public static ushort ScanCodeOf(ushort virtualKey) => (ushort)MapVirtualKey(virtualKey, MapVkToVsc);
+
+    /// <summary>True while Windows has <paramref name="virtualKey"/> down, whether pressed or injected.</summary>
+    public static bool IsKeyDown(ushort virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+    private const uint MapVkToVsc = 0;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
+
+    [DllImport("user32.dll")]
+    private static extern uint MapVirtualKey(uint code, uint mapType);
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint inputCount, Input[] inputs, int inputSize);
 
