@@ -42,16 +42,16 @@ internal static class VirtualCableNamer
         using var enumerator = new MMDeviceEnumerator();
         while (true)
         {
-            int found = 0;
+            int flowsFound = 0;
             foreach ((DataFlow flow, string cableName, string micMixerName) in Ends)
             {
                 if (TryRename(enumerator, flow, cableName, micMixerName))
                 {
-                    found++;
+                    flowsFound++;
                 }
             }
 
-            if (found == Ends.Length)
+            if (flowsFound == Ends.Length)
             {
                 return;
             }
@@ -66,9 +66,13 @@ internal static class VirtualCableNamer
         }
     }
 
-    /// <summary>True when the end exists, whatever it is called now.</summary>
+    /// <summary>
+    /// Renames the VB-CABLE ends of <paramref name="flow"/> still called <paramref name="cableName"/>.
+    /// Returns true when VB-CABLE has any end of that flow, whatever it is called.
+    /// </summary>
     private static bool TryRename(MMDeviceEnumerator enumerator, DataFlow flow, string cableName, string micMixerName)
     {
+        bool found = false;
         foreach (MMDevice device in enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active))
         {
             using (device)
@@ -81,13 +85,8 @@ internal static class VirtualCableNamer
                     continue;
                 }
 
-                string? name = properties[DeviceDescription].Value as string;
-                if (name == micMixerName)
-                {
-                    return true;
-                }
-
-                if (name != cableName)
+                found = true;
+                if (properties[DeviceDescription].Value as string != cableName)
                 {
                     continue;
                 }
@@ -95,11 +94,10 @@ internal static class VirtualCableNamer
                 device.GetPropertyInformation(StorageAccessMode.ReadWrite);
                 SetString(device.Properties, DeviceDescription, micMixerName);
                 Log.Information("Renamed {CableName} to {MicMixerName}.", cableName, micMixerName);
-                return true;
             }
         }
 
-        return false;
+        return found;
     }
 
     private static void SetString(PropertyStore properties, PropertyKey key, string value)
