@@ -70,9 +70,11 @@ Source: "{#VBCableDir}\*"; DestDir: "{tmp}\vbcable"; Flags: dontcopy
 Name: "{autoprograms}\MicMixer"; Filename: "{app}\MicMixer.exe"; AppUserModelID: "BenjiButten.MicMixer"
 
 [Run]
-Filename: "{app}\MicMixer.exe"; Parameters: "--run-as-administrator"; Flags: waituntilterminated runascurrentuser; Tasks: runasadmin; Check: not WizardSilent
-Filename: "{app}\MicMixer.exe"; Description: "Start MicMixer"; Tasks: runasadmin; Flags: nowait postinstall skipifsilent runascurrentuser
-Filename: "{app}\MicMixer.exe"; Description: "Start MicMixer"; Tasks: not runasadmin; Flags: nowait postinstall skipifsilent runasoriginaluser
+; As the account that started Setup, not the one that approved it: they differ when a
+; standard account enters an administrator's password, and MicMixer and its settings
+; belong to the first. With the setting on, MicMixer then asks for elevation itself.
+Filename: "{app}\MicMixer.exe"; Parameters: "--run-as-administrator"; Flags: waituntilterminated runasoriginaluser; Tasks: runasadmin; Check: not WizardSilent
+Filename: "{app}\MicMixer.exe"; Description: "Start MicMixer"; Flags: nowait postinstall skipifsilent runasoriginaluser
 ; After an update, MicMixer comes back with the rights it had: those of whoever started this installer.
 Filename: "{app}\MicMixer.exe"; Parameters: "--update-cleanup ""{param:UPDATECLEANUP}"""; Flags: nowait runasoriginaluser; Check: IsUpdateFromMicMixer
 

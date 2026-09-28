@@ -2106,13 +2106,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
             MessageBoxResult answer = System.Windows.MessageBox.Show(this,
                 "Some settings are changed but not saved. Save them before MicMixer restarts?",
                 "Restart as administrator", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            bool runAsAdministratorWasSaved = _savedSettings.RunAsAdministrator;
             if (answer == MessageBoxResult.Cancel || (answer == MessageBoxResult.Yes && !SaveConfiguration()))
             {
                 return;
             }
 
-            // Saving "Run as administrator" restarts MicMixer by itself.
-            if (_isReallyClosing)
+            // Saving "Run as administrator" has already asked Windows to restart MicMixer,
+            // whatever the answer was.
+            if (!runAsAdministratorWasSaved && _savedSettings.RunAsAdministrator)
             {
                 return;
             }
