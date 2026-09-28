@@ -295,18 +295,37 @@
                 <StackPanel x:Name="HotkeyPage" Visibility="Collapsed">
                     <TextBlock Style="{StaticResource Title}" Text="Hotkey and push-to-talk"/>
                     <TextBlock Style="{StaticResource Body}"
-                               Text="One keyboard key or mouse button controls your voice. It works everywhere, also while a game has focus."/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
-                        <Border Padding="10,6" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="120">
-                            <TextBlock x:Name="HotkeyText" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Center"/>
-                        </Border>
-                        <Button x:Name="ChangeHotkeyButton" Content="Change" Click="OnChangeHotkeyClick" Margin="8,0,0,0" Padding="12,0"
-                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
-                    </StackPanel>
+                               Text="The hotkey is a keyboard key or mouse button you hold while you talk. It works everywhere, also while a game has focus. Holding it does what these two choices say:"/>
+                    <TextBlock Style="{StaticResource Body}">
+                        <Run Text="• A modified voice," FontWeight="SemiBold"/> <Run Text="if you chose one on the microphone page: others hear it instead of your normal mic while you hold the hotkey."/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource Body}">
+                        <Run Text="• Push-to-talk," FontWeight="SemiBold"/> <Run Text="if you turn it on below: nobody hears you until you hold the hotkey."/>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource Body}" Text="With neither, the hotkey does nothing yet."/>
+
+                    <TextBlock Style="{StaticResource Heading}" Text="Your hotkeys"/>
+                    <ItemsControl x:Name="HotkeyList" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <Border Padding="10,6" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="120">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <Button Content="{Binding ChangeText}" Click="OnChangeHotkeyClick" Margin="8,0,0,0" Padding="12,0"
+                                            Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                    <Button Content="Remove" Click="OnRemoveHotkeyClick" Visibility="{Binding RemoveVisibility}" Margin="6,0,0,0" Padding="12,0"
+                                            Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button x:Name="AddHotkeyButton" Content="Add hotkey" Click="OnAddHotkeyClick" HorizontalAlignment="Left" Height="30" Padding="12,0"
+                            Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
                     <TextBlock x:Name="HotkeyHintText" Style="{StaticResource Small}"/>
 
                     <CheckBox x:Name="PushToTalkCheck" Margin="0,12,0,0" FontSize="13" Checked="OnPushToTalkChanged" Unchecked="OnPushToTalkChanged">
-                        <TextBlock Text="Push-to-talk: nobody hears me until I hold the hotkey" TextWrapping="Wrap"/>
+                        <TextBlock Text="Push-to-talk: nobody hears me until I hold a hotkey" TextWrapping="Wrap"/>
                     </CheckBox>
                     <Border Style="{StaticResource Card}" Margin="0,12,0,0">
                         <TextBlock x:Name="HotkeyEffectText" Style="{StaticResource Body}" Margin="0"/>

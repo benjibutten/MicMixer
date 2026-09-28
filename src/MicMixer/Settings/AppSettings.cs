@@ -96,6 +96,17 @@ public sealed class AppSettings
     /// <summary>Further hotkeys that do exactly what <see cref="HotkeyId"/> does.</summary>
     public List<string> ExtraHotkeyIds { get; set; } = [];
 
+    /// <summary>Every hotkey, <see cref="HotkeyId"/> first, without duplicates.</summary>
+    public List<Input.HotkeyBinding> ReadHotkeys() =>
+        [.. new[] { HotkeyId }.Concat(ExtraHotkeyIds).Select(Input.HotkeyBinding.Parse).DistinctBy(binding => binding.SerializedValue)];
+
+    /// <summary>Stores <paramref name="hotkeys"/>, which must hold at least one, the first as <see cref="HotkeyId"/>.</summary>
+    public void WriteHotkeys(IReadOnlyList<Input.HotkeyBinding> hotkeys)
+    {
+        HotkeyId = hotkeys[0].SerializedValue;
+        ExtraHotkeyIds = [.. hotkeys.Skip(1).Select(binding => binding.SerializedValue)];
+    }
+
     public int ReleaseDelayMilliseconds { get; set; }
 
     public bool PushToTalkMode { get; set; }

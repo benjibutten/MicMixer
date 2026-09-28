@@ -19,8 +19,9 @@ internal partial class SetupGuideWindow : Window
     private readonly StackPanel[] _pages;
     private List<AudioDeviceOption> _inputs = [];
     private List<AudioDeviceOption> _outputs = [];
-    private HotkeyBinding _hotkey;
-    private bool _isCapturingHotkey;
+    private List<HotkeyBinding> _hotkeys;
+    /// <summary>Index of the hotkey the next key or click replaces; the hotkey count adds one, -1 captures nothing.</summary>
+    private int _capturingHotkeyIndex = -1;
     private int _step;
 
     public SetupGuideWindow(AppSettings current)
@@ -29,7 +30,7 @@ internal partial class SetupGuideWindow : Window
         _pages = [WelcomePage, CablePage, MicPage, OutputPage, AppPage, HotkeyPage, DonePage];
         StepProgress.Maximum = _pages.Length - 1;
 
-        _hotkey = HotkeyBinding.Parse(current.HotkeyId);
+        _hotkeys = current.ReadHotkeys();
         PushToTalkCheck.IsChecked = current.PushToTalkMode;
         (current.ModifiedVoiceMode switch
         {
@@ -64,7 +65,7 @@ internal partial class SetupGuideWindow : Window
 
         settings.OutputDeviceId = SelectedId(OutputCombo);
         settings.MusicMonitorDeviceId = SelectedId(MonitorCombo);
-        settings.HotkeyId = _hotkey.SerializedValue;
+        settings.WriteHotkeys(_hotkeys);
         settings.PushToTalkMode = PushToTalkCheck.IsChecked == true;
     }
 
@@ -231,14 +232,33 @@ internal partial class SetupGuideWindow : Window
 
     private void OnChangeHotkeyClick(object sender, RoutedEventArgs e)
     {
-        _isCapturingHotkey = true;
+        if ((sender as FrameworkElement)?.DataContext is HotkeyRow row)
+        {
+            _capturingHotkeyIndex = row.Index;
+            UpdateHotkeyTexts();
+        }
+    }
+
+    private void OnAddHotkeyClick(object sender, RoutedEventArgs e)
+    {
+        _capturingHotkeyIndex = _hotkeys.Count;
         UpdateHotkeyTexts();
+    }
+
+    private void OnRemoveHotkeyClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is HotkeyRow row && _hotkeys.Count > 1)
+        {
+            _hotkeys.RemoveAt(row.Index);
+            _capturingHotkeyIndex = -1;
+            UpdateHotkeyTexts();
+        }
     }
 
     private void OnPreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (!_isCapturingHotkey || key == Key.None)
+        if (_capturingHotkeyIndex < 0 || key == Key.None)
         {
             return;
         }
@@ -249,7 +269,7 @@ internal partial class SetupGuideWindow : Window
 
     private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_isCapturingHotkey)
+        if (_capturingHotkeyIndex < 0)
         {
             return;
         }
@@ -260,20 +280,29 @@ internal partial class SetupGuideWindow : Window
 
     private void SetHotkey(HotkeyBinding binding)
     {
-        _hotkey = binding;
-        _isCapturingHotkey = false;
+        if (_capturingHotkeyIndex < _hotkeys.Count)
+        {
+            _hotkeys[_capturingHotkeyIndex] = binding;
+        }
+        else
+        {
+            _hotkeys.Add(binding);
+        }
+
+        _hotkeys = [.. _hotkeys.DistinctBy(hotkey => hotkey.SerializedValue)];
+        _capturingHotkeyIndex = -1;
         UpdateHotkeyTexts();
     }
 
     private void UpdateHotkeyTexts()
     {
-        string key = _hotkey.DisplayName;
-        HotkeyText.Text = key;
-        ChangeHotkeyButton.Content = _isCapturingHotkey ? "Press now…" : "Change";
-        HotkeyHintText.Text = _isCapturingHotkey
+        HotkeyList.ItemsSource = HotkeyRow.For(_hotkeys, _capturingHotkeyIndex);
+        AddHotkeyButton.Content = _capturingHotkeyIndex == _hotkeys.Count ? HotkeyRow.CapturingText : "Add hotkey";
+        HotkeyHintText.Text = _capturingHotkeyIndex >= 0
             ? "Press the keyboard key or mouse button you want to use."
-            : "Click Change, then press any keyboard key or mouse button. A mouse side button works well.";
+            : "Click Change, then press any keyboard key or mouse button; a mouse side button works well. Add hotkey lets more keys or buttons do the same, for example the key your game uses for voice.";
 
+        string key = HotkeyRow.Names(_hotkeys);
         bool pushToTalk = PushToTalkCheck.IsChecked == true;
         HotkeyEffectText.Text = (pushToTalk, SelectedVoiceMode != ModifiedVoiceMode.None) switch
         {

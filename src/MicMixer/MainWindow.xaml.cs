@@ -206,8 +206,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // ApplyConfiguration writes the hotkeys back without duplicates and in their
         // current form. The saved copy takes that form too, or an older one would count
         // as an unsaved change that Cancel can never clear.
-        _savedSettings.HotkeyId = _settings.HotkeyId;
-        _savedSettings.ExtraHotkeyIds = [.. _settings.ExtraHotkeyIds];
+        _savedSettings.WriteHotkeys(_hotkeyBindings);
         ModdedInputCombo.ItemsSource = ModifiedVoiceOptions;
         RenderVoiceChoice();
         SyncStartWithWindows();
@@ -1924,7 +1923,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _releaseDelayMilliseconds = _settings.ReleaseDelayMilliseconds;
         CancelPendingReleaseDelay();
-        UseHotkeyBindings(new[] { _settings.HotkeyId }.Concat(_settings.ExtraHotkeyIds).Select(HotkeyBinding.Parse));
+        UseHotkeyBindings(_settings.ReadHotkeys());
 
         UpdateMeterSensitivityText();
         ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
@@ -2443,8 +2442,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private void UseHotkeyBindings(IEnumerable<HotkeyBinding> bindings)
     {
         _hotkeyBindings = [.. bindings.DistinctBy(binding => binding.SerializedValue)];
-        _settings.HotkeyId = _hotkeyBindings[0].SerializedValue;
-        _settings.ExtraHotkeyIds = [.. _hotkeyBindings.Skip(1).Select(binding => binding.SerializedValue)];
+        _settings.WriteHotkeys(_hotkeyBindings);
         _capturingHotkeyIndex = -1;
         _hotkeyListener.UpdateBindings(_hotkeyBindings);
         UpdateHotkeyUi();
@@ -2453,23 +2451,15 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void UpdateHotkeyUi()
     {
-        HotkeyList.ItemsSource = _hotkeyBindings
-            .Select((binding, index) => new HotkeyRow(
-                index,
-                binding.DisplayName,
-                index == _capturingHotkeyIndex ? "Press now..." : "Change",
-                _hotkeyBindings.Count > 1 ? Visibility.Visible : Visibility.Collapsed))
-            .ToList();
-        AddHotkeyButton.Content = _capturingHotkeyIndex == _hotkeyBindings.Count ? "Press now..." : "Add hotkey";
+        HotkeyList.ItemsSource = HotkeyRow.For(_hotkeyBindings, _capturingHotkeyIndex);
+        AddHotkeyButton.Content = _capturingHotkeyIndex == _hotkeyBindings.Count ? HotkeyRow.CapturingText : "Add hotkey";
         HotkeyCaptureHintText.Text = _capturingHotkeyIndex >= 0
             ? "Press any keyboard key or mouse button now."
             : "Click Change or Add hotkey, then press any keyboard key or mouse button.";
     }
 
-    private sealed record HotkeyRow(int Index, string Name, string ChangeText, Visibility RemoveVisibility);
-
     /// <summary>All hotkeys by name, for text that tells the user what to hold.</summary>
-    private string HotkeyNames => string.Join(" or ", _hotkeyBindings.Select(binding => binding.DisplayName));
+    private string HotkeyNames => HotkeyRow.Names(_hotkeyBindings);
 
     private void ApplyHotkeyPressedState(bool isPressed)
     {
