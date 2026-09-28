@@ -18,6 +18,8 @@ internal sealed class SendingKeyHolder
     private readonly Action<FunctionKey, bool> _sendKey;
     private readonly Func<FunctionKey, bool> _isKeyDown;
     private FunctionKey? _key;
+    /// <summary>A key this holder let go of that Windows has not yet reported up.</summary>
+    private FunctionKey? _unconfirmedRelease;
     private bool _isDown;
     private bool _wasSending;
     private TimeSpan _stoppedSendingAt;
@@ -45,6 +47,7 @@ internal sealed class SendingKeyHolder
             if (_isDown)
             {
                 _sendKey(_key!, false);
+                _unconfirmedRelease = _key;
                 _isDown = false;
             }
 
@@ -55,8 +58,8 @@ internal sealed class SendingKeyHolder
     /// <summary>
     /// Presses or releases the key to match <paramref name="sending"/>, and sends the
     /// wanted state again when Windows has not taken it on. Call it whenever sending
-    /// may have changed and regularly while routing runs: the release delay and the
-    /// resends only take effect on a call.
+    /// may have changed, and regularly, also while routing is off: the release delay
+    /// and the resends only take effect on a call.
     /// </summary>
     public void Update(bool sending, TimeSpan now)
     {
@@ -67,25 +70,40 @@ internal sealed class SendingKeyHolder
 
         _wasSending = sending;
 
-        if (_key == null)
+        if (_key != null)
         {
-            return;
+            bool down = sending || (_isDown && now - _stoppedSendingAt < ReleaseDelay);
+            if (down != _isDown)
+            {
+                Send(_key, down, now);
+                return;
+            }
+
+            // Windows drops injected keys without telling the sender while a window of a
+            // higher integrity level has focus, or while the UAC prompt or the lock screen
+            // shows. Resending only on a mismatch keeps an idle MicMixer from injecting
+            // input, which would stop the screen saver, sleep and "away" statuses.
+            if (down && !_isKeyDown(_key) && now - _lastSentAt >= ResendInterval)
+            {
+                Send(_key, true, now);
+                return;
+            }
         }
 
-        bool down = sending || (_isDown && now - _stoppedSendingAt < ReleaseDelay);
-        if (down != _isDown)
+        // A dropped key-up leaves the key down for every other app, which would keep
+        // one bound to it transmitting. Only a key this holder let go of is released
+        // again, so a key the user holds down themselves is left alone.
+        if (_unconfirmedRelease is { } released && !(_isDown && released == _key))
         {
-            Send(_key, down, now);
-            return;
-        }
-
-        // Windows drops injected keys without telling the sender while a window of a
-        // higher integrity level has focus, or while the UAC prompt or the lock screen
-        // shows. Resending only on a mismatch keeps an idle MicMixer from injecting
-        // input, which would stop the screen saver, sleep and "away" statuses.
-        if (_isKeyDown(_key) != down && now - _lastSentAt >= ResendInterval)
-        {
-            Send(_key, down, now);
+            if (!_isKeyDown(released))
+            {
+                _unconfirmedRelease = null;
+            }
+            else if (now - _lastSentAt >= ResendInterval)
+            {
+                _sendKey(released, false);
+                _lastSentAt = now;
+            }
         }
     }
 
@@ -95,6 +113,7 @@ internal sealed class SendingKeyHolder
         if (_key is { } key)
         {
             _sendKey(key, false);
+            _unconfirmedRelease = key;
         }
 
         _isDown = false;
@@ -106,5 +125,9 @@ internal sealed class SendingKeyHolder
         _sendKey(key, down);
         _isDown = down;
         _lastSentAt = now;
+        if (!down)
+        {
+            _unconfirmedRelease = key;
+        }
     }
 }

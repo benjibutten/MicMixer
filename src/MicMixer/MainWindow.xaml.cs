@@ -760,12 +760,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         UpdateNoiseGateStateText();
+        // Also picks up music starting and stopping, which changes no routing state, and
+        // releases again a key Windows dropped the release of after routing stopped.
+        UpdateSendingKey();
         if (_router.IsRouting)
         {
             DryLevelMeter.Value = _router.NormalPeak;
             ModdedLevelMeter.Value = _router.ModdedPeak;
-            // Also picks up music starting and stopping, which changes no routing state.
-            UpdateSendingKey();
         }
         else
         {
@@ -1360,14 +1361,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
     /// <summary>Holds the chosen key while mic or music reaches the cable.</summary>
     private void UpdateSendingKey()
     {
-        if (!_router.IsRouting)
-        {
-            return;
-        }
-
         // NoiseGateOpen is also true while the noise gate is off.
-        bool micSending = _router.OutputGateOpen && _router.NoiseGateOpen;
-        bool sending = micSending || ComputeOverlayMusicState() == OverlayMusicState.Sending;
+        bool sending = _router.IsRouting
+            && ((_router.OutputGateOpen && _router.NoiseGateOpen) || ComputeOverlayMusicState() == OverlayMusicState.Sending);
         _sendingKey.Update(sending, _uptime.Elapsed);
     }
 

@@ -118,6 +118,49 @@ public sealed class SendingKeyHolderTests
     }
 
     [Fact]
+    public void Update_ShouldResendADroppedKeyUp_AfterSendingStoppedForGood()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _dropEvents = true;
+        _holder.Release();
+        _holder.Update(sending: false, Ms(1_000));
+
+        _dropEvents = false;
+        _holder.Update(sending: false, Ms(2_000));
+        _holder.Update(sending: false, Ms(3_000));
+
+        _sent.Should().Equal(("F24", true), ("F24", false), ("F24", false), ("F24", false));
+        _keysDownInWindows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Update_ShouldResendADroppedKeyUp_OfAKeyNoLongerInUse()
+    {
+        _holder.Update(sending: true, Ms(0));
+        _dropEvents = true;
+        _holder.Key = null;
+        _holder.Update(sending: false, Ms(1_000));
+
+        _dropEvents = false;
+        _holder.Update(sending: false, Ms(2_000));
+
+        _keysDownInWindows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Update_ShouldLeaveAKeyTheUserHolds_WhileNotSending()
+    {
+        _keysDownInWindows.Add("F24");
+
+        for (int ms = 0; ms <= 5_000; ms += 50)
+        {
+            _holder.Update(sending: false, Ms(ms));
+        }
+
+        _sent.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Update_ShouldPressAgain_WhenSomethingElseReleasedTheKey()
     {
         _holder.Update(sending: true, Ms(0));
