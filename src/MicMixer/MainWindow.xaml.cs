@@ -1980,8 +1980,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 Height = 660,
                 MinWidth = 620,
                 MinHeight = 440,
-                ShowInTaskbar = false,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner
+                ShowInTaskbar = false
             };
             _settingsWindow.PreviewKeyDown += OnPreviewHotkeyKeyDown;
             _settingsWindow.PreviewMouseDown += OnPreviewHotkeyMouseDown;
@@ -2008,6 +2007,16 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (page != null)
         {
             SettingsTabs.SelectedItem = page;
+        }
+
+        // Centered on every open, since the window is hidden rather than closed and
+        // WindowStartupLocation would place it only the first time.
+        if (!_settingsWindow.IsVisible)
+        {
+            var mainBounds = RestoreBounds;
+            _settingsWindow.Left = mainBounds.Left + (mainBounds.Width - _settingsWindow.Width) / 2;
+            // Not above the main window, which could push the title bar off the top of the screen.
+            _settingsWindow.Top = mainBounds.Top + Math.Max(0, (mainBounds.Height - _settingsWindow.Height) / 2);
         }
 
         _settingsWindow.Show();
