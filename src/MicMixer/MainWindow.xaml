@@ -1056,14 +1056,14 @@
                                             <TextBlock Style="{StaticResource FlowArrow}"/>
                                             <Border Style="{StaticResource FlowStep}"><TextBlock Text="MicMixer" FontSize="11.5"/></Border>
                                             <TextBlock Style="{StaticResource FlowArrow}"/>
-                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="CABLE Input" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
+                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="Cable Input" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
                                             <TextBlock Style="{StaticResource FlowArrow}" Text="⇢"/>
-                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="CABLE Output" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
+                                            <Border Style="{StaticResource FlowStep}" BorderBrush="#A5B4FC"><TextBlock Text="Cable Output" FontSize="11.5" FontWeight="SemiBold" Foreground="#4338CA"/></Border>
                                             <TextBlock Style="{StaticResource FlowArrow}"/>
                                             <Border Style="{StaticResource FlowStep}"><TextBlock Text="Game or chat" FontSize="11.5"/></Border>
                                         </WrapPanel>
                                         <TextBlock Style="{StaticResource SettingsDesc}" Margin="0"
-                                                   Text="A virtual cable is a pipe with two ends. Whatever is played into CABLE Input comes out of CABLE Output, which apps see as a microphone. MicMixer only uses the input end; the output end is chosen in your game or chat."/>
+                                                   Text="A virtual cable is a pipe with two ends. Whatever is played into its Input end comes out of its Output end, which apps see as a microphone. With VB-CABLE they are called CABLE Input and CABLE Output, or MicMixer Input and MicMixer Output when the MicMixer installer named them. MicMixer only uses the Input end; the Output end is chosen in your game or chat."/>
                                     </StackPanel>
                                 </Border>
 
@@ -1164,13 +1164,13 @@
                                         <TextBlock Text="Virtual cable" Style="{StaticResource SettingsHeading}" Margin="0"/>
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource SettingsDesc}"
-                                               Text="Where MicMixer sends the finished mix. Choose CABLE Input here, then choose CABLE Output as the microphone in your game or chat."/>
+                                               Text="Where MicMixer sends the finished mix. Choose the cable's Input end here, such as MicMixer Input or CABLE Input, then choose its Output end as the microphone in your game or chat."/>
                                     <TextBlock Text="Send the mix to" FontSize="11" Foreground="#6B7280" Margin="0,0,0,3"/>
                                     <ComboBox x:Name="OutputDeviceCombo" DisplayMemberPath="FriendlyName" SelectionChanged="OnSettingsSelectionChanged" FontSize="11.5"
                                               AutomationProperties.Name="Send the mix to"/>
                                     <TextBlock x:Name="OutputCableWarningText" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap"
                                                Foreground="#B45309" Visibility="Collapsed"
-                                               Text="⚠ This does not look like a virtual cable. A game or chat can only pick up the mix from a device such as CABLE Input."/>
+                                               Text="⚠ This does not look like a virtual cable. A game or chat can only pick up the mix from a cable's Input end, such as MicMixer Input or CABLE Input."/>
                                 </StackPanel>
 
                                 <StackPanel Style="{StaticResource SettingsSection}">

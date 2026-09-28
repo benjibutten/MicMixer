@@ -551,7 +551,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         if (!AudioDevices.LooksLikeVirtualCable(output) && _acknowledgedNonCableOutputId != output.Id)
         {
             _acknowledgedNonCableOutputId = output.Id;
-            StatusText.Text = $"\"{output.FriendlyName}\" does not appear to be a virtual cable — the game can hear the mix only through a device such as CABLE Input. Click Enable again to start anyway.";
+            StatusText.Text = $"\"{output.FriendlyName}\" does not appear to be a virtual cable — the game can hear the mix only through a cable's Input end, such as MicMixer Input or CABLE Input. Click Enable again to start anyway.";
             return;
         }
 
