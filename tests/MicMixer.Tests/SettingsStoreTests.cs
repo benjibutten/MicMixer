@@ -153,6 +153,40 @@ public sealed class SettingsStoreTests : IDisposable
         live.OutputDeviceId.Should().Be("cable");
     }
 
+    [Fact]
+    public void SaveAndLoad_ShouldRoundTripExtraHotkeys()
+    {
+        var sut = new SettingsStore(Path.Combine(_root, "settings.json"));
+
+        sut.Save(new AppSettings { HotkeyId = "mouse:x2", ExtraHotkeyIds = ["keyboard:vk:66"] });
+        AppSettings actual = sut.Load();
+
+        actual.HotkeyId.Should().Be("mouse:x2");
+        actual.ExtraHotkeyIds.Should().Equal("keyboard:vk:66");
+    }
+
+    [Fact]
+    public void Load_ShouldGiveNoExtraHotkeys_WhenTheFileHasNone()
+    {
+        Directory.CreateDirectory(_root);
+        string path = Path.Combine(_root, "settings.json");
+        File.WriteAllText(path, """{ "HotkeyId": "mouse:x2", "ExtraHotkeyIds": null }""");
+
+        new SettingsStore(path).Load().ExtraHotkeyIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CopyConfigurationFrom_ShouldNotShareTheHotkeyList()
+    {
+        var saved = new AppSettings { ExtraHotkeyIds = ["mouse:x1"] };
+        var live = new AppSettings();
+
+        live.CopyConfigurationFrom(saved);
+        live.ExtraHotkeyIds.Add("mouse:x2");
+
+        saved.ExtraHotkeyIds.Should().Equal("mouse:x1");
+    }
+
     [Theory]
     [InlineData(ModifiedVoiceMode.None)]
     [InlineData(ModifiedVoiceMode.ExternalMicrophone)]

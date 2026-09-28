@@ -10,7 +10,7 @@ public sealed class GlobalHotkeyListener : IDisposable
     private readonly object _syncRoot = new();
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly Task _pollLoopTask;
-    private HotkeyBinding? _binding;
+    private IReadOnlyList<HotkeyBinding> _bindings = [];
     private bool _isMonitoringEnabled;
     private bool _isPressed;
     private bool _disposed;
@@ -24,11 +24,12 @@ public sealed class GlobalHotkeyListener : IDisposable
 
     public event EventHandler<bool>? PressedStateChanged;
 
-    public void UpdateBinding(HotkeyBinding? binding)
+    /// <summary>Watches <paramref name="bindings"/>; the hotkey counts as pressed while any of them is held.</summary>
+    public void UpdateBindings(IReadOnlyList<HotkeyBinding> bindings)
     {
         lock (_syncRoot)
         {
-            _binding = binding;
+            _bindings = bindings;
         }
 
         VerifyPressedState();
@@ -100,29 +101,32 @@ public sealed class GlobalHotkeyListener : IDisposable
 
     private bool ReadPressedState()
     {
-        HotkeyBinding? binding;
+        IReadOnlyList<HotkeyBinding> bindings;
         bool isMonitoringEnabled;
 
         lock (_syncRoot)
         {
-            binding = _binding;
+            bindings = _bindings;
             isMonitoringEnabled = _isMonitoringEnabled;
         }
 
-        if (!isMonitoringEnabled || binding == null)
+        if (!isMonitoringEnabled)
         {
             return false;
         }
 
-        foreach (int code in binding.Codes)
+        foreach (HotkeyBinding binding in bindings)
         {
-            int virtualKey = binding.DeviceKind == HotkeyDeviceKind.Keyboard
-                ? code
-                : MouseCodeToVirtualKey(code);
-
-            if (virtualKey != 0 && (GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+            foreach (int code in binding.Codes)
             {
-                return true;
+                int virtualKey = binding.DeviceKind == HotkeyDeviceKind.Keyboard
+                    ? code
+                    : MouseCodeToVirtualKey(code);
+
+                if (virtualKey != 0 && (GetAsyncKeyState(virtualKey) & 0x8000) != 0)
+                {
+                    return true;
+                }
             }
         }
 

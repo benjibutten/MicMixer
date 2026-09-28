@@ -24,6 +24,7 @@ public sealed class AppSettings
         ProcessedVoiceVolume = source.ProcessedVoiceVolume;
         OutputDeviceId = source.OutputDeviceId;
         HotkeyId = source.HotkeyId;
+        ExtraHotkeyIds = [.. source.ExtraHotkeyIds];
         ReleaseDelayMilliseconds = source.ReleaseDelayMilliseconds;
         PushToTalkMode = source.PushToTalkMode;
         MusicMonitorDeviceId = source.MusicMonitorDeviceId;
@@ -76,7 +77,11 @@ public sealed class AppSettings
 
     public string? OutputDeviceId { get; set; }
 
+    /// <summary>The first hotkey. Older builds read only this one, so it stays a single value.</summary>
     public string HotkeyId { get; set; } = Input.HotkeyBinding.Default.SerializedValue;
+
+    /// <summary>Further hotkeys that do exactly what <see cref="HotkeyId"/> does.</summary>
+    public List<string> ExtraHotkeyIds { get; set; } = [];
 
     public int ReleaseDelayMilliseconds { get; set; }
 

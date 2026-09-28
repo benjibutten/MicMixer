@@ -74,6 +74,7 @@ public sealed class SettingsStore
             settings.NoiseGateThresholdDb = float.IsFinite(settings.NoiseGateThresholdDb)
                 ? Math.Clamp(settings.NoiseGateThresholdDb, -70f, -10f) : -45f;
             settings.SkipModdedMic = settings.ModifiedVoiceMode == ModifiedVoiceMode.None;
+            settings.ExtraHotkeyIds ??= [];
             return settings;
         }
         catch (Exception ex)

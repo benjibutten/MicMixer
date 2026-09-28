@@ -1280,17 +1280,29 @@
                             <StackPanel>
                                 <StackPanel x:Name="HotkeyConfigPanel">
                                     <StackPanel Style="{StaticResource SettingsSection}">
-                                        <TextBlock Text="Hotkey" Style="{StaticResource SettingsHeading}"/>
+                                        <TextBlock Text="Hotkeys" Style="{StaticResource SettingsHeading}"/>
                                         <TextBlock Style="{StaticResource SettingsDesc}"
-                                                   Text="Hold it to switch to the modified voice. With push-to-talk on, you are heard only while you hold it. Works everywhere, also while a game has focus."/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <Border Padding="8,5" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="100">
-                                                <TextBlock x:Name="HotkeyValueText" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
-                                            </Border>
-                                            <Button x:Name="CaptureHotkeyButton" Margin="8,0,0,0" Height="28" Padding="10,0"
-                                                    Click="OnCaptureHotkeyClick" Content="Change" FontSize="11.5"
-                                                    Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
-                                        </StackPanel>
+                                                   Text="Hold a hotkey to switch to the modified voice. With push-to-talk on, you are heard only while you hold one. Add more hotkeys to let several keys or buttons do the same. Works everywhere, also while a game has focus."/>
+                                        <ItemsControl x:Name="HotkeyList" Focusable="False">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                        <Border Padding="8,5" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1" MinWidth="100">
+                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="#10233A" FontSize="12" HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                        <Button Margin="8,0,0,0" Height="28" Padding="10,0"
+                                                                Click="OnCaptureHotkeyClick" Content="{Binding ChangeText}" FontSize="11.5"
+                                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                                        <Button Margin="6,0,0,0" Height="28" Padding="10,0"
+                                                                Click="OnRemoveHotkeyClick" Content="Remove" FontSize="11.5" Visibility="{Binding RemoveVisibility}"
+                                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button x:Name="AddHotkeyButton" HorizontalAlignment="Left" Height="28" Padding="10,0"
+                                                Click="OnAddHotkeyClick" Content="Add hotkey" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
                                         <TextBlock x:Name="HotkeyCaptureHintText" Margin="0,5,0,0" FontSize="10.5" Foreground="#9CA3AF" TextWrapping="Wrap"/>
                                     </StackPanel>
 

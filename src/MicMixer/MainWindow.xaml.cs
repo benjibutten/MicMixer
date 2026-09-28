@@ -85,10 +85,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private List<Problem> _problems = [];
     private string? _secondaryOutputError;
     private OverlayIndicatorWindow? _overlayIndicator;
-    private HotkeyBinding _hotkeyBinding = HotkeyBinding.Default;
+    private List<HotkeyBinding> _hotkeyBindings = [HotkeyBinding.Default];
     private int _releaseDelayMilliseconds;
     private float _noiseGatePeakHold;
-    private bool _isCapturingHotkey;
+    /// <summary>Index of the hotkey the next key or click replaces; the hotkey count adds one, -1 captures nothing.</summary>
+    private int _capturingHotkeyIndex = -1;
     private bool _isReleaseDelayPending;
     private bool _isStartingRouting;
     private bool _isDevicesLoading;
@@ -1421,16 +1422,32 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnCaptureHotkeyClick(object sender, RoutedEventArgs e)
     {
-        _isCapturingHotkey = true;
+        StartHotkeyCapture(((HotkeyRow)((FrameworkElement)sender).DataContext).Index, sender);
+    }
+
+    private void OnAddHotkeyClick(object sender, RoutedEventArgs e)
+    {
+        StartHotkeyCapture(_hotkeyBindings.Count, sender);
+    }
+
+    private void StartHotkeyCapture(int index, object sender)
+    {
+        _capturingHotkeyIndex = index;
         UpdateHotkeyUi();
-        Window window = Window.GetWindow(CaptureHotkeyButton);
+        Window window = Window.GetWindow((DependencyObject)sender);
         window.Activate();
         window.Focus();
     }
 
+    private void OnRemoveHotkeyClick(object sender, RoutedEventArgs e)
+    {
+        int index = ((HotkeyRow)((FrameworkElement)sender).DataContext).Index;
+        SetHotkeyBindings(_hotkeyBindings.Where((_, i) => i != index));
+    }
+
     private void OnPreviewHotkeyKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (!_isCapturingHotkey)
+        if (_capturingHotkeyIndex < 0)
         {
             return;
         }
@@ -1447,7 +1464,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void OnPreviewHotkeyMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (!_isCapturingHotkey)
+        if (_capturingHotkeyIndex < 0)
         {
             return;
         }
@@ -1721,9 +1738,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         _releaseDelayMilliseconds = _settings.ReleaseDelayMilliseconds;
         CancelPendingReleaseDelay();
-        _hotkeyBinding = HotkeyBinding.Parse(_settings.HotkeyId);
-        _hotkeyListener.UpdateBinding(_hotkeyBinding);
-        UpdateHotkeyUi();
+        UseHotkeyBindings(new[] { _settings.HotkeyId }.Concat(_settings.ExtraHotkeyIds).Select(HotkeyBinding.Parse));
 
         UpdateMeterSensitivityText();
         ApplyOverlayIndicatorSetting(_settings.OverlayIndicatorEnabled);
@@ -1788,7 +1803,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                     closing.Cancel = true;
                     ((Window)window!).Hide();
                     // An armed capture would otherwise take the next key or click for the hotkey.
-                    _isCapturingHotkey = false;
+                    _capturingHotkeyIndex = -1;
                     UpdateHotkeyUi();
                 }
             };
@@ -1866,7 +1881,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private string DescribeHotkeyState()
     {
-        string key = _hotkeyBinding.DisplayName;
+        string key = HotkeyNames;
+        // The listener does not say which hotkey is down, so the held state cannot name it.
+        string heldKey = _hotkeyBindings.Count == 1 ? key : "Hotkey";
         if (!_router.IsRouting)
         {
             return IsPushToTalk
@@ -1876,14 +1893,14 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (IsPushToTalk)
         {
-            return _hotkeyListener.IsPressed ? $"{key} held, you are heard"
-                : _isReleaseDelayPending ? $"{key} released, muting in {_releaseDelayMilliseconds} ms"
+            return _hotkeyListener.IsPressed ? $"{heldKey} held, you are heard"
+                : _isReleaseDelayPending ? $"{heldKey} released, muting in {_releaseDelayMilliseconds} ms"
                 : $"Hold {key} to be heard";
         }
 
         return IsModdedMicSkipped ? "Your normal mic is live"
-            : _hotkeyListener.IsPressed ? $"{key} held, modified voice is live"
-            : _isReleaseDelayPending ? $"{key} released, switching back in {_releaseDelayMilliseconds} ms"
+            : _hotkeyListener.IsPressed ? $"{heldKey} held, modified voice is live"
+            : _isReleaseDelayPending ? $"{heldKey} released, switching back in {_releaseDelayMilliseconds} ms"
             : $"Normal mic is live, hold {key} for the modified voice";
     }
 
@@ -2074,24 +2091,61 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
     private void ApplyHotkeyBinding(HotkeyBinding binding)
     {
-        _hotkeyBinding = binding;
-        _isCapturingHotkey = false;
+        var bindings = new List<HotkeyBinding>(_hotkeyBindings);
+        if (_capturingHotkeyIndex < bindings.Count)
+        {
+            bindings[_capturingHotkeyIndex] = binding;
+        }
+        else
+        {
+            bindings.Add(binding);
+        }
+
+        SetHotkeyBindings(bindings);
+    }
+
+    /// <summary>Applies hotkeys the user just changed.</summary>
+    private void SetHotkeyBindings(IEnumerable<HotkeyBinding> bindings)
+    {
+        UseHotkeyBindings(bindings);
         CancelPendingReleaseDelay();
-        _hotkeyListener.UpdateBinding(binding);
-        _settings.HotkeyId = binding.SerializedValue;
         ApplyEffectiveRoutingStates();
-        UpdateHotkeyUi();
         OnConfigurationChanged();
+    }
+
+    /// <summary>
+    /// Makes <paramref name="bindings"/> the hotkeys, without duplicates, in _settings,
+    /// the listener and the settings window, and ends any capture in progress.
+    /// </summary>
+    private void UseHotkeyBindings(IEnumerable<HotkeyBinding> bindings)
+    {
+        _hotkeyBindings = [.. bindings.DistinctBy(binding => binding.SerializedValue)];
+        _settings.HotkeyId = _hotkeyBindings[0].SerializedValue;
+        _settings.ExtraHotkeyIds = [.. _hotkeyBindings.Skip(1).Select(binding => binding.SerializedValue)];
+        _capturingHotkeyIndex = -1;
+        _hotkeyListener.UpdateBindings(_hotkeyBindings);
+        UpdateHotkeyUi();
     }
 
     private void UpdateHotkeyUi()
     {
-        HotkeyValueText.Text = _hotkeyBinding.DisplayName;
-        CaptureHotkeyButton.Content = _isCapturingHotkey ? "Press now..." : "Change";
-        HotkeyCaptureHintText.Text = _isCapturingHotkey
+        HotkeyList.ItemsSource = _hotkeyBindings
+            .Select((binding, index) => new HotkeyRow(
+                index,
+                binding.DisplayName,
+                index == _capturingHotkeyIndex ? "Press now..." : "Change",
+                _hotkeyBindings.Count > 1 ? Visibility.Visible : Visibility.Collapsed))
+            .ToList();
+        AddHotkeyButton.Content = _capturingHotkeyIndex == _hotkeyBindings.Count ? "Press now..." : "Add hotkey";
+        HotkeyCaptureHintText.Text = _capturingHotkeyIndex >= 0
             ? "Press any keyboard key or mouse button now."
-            : "Click Change, then press any keyboard key or mouse button.";
+            : "Click Change or Add hotkey, then press any keyboard key or mouse button.";
     }
+
+    private sealed record HotkeyRow(int Index, string Name, string ChangeText, Visibility RemoveVisibility);
+
+    /// <summary>All hotkeys by name, for text that tells the user what to hold.</summary>
+    private string HotkeyNames => string.Join(" or ", _hotkeyBindings.Select(binding => binding.DisplayName));
 
     private void ApplyHotkeyPressedState(bool isPressed)
     {
@@ -3405,7 +3459,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ExternalCaptureRouteState.MonitorOnly =>
                 "Turn off Monitor only to send music to the mic channel.",
             ExternalCaptureRouteState.BlockedByPushToTalk =>
-                $"Hold {_hotkeyBinding.DisplayName}, or enable Music ignores push-to-talk, to let others hear the music.",
+                $"Hold {HotkeyNames}, or enable Music ignores push-to-talk, to let others hear the music.",
             _ => "Audio is being received and routed to the virtual mic."
         };
 
@@ -3440,7 +3494,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ExternalCaptureRouteState.RoutingStopped => "App audio is being received — enable routing so others can hear it.",
             ExternalCaptureRouteState.MonitorOnly => "App audio is being received, but Monitor only is active.",
             ExternalCaptureRouteState.BlockedByPushToTalk =>
-                $"App audio is being received but blocked by push-to-talk — hold {_hotkeyBinding.DisplayName} or let music ignore push-to-talk.",
+                $"App audio is being received but blocked by push-to-talk — hold {HotkeyNames} or let music ignore push-to-talk.",
             _ => $"{target.DisplayName} is being sent to the virtual mic."
         };
     }
