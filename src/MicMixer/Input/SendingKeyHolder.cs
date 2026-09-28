@@ -17,9 +17,13 @@ internal sealed class SendingKeyHolder
 
     private readonly Action<FunctionKey, bool> _sendKey;
     private readonly Func<FunctionKey, bool> _isKeyDown;
+    private readonly Func<nint> _foregroundWindow;
+    private nint _lastForegroundWindow;
     private FunctionKey? _key;
     /// <summary>A key this holder let go of that Windows has not yet reported up.</summary>
     private FunctionKey? _unconfirmedRelease;
+    /// <summary>A key this holder let go of since focus last moved.</summary>
+    private FunctionKey? _releaseToRepeat;
     private bool _isDown;
     private bool _wasSending;
     private TimeSpan _stoppedSendingAt;
@@ -27,10 +31,12 @@ internal sealed class SendingKeyHolder
 
     /// <param name="sendKey">Injects a key-down (true) or key-up (false) for the key.</param>
     /// <param name="isKeyDown">Reads whether Windows currently has the key down.</param>
-    public SendingKeyHolder(Action<FunctionKey, bool> sendKey, Func<FunctionKey, bool> isKeyDown)
+    /// <param name="foregroundWindow">Reads the handle of the window that has focus.</param>
+    public SendingKeyHolder(Action<FunctionKey, bool> sendKey, Func<FunctionKey, bool> isKeyDown, Func<nint> foregroundWindow)
     {
         _sendKey = sendKey;
         _isKeyDown = isKeyDown;
+        _foregroundWindow = foregroundWindow;
     }
 
     /// <summary>The key to hold, or null when the feature is off. Changing it releases the old key.</summary>
@@ -48,6 +54,7 @@ internal sealed class SendingKeyHolder
             {
                 _sendKey(_key!, false);
                 _unconfirmedRelease = _key;
+                _releaseToRepeat = _key;
                 _isDown = false;
             }
 
@@ -57,9 +64,10 @@ internal sealed class SendingKeyHolder
 
     /// <summary>
     /// Presses or releases the key to match <paramref name="sending"/>, and sends the
-    /// wanted state again when Windows has not taken it on. Call it whenever sending
-    /// may have changed, and regularly, also while routing is off: the release delay
-    /// and the resends only take effect on a call.
+    /// wanted state again when Windows has not taken it on. When another window takes
+    /// focus, the last press or release is sent again. Call it whenever sending
+    /// may have changed, and regularly, also while routing is off: the release delay,
+    /// the resends and the focus check only take effect on a call.
     /// </summary>
     public void Update(bool sending, TimeSpan now)
     {
@@ -70,12 +78,32 @@ internal sealed class SendingKeyHolder
 
         _wasSending = sending;
 
+        nint foregroundWindow = _foregroundWindow();
+        bool focusMoved = foregroundWindow != _lastForegroundWindow;
+        _lastForegroundWindow = foregroundWindow;
+
+        // An elevated MicMixer's key events reach programs that read raw input only
+        // while the focused window is not elevated either, so a press or release made
+        // while MicMixer has focus goes unseen by the game even though Windows takes it
+        // on. Sending it again on the next focus change reaches the new window; a press
+        // arrives as a key repeat, with no key-up in between.
+        if (focusMoved)
+        {
+            RepeatRelease();
+        }
+
         if (_key != null)
         {
             bool down = sending || (_isDown && now - _stoppedSendingAt < ReleaseDelay);
             if (down != _isDown)
             {
                 Send(_key, down, now);
+                return;
+            }
+
+            if (down && focusMoved)
+            {
+                Send(_key, true, now);
                 return;
             }
 
@@ -114,10 +142,26 @@ internal sealed class SendingKeyHolder
         {
             _sendKey(key, false);
             _unconfirmedRelease = key;
+            _releaseToRepeat = key;
         }
 
         _isDown = false;
         _wasSending = false;
+    }
+
+    private void RepeatRelease()
+    {
+        if (_releaseToRepeat is not { } released)
+        {
+            return;
+        }
+
+        _releaseToRepeat = null;
+        // Down in Windows means the user holds the key, or this holder pressed it again.
+        if (!_isKeyDown(released))
+        {
+            _sendKey(released, false);
+        }
     }
 
     private void Send(FunctionKey key, bool down, TimeSpan now)
@@ -128,6 +172,7 @@ internal sealed class SendingKeyHolder
         if (!down)
         {
             _unconfirmedRelease = key;
+            _releaseToRepeat = key;
         }
     }
 }

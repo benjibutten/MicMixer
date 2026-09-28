@@ -51,7 +51,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private readonly DispatcherTimer _settingsSaveTimer;
     private readonly DispatcherTimer _deviceChangeTimer;
     private readonly DispatcherTimer _sendHeldKeyTimer;
-    private readonly SendingKeyHolder _sendingKey = new((key, down) => key.Send(down), key => key.IsDown);
+    private readonly SendingKeyHolder _sendingKey = new((key, down) => key.Send(down), key => key.IsDown, KeyInjector.ForegroundWindow);
     private int _sendHeldKeyCountdown;
     private MMDeviceEnumerator? _deviceEnumerator;
     private MMDeviceNotificationClient? _deviceNotifications;

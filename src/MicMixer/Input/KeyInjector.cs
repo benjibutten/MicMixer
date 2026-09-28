@@ -43,10 +43,16 @@ internal static class KeyInjector
     /// <summary>True while Windows has <paramref name="virtualKey"/> down, whether pressed or injected.</summary>
     public static bool IsKeyDown(ushort virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
 
+    /// <summary>The handle of the window that has focus, or zero when none has.</summary>
+    public static nint ForegroundWindow() => GetForegroundWindow();
+
     private const uint MapVkToVsc = 0;
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int virtualKey);
+
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
 
     [DllImport("user32.dll")]
     private static extern uint MapVirtualKey(uint code, uint mapType);
