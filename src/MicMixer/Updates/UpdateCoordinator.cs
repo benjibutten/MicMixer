@@ -38,7 +38,7 @@ internal static class UpdateCoordinator
 
         try
         {
-            UpdateInfo? update = await Service.CheckAsync(currentVersion, manual);
+            UpdateInfo? update = await Service.CheckAsync(currentVersion, manual, InstallEnvironment.IsInstalledWithSetup);
             if (update is null)
             {
                 if (manual)
@@ -73,7 +73,12 @@ internal static class UpdateCoordinator
             try
             {
                 var progress = new Progress<UpdateProgress>(progressWindow.Report);
-                await Service.LaunchInstallerAsync(update, progress);
+                if (!await Service.LaunchInstallerAsync(update, progress))
+                {
+                    Log.Information("The MicMixer installer ended without installing the update.");
+                    return;
+                }
+
                 if (Application.Current.MainWindow is MainWindow mainWindow)
                     mainWindow.ExitApplication();
                 else

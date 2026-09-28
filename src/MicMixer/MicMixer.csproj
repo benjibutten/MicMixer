@@ -14,7 +14,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Bundled native libraries would be unpacked into %TEMP% and loaded from there,
+         where any program can replace them before MicMixer runs as administrator. -->
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">false</IncludeNativeLibrariesForSelfExtract>
     <!-- DOTNET_STARTUP_HOOKS comes from the user's environment, which any program the
          user runs can set, and would load its code into MicMixer running as administrator. -->
     <StartupHookSupport>false</StartupHookSupport>

@@ -64,13 +64,17 @@ jobs:
           $tagName = "v$version"
           $assemblyVersion = "$version.0"
           $releaseName = "MicMixer $version"
+          # Both names must match GitHubUpdateService. MicMixer versions from before the
+          # installer update from the zip, so it is published for as long as they exist.
           $assetName = "MicMixer-$version-win-x64.zip"
+          $setupName = "MicMixer-$version-win-x64-setup.exe"
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag_name=$tagName" >> $env:GITHUB_OUTPUT
           "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
           "release_name=$releaseName" >> $env:GITHUB_OUTPUT
           "asset_name=$assetName" >> $env:GITHUB_OUTPUT
+          "setup_name=$setupName" >> $env:GITHUB_OUTPUT
 
       - name: Restore solution
         shell: pwsh
@@ -99,7 +103,7 @@ jobs:
             -p:DebugType=None `
             -p:DebugSymbols=false `
             -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:IncludeNativeLibrariesForSelfExtract=false `
             -p:EnableCompressionInSingleFile=false `
             -p:PublishReadyToRun=true `
             -p:Version=${{ steps.meta.outputs.version }} `
@@ -112,42 +116,8 @@ jobs:
         id: codesign
         shell: pwsh
         run: |
-          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PFX_BASE64)
-          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_CERT_PASSWORD)
-
-          if ($hasCertificate -ne $hasPassword)
-          {
-            throw "Both WINDOWS_CODESIGN_CERT_PFX_BASE64 and WINDOWS_CODESIGN_CERT_PASSWORD must be configured together."
-          }
-
-          if (-not $hasCertificate)
-          {
-            "status=Unsigned" >> $env:GITHUB_OUTPUT
-            return
-          }
-
-          $certPath = Join-Path $env:RUNNER_TEMP "micmixer-codesign.pfx"
-          try
-          {
-            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_CERT_PFX_BASE64))
-            $exePath = Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID/MicMixer.exe"
-            signtool sign `
-              /fd SHA256 `
-              /f $certPath `
-              /p $env:WINDOWS_CODESIGN_CERT_PASSWORD `
-              /tr "http://timestamp.digicert.com" `
-              /td SHA256 `
-              $exePath
-            if ($LASTEXITCODE -ne 0) { throw "signtool sign failed with exit code $LASTEXITCODE." }
-
-            signtool verify /pa /v $exePath
-            if ($LASTEXITCODE -ne 0) { throw "signtool verify failed with exit code $LASTEXITCODE." }
-            "status=Signed (signature verified)" >> $env:GITHUB_OUTPUT
-          }
-          finally
-          {
-            Remove-Item -LiteralPath $certPath -Force -ErrorAction SilentlyContinue
-          }
+          $signed = ./scripts/Sign-Release.ps1 -Path (Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID/MicMixer.exe")
+          "status=$(if ($signed) { 'Signed (signature verified)' } else { 'Unsigned' })" >> $env:GITHUB_OUTPUT
 
       - name: Create release zip
         id: package
@@ -167,6 +137,21 @@ jobs:
           "$hash  ${{ steps.meta.outputs.asset_name }}" | Set-Content -Path "$zipPath.sha256" -NoNewline
           "sha256=$hash" >> $env:GITHUB_OUTPUT
 
+      - name: Build installer
+        id: installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $setupPath = ./scripts/Build-Installer.ps1 `
+            -PublishDirectory "artifacts/publish/$env:RUNTIME_ID" `
+            -OutputDirectory (Join-Path $PWD "artifacts") `
+            -Version ${{ steps.meta.outputs.version }} `
+            -Sign:('${{ steps.codesign.outputs.status }}' -ne 'Unsigned')
+
+          $hash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ${{ steps.meta.outputs.setup_name }}" | Set-Content -Path "$setupPath.sha256" -NoNewline
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -174,11 +159,15 @@ jobs:
           path: |
             artifacts/${{ steps.meta.outputs.asset_name }}
             artifacts/${{ steps.meta.outputs.asset_name }}.sha256
+            artifacts/${{ steps.meta.outputs.setup_name }}
+            artifacts/${{ steps.meta.outputs.setup_name }}.sha256
 
-      - name: Attest release archive
+      - name: Attest release downloads
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: artifacts/${{ steps.meta.outputs.asset_name }}
+          subject-path: |
+            artifacts/${{ steps.meta.outputs.asset_name }}
+            artifacts/${{ steps.meta.outputs.setup_name }}
 
       - name: Write release notes
         shell: pwsh
@@ -195,18 +184,23 @@ jobs:
           Build: ${{ steps.meta.outputs.version }}
           Commit: ${{ github.sha }}
           Runtime: ${{ env.RUNTIME_ID }}
-          SHA-256: ${{ steps.package.outputs.sha256 }}
+          SHA-256 (installer): ${{ steps.installer.outputs.sha256 }}
+          SHA-256 (zip): ${{ steps.package.outputs.sha256 }}
           Code signing: ${{ steps.codesign.outputs.status }}
           Code signing policy: https://benjibutten.github.io/MicMixer/code-signing-policy.html
 
           The code-signing status above is authoritative for this release.
 
-          For a manual ZIP installation, download the asset below and extract it over
-          your existing MicMixer folder, then run MicMixer.exe. Keeping the same install
-          path helps Windows keep tray icon preferences.
+          To install, download ${{ steps.meta.outputs.setup_name }} and run it. It installs
+          MicMixer into Program Files, adds it to the Start menu and to Apps in Windows
+          Settings, and MicMixer updates itself through it from then on.
+
+          The zip is the same app without an installer: extract it over your existing
+          MicMixer folder and run MicMixer.exe. Keeping the same install path helps
+          Windows keep tray icon preferences.
 
           Windows Defender SmartScreen may warn about a newly published or unsigned build.
-          Verify that the archive came from this GitHub release and compare its SHA-256
+          Verify that the download came from this GitHub release and compare its SHA-256
           hash with the attached .sha256 file before choosing More info > Run anyway.
           "@ | Set-Content -Path artifacts/release-notes.md
 
@@ -217,7 +211,7 @@ jobs:
           commit: ${{ github.sha }}
           name: ${{ steps.meta.outputs.release_name }}
           bodyFile: artifacts/release-notes.md
-          artifacts: artifacts/${{ steps.meta.outputs.asset_name }},artifacts/${{ steps.meta.outputs.asset_name }}.sha256
+          artifacts: artifacts/${{ steps.meta.outputs.setup_name }},artifacts/${{ steps.meta.outputs.setup_name }}.sha256,artifacts/${{ steps.meta.outputs.asset_name }},artifacts/${{ steps.meta.outputs.asset_name }}.sha256
           allowUpdates: false
           artifactErrorsFailBuild: true
           replacesArtifacts: true

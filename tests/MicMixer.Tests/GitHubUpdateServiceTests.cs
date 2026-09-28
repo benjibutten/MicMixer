@@ -26,6 +26,14 @@ public sealed class GitHubUpdateServiceTests
     }
 
     [Fact]
+    public void GetReleaseSetupName_IncludesVersion()
+    {
+        string result = GitHubUpdateService.GetReleaseSetupName(new Version(2026, 7, 12));
+
+        Assert.Equal("MicMixer-2026.7.12-win-x64-setup.exe", result);
+    }
+
+    [Fact]
     public void ParseChecksum_AcceptsStandardSha256File()
     {
         string hash = new('a', 64);
@@ -77,18 +85,80 @@ public sealed class GitHubUpdateServiceTests
             UpdateInfo? update = await service.CheckAsync(
                 new Version(2026, 7, 11),
                 force: true,
+                installedWithSetup: false,
                 TestContext.Current.CancellationToken);
 
             Assert.Equal("https://api.github.com/repos/benjibutten/MicMixer/releases/latest", requestedUrl);
             Assert.NotNull(update);
             Assert.Equal(new Uri(zipUrl), update.DownloadUri);
             Assert.Equal(new Uri(checksumUrl), update.ChecksumUri);
+            Assert.False(update.IsInstaller);
         }
         finally
         {
             if (Directory.Exists(stateRoot))
                 Directory.Delete(stateRoot, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task CheckAsync_SelectsTheInstallerForAnInstalledCopy()
+    {
+        const string setupUrl = "https://github.com/benjibutten/MicMixer/releases/download/v2026.7.12/MicMixer-2026.7.12-win-x64-setup.exe";
+        string json = $$"""
+            {
+              "tag_name": "v2026.7.12",
+              "html_url": "https://github.com/benjibutten/MicMixer/releases/tag/v2026.7.12",
+              "assets": [
+                { "name": "MicMixer-2026.7.12-win-x64.zip", "browser_download_url": "https://example.test/update.zip" },
+                { "name": "MicMixer-2026.7.12-win-x64.zip.sha256", "browser_download_url": "https://example.test/update.zip.sha256" },
+                { "name": "MicMixer-2026.7.12-win-x64-setup.exe", "browser_download_url": "{{setupUrl}}" },
+                { "name": "MicMixer-2026.7.12-win-x64-setup.exe.sha256", "browser_download_url": "{{setupUrl}}.sha256" }
+              ]
+            }
+            """;
+        using var client = new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        }));
+        string stateRoot = Path.Combine(Path.GetTempPath(), $"MicMixer-update-check-test-{Guid.NewGuid():N}");
+
+        try
+        {
+            var service = new GitHubUpdateService(client, Path.Combine(stateRoot, "state.txt"));
+            UpdateInfo? update = await service.CheckAsync(
+                new Version(2026, 7, 11),
+                force: true,
+                installedWithSetup: true,
+                TestContext.Current.CancellationToken);
+
+            Assert.NotNull(update);
+            Assert.True(update.IsInstaller);
+            Assert.Equal(new Uri(setupUrl), update.DownloadUri);
+            Assert.Equal(new Uri($"{setupUrl}.sha256"), update.ChecksumUri);
+        }
+        finally
+        {
+            if (Directory.Exists(stateRoot))
+                Directory.Delete(stateRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetValidatedWorkDirectory_AcceptsDownloadFoldersInTempAndTheInstallFolderOnly()
+    {
+        string install = Path.Combine(Path.GetTempPath(), "Somewhere", "MicMixer");
+        string inTemp = Path.Combine(Path.GetTempPath(), "MicMixer-update-abc");
+        string inInstall = Path.Combine(install, "MicMixer-update-abc");
+
+        Assert.Equal(inTemp, UpdateInstaller.GetValidatedWorkDirectory(inTemp, install));
+        Assert.Equal(inInstall, UpdateInstaller.GetValidatedWorkDirectory(inInstall + Path.DirectorySeparatorChar, install));
+        Assert.Throws<InvalidOperationException>(() =>
+            UpdateInstaller.GetValidatedWorkDirectory(Path.Combine(install, "Music"), install));
+        Assert.Throws<InvalidOperationException>(() =>
+            UpdateInstaller.GetValidatedWorkDirectory(Path.Combine(install, "sub", "MicMixer-update-abc"), install));
+        Assert.Throws<InvalidOperationException>(() =>
+            UpdateInstaller.GetValidatedWorkDirectory(Path.Combine(inTemp, "..", "..", "MicMixer-update-abc"), install));
     }
 
     [Fact]
