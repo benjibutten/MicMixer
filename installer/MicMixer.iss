@@ -96,11 +96,16 @@ const
   CableInterfaceName = 'VB-Audio Virtual Cable';
   DEVICE_STATEMASK = $F;
   DEVICE_STATE_NOTPRESENT = 4;
+  HWND_TOPMOST = -1;
+  HWND_NOTOPMOST = -2;
+  SWP_NOSIZE = $0001;
+  SWP_NOMOVE = $0002;
 
 var
   CablePage: TInputOptionWizardPage;
   CableWasInstalled: Boolean;
   CableNeedsRestart: Boolean;
+  WizardRaised: Boolean;
 
 function OpenProcess(DesiredAccess: Cardinal; InheritHandle: Boolean; ProcessId: Cardinal): THandle;
   external 'OpenProcess@kernel32.dll stdcall';
@@ -112,6 +117,22 @@ function OpenEvent(DesiredAccess: Cardinal; InheritHandle: Boolean; Name: String
   external 'OpenEventW@kernel32.dll stdcall';
 function SetEvent(Handle: THandle): Boolean;
   external 'SetEvent@kernel32.dll stdcall';
+function SetWindowPos(Window: HWND; InsertAfter: Integer; X, Y, Width, Height: Integer; Flags: Cardinal): Boolean;
+  external 'SetWindowPos@user32.dll stdcall';
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if WizardRaised or WizardSilent then
+    Exit;
+  WizardRaised := True;
+
+  // After the UAC prompt the wizard can open behind the window it was started from,
+  // since Windows lets only the process the user last used take the focus. Passing
+  // through the topmost band puts it on top anyway; the focus follows when allowed.
+  SetWindowPos(WizardForm.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE or SWP_NOSIZE);
+  SetWindowPos(WizardForm.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE or SWP_NOSIZE);
+  BringToFrontAndRestore;
+end;
 
 // True when Windows has a VB-CABLE playback end that is not left over from an
 // uninstalled driver.
