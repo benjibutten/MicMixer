@@ -230,11 +230,12 @@
         <Style x:Key="SettingsNavItem" TargetType="TabItem">
             <Setter Property="Foreground" Value="#5B6B7C"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="NavBg" Background="Transparent" CornerRadius="6" Padding="10,6" Margin="0,0,0,2">
+                        <!-- The hand goes on the template, not the TabItem: the page is the
+                             TabItem's logical child and would show the TabItem's cursor too. -->
+                        <Border x:Name="NavBg" Background="Transparent" CornerRadius="6" Padding="10,6" Margin="0,0,0,2" Cursor="Hand">
                             <ContentPresenter ContentSource="Header"/>
                         </Border>
                         <ControlTemplate.Triggers>
