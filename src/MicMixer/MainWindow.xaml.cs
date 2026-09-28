@@ -1746,7 +1746,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // A failed save stays open so its error in the save bar is seen.
         if (SaveConfiguration())
         {
-            _settingsWindow?.Hide();
+            _settingsWindow?.Close();
         }
     }
 
@@ -1990,6 +1990,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 if (!_isReallyClosing)
                 {
                     closing.Cancel = true;
+                    // Hiding the active window lets Windows activate whichever window is next in
+                    // z-order, which can be another app, leaving the main window behind it.
+                    if (IsVisible)
+                    {
+                        Activate();
+                    }
+
                     ((Window)window!).Hide();
                     // An armed capture would otherwise take the next key or click for the hotkey.
                     _capturingHotkeyIndex = -1;
