@@ -1580,9 +1580,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
     private static readonly System.Windows.Media.Brush ProblemInkBrush = CreateFrozenBrush(0x9A, 0x34, 0x12);
     private static readonly System.Windows.Media.Brush MutedInkBrush = CreateFrozenBrush(0x6B, 0x72, 0x80);
 
-    private void OnSaveSettingsClick(object sender, RoutedEventArgs e) => SaveConfiguration();
+    private void OnSaveSettingsClick(object sender, RoutedEventArgs e)
+    {
+        // A failed save stays open so its error in the save bar is seen.
+        if (SaveConfiguration())
+        {
+            _settingsWindow?.Hide();
+        }
+    }
 
-    private void SaveConfiguration()
+    /// <summary>Writes the settings-window values to disk. Returns false and shows the error when that fails.</summary>
+    private bool SaveConfiguration()
     {
         AppSettings saved = _settings.Clone();
         try
@@ -1594,12 +1602,13 @@ public partial class MainWindow : Window, IMicMixerControlHost
             Log.Warning(ex, "Failed to save settings.");
             SettingsSaveStateText.Text = $"Could not save: {ex.Message}";
             StatusText.Text = $"Could not save settings: {ex.Message}";
-            return;
+            return false;
         }
 
         _savedSettings = saved;
         SyncStartWithWindows();
         OnConfigurationChanged();
+        return true;
     }
 
     private void OnRunSetupGuideClick(object sender, RoutedEventArgs e) => ShowSetupGuide();
