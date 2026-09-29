@@ -20,6 +20,7 @@ concurrency:
 env:
   SOLUTION_PATH: MicMixer.slnx
   PROJECT_PATH: src/MicMixer/MicMixer.csproj
+  LAUNCHER_PROJECT_PATH: src/MicMixer.Launcher/MicMixer.Launcher.csproj
   RUNTIME_ID: win-x64
   WINDOWS_CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
   WINDOWS_CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
@@ -112,11 +113,25 @@ jobs:
             -p:InformationalVersion="${{ steps.meta.outputs.version }}+${{ github.sha }}" `
             -o $publishDir
 
+          # Native, and starts MicMixer whenever it runs as administrator.
+          dotnet publish $env:LAUNCHER_PROJECT_PATH `
+            -c Release `
+            -r $env:RUNTIME_ID `
+            -p:ContinuousIntegrationBuild=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:Version=${{ steps.meta.outputs.version }} `
+            -p:AssemblyVersion=${{ steps.meta.outputs.assembly_version }} `
+            -p:FileVersion=${{ steps.meta.outputs.assembly_version }} `
+            -p:InformationalVersion="${{ steps.meta.outputs.version }}+${{ github.sha }}" `
+            -o $publishDir
+
       - name: Code sign executable when configured
         id: codesign
         shell: pwsh
         run: |
-          $signed = ./scripts/Sign-Release.ps1 -Path (Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID/MicMixer.exe")
+          $publishDir = Join-Path $PWD "artifacts/publish/$env:RUNTIME_ID"
+          $signed = ./scripts/Sign-Release.ps1 -Path (Join-Path $publishDir "MicMixer.exe"), (Join-Path $publishDir "MicMixer.Launcher.exe")
           "status=$(if ($signed) { 'Signed (signature verified)' } else { 'Unsigned' })" >> $env:GITHUB_OUTPUT
 
       - name: Create release zip

@@ -125,8 +125,11 @@ does not: Windows would start whatever program replaced `MicMixer.exe` there as
 administrator. Running as administrator, MicMixer still starts yt-dlp, the
 browser and File Explorer without administrator rights, and on Windows 11 it does
 not follow folder junctions made without administrator rights, so a music folder
-reached through such a junction stays empty. The option needs a Windows account
-with administrator rights.
+reached through such a junction stays empty. It starts as administrator through
+`MicMixer.Launcher.exe`, a small native program that first removes the
+`DOTNET_*`, `COMPlus_*` and `CORECLR_*` environment variables, since any program
+can set those to load a DLL, such as a profiler, into the .NET runtime. The option
+needs a Windows account with administrator rights.
 
 Alternatively, install MicMixer with Windows Package Manager:
 

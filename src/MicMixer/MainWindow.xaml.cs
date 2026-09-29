@@ -2072,10 +2072,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         bool startElevated = _settings.StartWithWindows && _settings.RunAsAdministrator;
-        // Starting as administrator with no prompt needs an exe that nothing without
-        // administrator rights can swap out; from anywhere else it would hand those
-        // rights to whoever replaced the file.
-        bool isProtected = _settings.RunAsAdministrator && Elevation.IsProtectedFromNonAdministrators(exePath);
+        // Starting as administrator with no prompt needs a launcher and an exe that nothing
+        // without administrator rights can swap out; from anywhere else it would hand those
+        // rights to whoever replaced a file.
+        bool isProtected = _settings.RunAsAdministrator
+            && Elevation.IsProtectedFromNonAdministrators(Elevation.LauncherPath)
+            && Elevation.IsProtectedFromNonAdministrators(exePath);
         string hint = string.Empty;
 
         try
@@ -2085,7 +2087,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 bool useTask = startElevated && isProtected;
                 try
                 {
-                    _startupTaskService.Sync(useTask, exePath);
+                    _startupTaskService.Sync(useTask, Elevation.LauncherPath);
                 }
                 catch (Exception ex)
                 {

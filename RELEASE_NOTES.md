@@ -24,3 +24,11 @@
 - Screen readers announce icon-only buttons, sliders and fields, and the last
   Swedish words in the interface are in English.
 - **About** credits Signalsmith Stretch, which the MicMixer voices use.
+- **Starting MicMixer as administrator can no longer load a program other
+  programs chose.** Any program could set environment variables that make .NET
+  load its DLL into MicMixer, which then ran as administrator at sign-in without
+  a prompt. MicMixer now starts as administrator through a small launcher that
+  removes them first.
+- A silent update on a standard Windows account, approved with an
+  administrator's password, can close MicMixer and install. It used to fail
+  every time.
