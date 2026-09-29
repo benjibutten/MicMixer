@@ -22,10 +22,12 @@ public sealed class ToolBootstrapper
     private const string YtDlpDownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/" + YtDlpVersion + "/yt-dlp.exe";
     private const string YtDlpSha256 = "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a";
 
-    private const string FfmpegVersion = "autobuild-2026-07-01-16-32";
-    private const string FfmpegArchiveName = "ffmpeg-N-125385-ge2e889d9da-win64-gpl.zip";
+    // FFmpeg-Builds deletes its daily releases after a few weeks and keeps only the
+    // last build of each month, so the pinned build must be a month-end one.
+    private const string FfmpegVersion = "autobuild-2026-08-31-20-15";
+    private const string FfmpegArchiveName = "ffmpeg-N-126374-g089a48eb36-win64-gpl.zip";
     private const string FfmpegDownloadUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/" + FfmpegVersion + "/" + FfmpegArchiveName;
-    private const string FfmpegArchiveSha256 = "aa8bd4e8365f673a3d4194dc51cb69e85365fcbaaed9bb497ca24a006573df3f";
+    private const string FfmpegArchiveSha256 = "fc496061ed2cc5264d7c9c4ec929365f15267aeb40c94fd34ce637a0ea6ce229";
 
     // YouTube hides its media URLs behind a JavaScript challenge. yt-dlp can only solve
     // that challenge when a JavaScript runtime is installed, and an unsolved challenge

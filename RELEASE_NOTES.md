@@ -2,6 +2,9 @@
 
 <!-- Update this list together with user-visible changes under src/. -->
 
+- **Downloading music works again on a new install.** The ffmpeg build that
+  MicMixer fetches the first time you download had been removed from GitHub, so
+  the download failed with "404 (Not Found)".
 - **The held key reaches the game when MicMixer runs as administrator.** While
   MicMixer's own window has focus, Windows keeps the key MicMixer holds from
   programs that are not running as administrator. MicMixer now presses or
