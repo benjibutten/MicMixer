@@ -14,10 +14,10 @@ can switch live, mid-session.
 
 ## What it's for
 
-- **Music in games without holding the game's push-to-talk.** In games and on servers that
-  allow an open or voice-activated input, the game listens to the cable while
-  MicMixer's own push-to-talk gates your voice. *Music ignores push-to-talk*
-  keeps the track flowing. Walk through it in
+- **Music in games without holding the game's push-to-talk.** The game listens to
+  the cable while MicMixer's own push-to-talk gates your voice, and *Music
+  ignores push-to-talk* keeps the track flowing. *Hold a key while sending*
+  presses the game's talk key for you whenever MicMixer sends. Walk through it in
   [Play music in FiveM without holding push-to-talk](docs/guides/fivem-music-through-mic.md).
 - **A voice changer on a key.** Pick your real mic and a modified one (for
   example Voicemod's virtual device); hold the hotkey to switch to the modified
