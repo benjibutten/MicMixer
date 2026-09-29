@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using MicMixer.Admin;
 
@@ -156,7 +158,8 @@ internal sealed class GitHubUpdateService
     private static async Task<bool> RunSetupUntilItTakesOverAsync(
         string setupPath, string workDirectory, IProgress<UpdateProgress>? progress)
     {
-        using var exitRequested = new EventWaitHandle(false, EventResetMode.ManualReset, ExitForUpdateEventName(Environment.ProcessId));
+        using var exitRequested = EventWaitHandleAcl.Create(
+            false, EventResetMode.ManualReset, ExitForUpdateEventName(Environment.ProcessId), out _, CreateExitRequestSecurity());
         var startInfo = new ProcessStartInfo(setupPath)
         {
             UseShellExecute = true,
@@ -186,6 +189,21 @@ internal sealed class GitHubUpdateService
         {
             registration.Unregister(null);
         }
+    }
+
+    // The installer may run as another account: a standard account's UAC prompt takes an
+    // administrator's password. The default permission of an event made without
+    // administrator rights would keep that installer from signalling it.
+    private static EventWaitHandleSecurity CreateExitRequestSecurity()
+    {
+        var security = new EventWaitHandleSecurity();
+        security.AddAccessRule(new EventWaitHandleAccessRule(
+            Elevation.CurrentUser(), EventWaitHandleRights.FullControl, AccessControlType.Allow));
+        security.AddAccessRule(new EventWaitHandleAccessRule(
+            new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+            EventWaitHandleRights.Modify | EventWaitHandleRights.Synchronize,
+            AccessControlType.Allow));
+        return security;
     }
 
     private static void StartZipUpdater(
