@@ -45,6 +45,11 @@ SetupIconFile=..\src\MicMixer\Assets\AppIcon.ico
 UninstallDisplayIcon={app}\MicMixer.exe
 UninstallDisplayName=MicMixer
 WizardStyle=modern
+; Setup picks the image that best fits the display scaling.
+WizardImageFile=WizardImage100.png,WizardImage150.png,WizardImage200.png
+WizardSmallImageFile=WizardSmallImage100.png,WizardSmallImage150.png,WizardSmallImage200.png
+DisableWelcomePage=no
+InfoBeforeFile=BeforeInstall.txt
 Compression=lzma2
 SolidCompression=yes
 ; The Finished page and the update both start MicMixer again. Restart Manager must
@@ -55,6 +60,12 @@ UsePreviousTasks=no
 ; Signs the installer and the uninstaller it writes into {app}.
 SignTool=micmixer
 #endif
+
+[Messages]
+WelcomeLabel2=This will install [name/ver] on your computer.%n%nMicMixer mixes your microphone and your music into one virtual microphone, so your game or voice chat hears exactly what you let through.%n%nIt is free and open source, and every release is built from the public code on GitHub.
+WizardInfoBefore=Before you install
+InfoBeforeLabel=What gets installed, what MicMixer connects to, and its license.
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nThe first time MicMixer starts, a setup guide helps you pick your microphone and the virtual cable.
 
 [Tasks]
 ; Ticking it turns the setting on; unticked leaves the setting as it is in MicMixer.

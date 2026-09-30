@@ -1,0 +1,31 @@
+WHAT GETS INSTALLED
+
+MicMixer goes into Program Files\MicMixer, with a shortcut in the Start menu. You can uninstall it from Apps in Windows Settings at any time.
+
+If Windows has no virtual audio cable yet, the next pages offer to install VB-CABLE as well. You can untick it.
+
+Your settings, logs and downloaded music are kept in %LocalAppData%\MicMixer. Uninstalling leaves that folder and VB-CABLE in place.
+
+
+WHAT MICMIXER CONNECTS TO
+
+No account, no ads, no analytics, no telemetry. Your microphone and music are processed on this computer and are never recorded or uploaded.
+
+- GitHub, at most every 12 hours, to check for a new version. An update is installed only when you accept it, and only after its SHA-256 checksum matches the one published with the release.
+
+- If you use music downloads: yt-dlp, FFmpeg and, for YouTube, Deno are fetched from GitHub the first time and checked the same way. yt-dlp then contacts the site whose link you pasted.
+
+Privacy policy: https://benjibutten.github.io/MicMixer/privacy.html
+
+
+LICENSE
+
+MicMixer is free and open source under the Apache License 2.0, made by BenjiButten. You may use, change and share it, and it comes as is, without warranty. There is nothing to accept.
+
+It builds on open-source libraries such as NAudio, Signalsmith Stretch and Serilog. yt-dlp, FFmpeg and Deno are separate programs under their own licenses, and are downloaded only if you use music downloads.
+
+VB-CABLE is made by VB-Audio Software, not by MicMixer. The origin of VB-CABLE: www.vb-cable.com. VB-CABLE is a donationware, all participations are welcome.
+
+LICENSE.txt and THIRD-PARTY-NOTICES.txt, with every component and its license, are installed next to MicMixer.exe.
+
+Source code: https://github.com/benjibutten/MicMixer
