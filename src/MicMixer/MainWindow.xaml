@@ -1038,7 +1038,7 @@
                                 <Border BorderBrush="#E5EAF0" BorderThickness="0,0,1,0" Padding="8,14">
                                     <StackPanel IsItemsHost="True"/>
                                 </Border>
-                                <ContentPresenter Grid.Column="1" ContentSource="SelectedContent"/>
+                                <ContentPresenter x:Name="PART_SelectedContentHost" Grid.Column="1" ContentSource="SelectedContent"/>
                             </Grid>
                         </ControlTemplate>
                     </TabControl.Template>
