@@ -97,8 +97,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Could not list yt-dlp/FFmpeg-Builds releases." }
 
           # Tags sort chronologically, since they are autobuild-yyyy-MM-dd-HH-mm.
-          $lastOfMonth = @($tags | Where-Object { $_.StartsWith($monthPrefix) } | Sort-Object -Descending | Select-Object -First 1)
-          if ($lastOfMonth -ne $pinned)
+          $lastOfMonth = $tags | Where-Object { $_.StartsWith($monthPrefix) } | Sort-Object -Descending | Select-Object -First 1
+          if ([string]$lastOfMonth -ne $pinned)
           {
             Write-Host "::error::FfmpegVersion pins $pinned, but the last build of that month is '$lastOfMonth'. Only the last build of a month is kept past two weeks; pin the last build of a finished month."
             exit 1
