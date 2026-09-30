@@ -171,6 +171,8 @@ internal sealed class GitHubUpdateService
         startInfo.ArgumentList.Add($"/WAITPID={Environment.ProcessId}");
         startInfo.ArgumentList.Add($"/UPDATECLEANUP={workDirectory}");
 
+        Elevation.LetAdministratorsWaitForExit();
+
         progress?.Report(new UpdateProgress(
             Elevation.IsElevated ? "Starting installer…" : "Waiting for Windows approval…"));
         using Process setup = Process.Start(startInfo)

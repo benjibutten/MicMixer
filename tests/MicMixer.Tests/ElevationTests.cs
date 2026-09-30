@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Xml.Linq;
@@ -146,4 +147,46 @@ public sealed class ElevationTests
 
         Assert.Equal($"tool.exe {expected}", commandLine);
     }
+
+    [Fact]
+    public void Administrators_may_wait_for_this_process_to_exit()
+    {
+        Elevation.LetAdministratorsWaitForExit();
+
+        Assert.Contains(CurrentProcessDacl().Cast<GenericAce>(), ace =>
+            ace is CommonAce { AceQualifier: AceQualifier.AccessAllowed } allowed
+            && allowed.SecurityIdentifier == Administrators
+            && (allowed.AccessMask & ProcessSynchronize) != 0);
+    }
+
+    private const int ProcessSynchronize = 0x00100000;
+
+    private static RawAcl CurrentProcessDacl()
+    {
+        Assert.Equal(0u, GetSecurityInfo(GetCurrentProcess(), 6, 4, IntPtr.Zero, IntPtr.Zero, out _, IntPtr.Zero, out IntPtr descriptor));
+        try
+        {
+            var bytes = new byte[GetSecurityDescriptorLength(descriptor)];
+            Marshal.Copy(descriptor, bytes, 0, bytes.Length);
+            return new RawSecurityDescriptor(bytes, 0).DiscretionaryAcl!;
+        }
+        finally
+        {
+            LocalFree(descriptor);
+        }
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [DllImport("advapi32.dll")]
+    private static extern uint GetSecurityInfo(
+        IntPtr handle, int objectType, int securityInfo,
+        IntPtr owner, IntPtr group, out IntPtr dacl, IntPtr sacl, out IntPtr securityDescriptor);
+
+    [DllImport("advapi32.dll")]
+    private static extern int GetSecurityDescriptorLength(IntPtr securityDescriptor);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
 }
