@@ -128,9 +128,9 @@ browser and File Explorer without administrator rights, and on Windows 11 it doe
 not follow folder junctions made without administrator rights, so a music folder
 reached through such a junction stays empty. It starts as administrator through
 `MicMixer.Launcher.exe`, a small native program that first removes the
-`DOTNET_*`, `COMPlus_*` and `CORECLR_*` environment variables, since any program
-can set those to load a DLL, such as a profiler, into the .NET runtime. The option
-needs a Windows account with administrator rights.
+`DOTNET_*`, `COMPlus_*`, `CORECLR_*` and `COREHOST_*` environment variables, since
+any program can set those to load a DLL, such as a profiler, into the .NET
+runtime. The option needs a Windows account with administrator rights.
 
 Alternatively, install MicMixer with Windows Package Manager:
 
@@ -510,6 +510,12 @@ dotnet publish .\src\MicMixer\MicMixer.csproj `
   -c Release `
   -r win-x64 `
   --self-contained true `
+  -o .\artifacts\publish\win-x64
+
+# The launcher is compiled with NativeAOT, which needs the MSVC build tools.
+dotnet publish .\src\MicMixer.Launcher\MicMixer.Launcher.csproj `
+  -c Release `
+  -r win-x64 `
   -o .\artifacts\publish\win-x64
 ```
 

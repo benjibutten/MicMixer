@@ -77,8 +77,9 @@ internal static class Elevation
     }
 
     /// <summary>
-    /// Stops this process and the processes it starts from following folder junctions
-    /// that were made without administrator rights. Does nothing before Windows 11.
+    /// Stops this process from following folder junctions that were made without
+    /// administrator rights. Processes it starts are not covered. Does nothing before
+    /// Windows 11.
     /// </summary>
     public static void RefuseUntrustedJunctions()
     {
@@ -99,7 +100,9 @@ internal static class Elevation
     /// <summary>
     /// MicMixer.Launcher.exe beside this exe, which starts MicMixer without the
     /// environment variables that load code into the .NET runtime. Everything that starts
-    /// MicMixer as administrator goes through it. Missing in development builds.
+    /// MicMixer as administrator goes through it, apart from the installer and the zip
+    /// updater, which run from folders any program can write to anyway. Missing in
+    /// development builds.
     /// </summary>
     public static string LauncherPath { get; } = Path.Combine(AppContext.BaseDirectory, "MicMixer.Launcher.exe");
 

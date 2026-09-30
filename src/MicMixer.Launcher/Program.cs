@@ -4,10 +4,10 @@ using System.Diagnostics;
 // environment variables that make the .NET runtime load code before MicMixer's
 // own code runs, such as a profiler DLL. Any program the user runs can set those in
 // HKCU\Environment, and Windows passes them to MicMixer when it starts as
-// administrator. Everything that starts MicMixer elevated starts it through here.
+// administrator. MicMixer and its sign-in task start MicMixer elevated through here.
 
-string streamDecky = Path.Combine(AppContext.BaseDirectory, "MicMixer.exe");
-var startInfo = new ProcessStartInfo(streamDecky)
+string micMixer = Path.Combine(AppContext.BaseDirectory, "MicMixer.exe");
+var startInfo = new ProcessStartInfo(micMixer)
 {
     UseShellExecute = false,
     WorkingDirectory = AppContext.BaseDirectory
@@ -24,4 +24,5 @@ Process.Start(startInfo)?.Dispose();
 static bool IsRuntimeVariable(string name) =>
     name.StartsWith("DOTNET_", StringComparison.OrdinalIgnoreCase)
     || name.StartsWith("COMPlus_", StringComparison.OrdinalIgnoreCase)
-    || name.StartsWith("CORECLR_", StringComparison.OrdinalIgnoreCase);
+    || name.StartsWith("CORECLR_", StringComparison.OrdinalIgnoreCase)
+    || name.StartsWith("COREHOST_", StringComparison.OrdinalIgnoreCase);
