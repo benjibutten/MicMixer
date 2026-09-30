@@ -1293,6 +1293,42 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OnConfigurationChanged();
     }
 
+    private void OnMusicDuckingChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi || MusicDuckingLevelText == null)
+        {
+            return;
+        }
+
+        _settings.MusicDuckingEnabled = MusicDuckingCheck.IsChecked == true;
+        OnConfigurationChanged();
+    }
+
+    private void OnMusicDuckingLevelChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdatingUi || MusicDuckingLevelText == null)
+        {
+            return;
+        }
+
+        _settings.MusicDuckingLevel = (float)e.NewValue;
+        MusicDuckingLevelText.Text = $"{Math.Round(e.NewValue * 100)} %";
+        OnConfigurationChanged();
+    }
+
+    // Without push-to-talk or the noise gate the mic always reaches the cable, so
+    // ducking would keep the music lowered for good. Music that follows push-to-talk
+    // reaches the cable only while the mic does, so ducking would only cut it and let
+    // it swell in for a moment at each key press.
+    private bool CanTellWhenTalking =>
+        _settings.NoiseGateEnabled || (_settings.PushToTalkMode && _settings.MusicIgnoresPushToTalk);
+
+    private void ApplyMusicDucking()
+    {
+        _router.MusicDuckingEnabled = _settings.MusicDuckingEnabled && CanTellWhenTalking;
+        _router.MusicDuckingLevel = _settings.MusicDuckingLevel;
+    }
+
     /// <summary>
     /// Live gate readout: the level bar under the threshold slider plus open/closed.
     /// Peak-hold with decay, like the capture meter, so the bar is readable instead
@@ -1492,9 +1528,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         ApplyMusicRoutingModes();
+        ApplyMusicDucking();
         SaveSettings();
         UpdateStatusText();
         UpdateMusicUi();
+        UpdateDependentSettingsControls();
     }
 
     /// <summary>
@@ -1734,6 +1772,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ? "Unsaved changes. They are already in use; Save keeps them for the next time MicMixer starts."
             : "Everything is saved.";
         SettingsSaveStateText.Foreground = _hasUnsavedConfiguration ? ProblemInkBrush : MutedInkBrush;
+        ApplyMusicDucking();
         UpdateDependentSettingsControls();
         UpdateStatusText();
     }
@@ -1897,6 +1936,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             NormalMicVolumeSlider.Value = _settings.NormalMicVolume;
             NoiseGateCheck.IsChecked = _settings.NoiseGateEnabled;
             NoiseGateThresholdSlider.Value = _settings.NoiseGateThresholdDb;
+            MusicDuckingCheck.IsChecked = _settings.MusicDuckingEnabled;
+            MusicDuckingLevelSlider.Value = _settings.MusicDuckingLevel;
             ReleaseDelayTextBox.Text = _settings.ReleaseDelayMilliseconds.ToString(CultureInfo.InvariantCulture);
             PushToTalkCheck.IsChecked = _settings.PushToTalkMode;
             HoldKeyWhileSendingCheck.IsChecked = _settings.HoldKeyWhileSending;
@@ -1922,6 +1963,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         ProcessedVoiceVolumePercentText.Text = $"{Math.Round(_settings.ProcessedVoiceVolume * 100)} %";
         NormalMicVolumePercentText.Text = $"{Math.Round(_settings.NormalMicVolume * 100)} %";
         NoiseGateThresholdText.Text = $"{_settings.NoiseGateThresholdDb:0} dB";
+        ApplyMusicDucking();
+        MusicDuckingLevelText.Text = $"{Math.Round(_settings.MusicDuckingLevel * 100)} %";
         UpdateSecondaryVolumePercentText();
         ApplySecondaryOutputConfig();
 
@@ -1949,6 +1992,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
     {
         SecondaryOutputConfigPanel.IsEnabled = _settings.SecondaryOutputEnabled;
         NoiseGateSettingsPanel.IsEnabled = _settings.NoiseGateEnabled;
+        MusicDuckingSettingsPanel.IsEnabled = _settings.MusicDuckingEnabled;
+        MusicDuckingNeedsGateText.Visibility =
+            _settings.MusicDuckingEnabled && !CanTellWhenTalking
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         bool anyOverlay = _settings.OverlayIndicatorEnabled || _settings.ObsOverlayEnabled;
         OverlayVolumeMeterCheck.IsEnabled = anyOverlay;
         MeterSensitivityPanel.IsEnabled = anyOverlay && _settings.OverlayVolumeMeterEnabled;
@@ -2072,10 +2120,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         bool startElevated = _settings.StartWithWindows && _settings.RunAsAdministrator;
-        // Starting as administrator with no prompt needs an exe that nothing without
-        // administrator rights can swap out; from anywhere else it would hand those
-        // rights to whoever replaced the file.
-        bool isProtected = _settings.RunAsAdministrator && Elevation.IsProtectedFromNonAdministrators(exePath);
+        // Starting as administrator with no prompt needs a launcher and an exe that nothing
+        // without administrator rights can swap out; from anywhere else it would hand those
+        // rights to whoever replaced a file.
+        bool isProtected = _settings.RunAsAdministrator
+            && Elevation.IsProtectedFromNonAdministrators(Elevation.LauncherPath)
+            && Elevation.IsProtectedFromNonAdministrators(exePath);
         string hint = string.Empty;
 
         try
@@ -2085,7 +2135,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
                 bool useTask = startElevated && isProtected;
                 try
                 {
-                    _startupTaskService.Sync(useTask, exePath);
+                    _startupTaskService.Sync(useTask, Elevation.LauncherPath);
                 }
                 catch (Exception ex)
                 {

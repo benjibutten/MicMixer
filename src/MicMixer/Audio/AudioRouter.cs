@@ -37,6 +37,8 @@ public sealed class AudioRouter : IDisposable
     private float _normalMicVolume = 1f;
     private bool _noiseGateEnabled;
     private float _noiseGateThresholdDb = -45f;
+    private bool _musicDuckingEnabled;
+    private float _musicDuckingLevel = 0.25f;
     private bool _outputGateOpen = true;
     private bool _musicIgnoresPushToTalk;
     private bool _musicMonitorOnly;
@@ -76,6 +78,24 @@ public sealed class AudioRouter : IDisposable
         get => Volatile.Read(ref _noiseGateThresholdDb);
         set => Volatile.Write(ref _noiseGateThresholdDb,
             float.IsFinite(value) ? Math.Clamp(value, -70f, -10f) : -45f);
+    }
+
+    /// <summary>
+    /// Lowers the music to <see cref="MusicDuckingLevel"/> in every mix while the mic
+    /// reaches the cable, that is while push-to-talk and the noise gate are both open.
+    /// </summary>
+    public bool MusicDuckingEnabled
+    {
+        get => Volatile.Read(ref _musicDuckingEnabled);
+        set => Volatile.Write(ref _musicDuckingEnabled, value);
+    }
+
+    /// <summary>Fraction of the music volume kept while ducking, 0 to 1.</summary>
+    public float MusicDuckingLevel
+    {
+        get => Volatile.Read(ref _musicDuckingLevel);
+        set => Volatile.Write(ref _musicDuckingLevel,
+            float.IsFinite(value) ? Math.Clamp(value, 0f, 1f) : 0.25f);
     }
 
     /// <summary>Whether the noise gate currently lets the mic through; false while routing is stopped.</summary>
@@ -199,6 +219,13 @@ public sealed class AudioRouter : IDisposable
             // to the level actually sent and covers every mic source alike.
             noiseGate = new NoiseGateSampleProvider(micSource, () => NoiseGateEnabled, () => NoiseGateThresholdDb);
             ISampleProvider? musicSource = MusicSourceFactory?.Invoke(targetFormat);
+            if (musicSource != null)
+            {
+                // The mix reads the mic before the music in each block, so the
+                // noise gate state read here belongs to the same block.
+                musicSource = new MusicDuckingSampleProvider(musicSource, () =>
+                    MusicDuckingEnabled && OutputGateOpen && noiseGate.IsOpen ? MusicDuckingLevel : 1f);
+            }
 
             // A secondary start failure only skips that branch — the cable
             // routing continues untouched.

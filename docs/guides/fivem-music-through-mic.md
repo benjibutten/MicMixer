@@ -13,10 +13,11 @@ the cable and stays silent otherwise.
 ## What you need
 
 - [VB-CABLE](https://vb-audio.com/Cable/) (or another virtual audio cable).
-- MicMixer, running.
+- MicMixer, installed and running. [Setup](../index.html#setup) covers the
+  download and the Windows warnings you'll click past.
 - Your normal microphone.
 
-## Step 1 — Route MicMixer into the game
+## Step 1: Route MicMixer into the game
 
 1. Install VB-CABLE and reboot if the installer asks. The MicMixer installer can
    do this for you; if it also named the cable, its ends are *MicMixer Input* and
@@ -28,7 +29,7 @@ the cable and stays silent otherwise.
    *Default*. Both this and the voice chat mode are listed in the official
    [FiveM profile-settings reference](https://docs.fivem.net/docs/game-references/profile-settings/).
 
-## Step 2 — Turn on push-to-talk in MicMixer
+## Step 2: Turn on push-to-talk in MicMixer
 
 1. Open **Settings › Hotkey** in MicMixer and set a **Hotkey**, for example a
    mouse side button or the key that feels natural for speaking.
@@ -37,7 +38,7 @@ the cable and stays silent otherwise.
 While the hotkey is *not* held, MicMixer sends silence; while it is held, your
 voice goes through. This is the only talk key you press from now on.
 
-## Step 3 — Let MicMixer press FiveM's talk key
+## Step 3: Let MicMixer press FiveM's talk key
 
 FiveM's push-to-talk gets its own key that you never touch: MicMixer holds it
 down while it sends to the cable.
@@ -57,7 +58,7 @@ FiveM's push-to-talk listens for keyboard keys even while the game is in the
 background, so this keeps working when you alt-tab to MicMixer or another
 window.
 
-## Step 4 — Let the music ignore push-to-talk
+## Step 4: Let the music ignore push-to-talk
 
 1. Add music: paste a YouTube link and click **Download MP3**, or point MicMixer
    at a folder of your own `.mp3` files.
@@ -92,8 +93,8 @@ The tray icon and the optional overlay show the state at a glance:
 
 - Green mic + purple music circle: both are going into the game.
 - Red crossed-out mic + purple music: your voice is gated, music still playing.
-- Amber headphones on the music circle: **Monitor only** — you're previewing a
-  track and it is *not* going into the game yet.
+- Amber headphones on the music circle: **Monitor only**. You're previewing a
+  track, and it is *not* going into the game yet.
 
 Use **Monitor only** to line up the next song and set its volume before anyone
 else hears it, then turn it off to send it.
@@ -118,11 +119,10 @@ else hears it, then turn it off to send it.
 - **Music sounds thin or filtered.** Noise suppression in FiveM or the voice
   resource strips out music. Turn it off if the server's voice menu offers it.
 - **You hear yourself.** You've enabled local monitoring or a secondary output
-  on a device you can hear. That's separate from the cable — see the main
+  on a device you can hear. That's separate from the cable; see the
   [README](../../README.md#local-monitoring).
 
 ## Next step
 
-Want your microphone *and* music to reach Discord as a single input as well —
-without the game and Discord fighting over devices? See
+To send your mic and your music to Discord as a single input too, see
 [Mic and music as one Discord input](discord-single-input.md).

@@ -27,6 +27,9 @@ internal static class Elevation
     private const uint TOKEN_QUERY = 0x0008;
     private const int TokenElevationClass = 20;
     private const int TokenElevationTypeClass = 18;
+    private const int KernelObject = 6;
+    private const int DaclSecurityInformation = 0x4;
+    private const int ProcessSynchronize = 0x00100000;
     // An administrator's filtered token, which UAC can elevate to the full one.
     private const int TokenElevationTypeLimited = 3;
 
@@ -77,8 +80,9 @@ internal static class Elevation
     }
 
     /// <summary>
-    /// Stops this process and the processes it starts from following folder junctions
-    /// that were made without administrator rights. Does nothing before Windows 11.
+    /// Stops this process from following folder junctions that were made without
+    /// administrator rights. Processes it starts are not covered. Does nothing before
+    /// Windows 11.
     /// </summary>
     public static void RefuseUntrustedJunctions()
     {
@@ -97,12 +101,23 @@ internal static class Elevation
     }
 
     /// <summary>
+    /// MicMixer.Launcher.exe beside this exe, which starts MicMixer without the
+    /// environment variables that load code into the .NET runtime. Everything that starts
+    /// MicMixer as administrator goes through it, apart from the installer and the zip
+    /// updater, which run from folders any program can write to anyway. Missing in
+    /// development builds.
+    /// </summary>
+    public static string LauncherPath { get; } = Path.Combine(AppContext.BaseDirectory, "MicMixer.Launcher.exe");
+
+    /// <summary>
     /// Starts an elevated copy of MicMixer that takes over once this process exits.
     /// Returns false when the UAC prompt was declined; this process should then keep running.
     /// </summary>
     public static bool TryStartElevatedCopy()
     {
-        var startInfo = new ProcessStartInfo(Environment.ProcessPath!)
+        // Only a development build, which has no launcher, starts itself directly.
+        string target = File.Exists(LauncherPath) ? LauncherPath : Environment.ProcessPath!;
+        var startInfo = new ProcessStartInfo(target)
         {
             UseShellExecute = true,
             Verb = "runas",
@@ -288,6 +303,43 @@ internal static class Elevation
         return true;
     }
 
+    /// <summary>
+    /// Grants administrators SYNCHRONIZE on this process, so an installer running as another
+    /// account can wait for it to exit. Errors are ignored; they only cost that wait.
+    /// </summary>
+    public static void LetAdministratorsWaitForExit()
+    {
+        IntPtr process = GetCurrentProcess();
+        if (GetSecurityInfo(process, KernelObject, DaclSecurityInformation,
+                IntPtr.Zero, IntPtr.Zero, out _, IntPtr.Zero, out IntPtr descriptor) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var bytes = new byte[GetSecurityDescriptorLength(descriptor)];
+            Marshal.Copy(descriptor, bytes, 0, bytes.Length);
+            RawAcl? dacl = new RawSecurityDescriptor(bytes, 0).DiscretionaryAcl;
+            if (dacl is null)
+            {
+                return;
+            }
+
+            var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+            dacl.InsertAce(dacl.Count, new CommonAce(
+                AceFlags.None, AceQualifier.AccessAllowed, ProcessSynchronize, administrators, false, null));
+            var daclBytes = new byte[dacl.BinaryLength];
+            dacl.GetBinaryForm(daclBytes, 0);
+            _ = SetSecurityInfo(process, KernelObject, DaclSecurityInformation,
+                IntPtr.Zero, IntPtr.Zero, daclBytes, IntPtr.Zero);
+        }
+        finally
+        {
+            LocalFree(descriptor);
+        }
+    }
+
     private static bool IsTrusted(SecurityIdentifier sid) => TrustedPrincipals.Contains(sid);
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -302,4 +354,23 @@ internal static class Elevation
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool GetTokenInformation(
         SafeAccessTokenHandle token, int informationClass, out int information, int informationLength, out int returnLength);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [DllImport("advapi32.dll")]
+    private static extern uint GetSecurityInfo(
+        IntPtr handle, int objectType, int securityInfo,
+        IntPtr owner, IntPtr group, out IntPtr dacl, IntPtr sacl, out IntPtr securityDescriptor);
+
+    [DllImport("advapi32.dll")]
+    private static extern uint SetSecurityInfo(
+        IntPtr handle, int objectType, int securityInfo,
+        IntPtr owner, IntPtr group, byte[] dacl, IntPtr sacl);
+
+    [DllImport("advapi32.dll")]
+    private static extern int GetSecurityDescriptorLength(IntPtr securityDescriptor);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
 }

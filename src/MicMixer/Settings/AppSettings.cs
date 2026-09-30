@@ -30,6 +30,8 @@ public sealed class AppSettings
         PushToTalkMode = source.PushToTalkMode;
         HoldKeyWhileSending = source.HoldKeyWhileSending;
         HeldKey = source.HeldKey;
+        MusicDuckingEnabled = source.MusicDuckingEnabled;
+        MusicDuckingLevel = source.MusicDuckingLevel;
         MusicMonitorDeviceId = source.MusicMonitorDeviceId;
         SecondaryOutputEnabled = source.SecondaryOutputEnabled;
         SecondaryOutputDeviceId = source.SecondaryOutputDeviceId;
@@ -122,6 +124,12 @@ public sealed class AppSettings
 
     /// <summary>Preview mode: music is never sent to the virtual cable — only local monitoring (and the secondary output) carry it.</summary>
     public bool MusicMonitorOnly { get; set; }
+
+    /// <summary>Lowers the music to <see cref="MusicDuckingLevel"/> while the mic reaches the virtual cable.</summary>
+    public bool MusicDuckingEnabled { get; set; }
+
+    /// <summary>Fraction of the music volume kept while <see cref="MusicDuckingEnabled"/> lowers it, 0 to 0.9.</summary>
+    public float MusicDuckingLevel { get; set; } = 0.25f;
 
     public string? MusicMonitorDeviceId { get; set; }
 

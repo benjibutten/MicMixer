@@ -1,0 +1,116 @@
+name: Tool pins
+
+# ToolBootstrapper.cs pins every tool MicMixer downloads by URL and SHA-256. When an
+# upstream release disappears, first-time downloads fail with 404 for every new user.
+# This job fails while there is still time to repin, and on any pull request that
+# pins a build upstream is about to delete.
+
+on:
+  schedule:
+    - cron: "41 6 * * 1"
+  pull_request:
+    paths:
+      - src/MicMixer/Music/ToolBootstrapper.cs
+      - .github/workflows/tool-pins.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BOOTSTRAPPER_PATH: src/MicMixer/Music/ToolBootstrapper.cs
+
+jobs:
+  check:
+    name: Check pinned tool downloads
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check that every pinned download still exists
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $source = Get-Content -LiteralPath $env:BOOTSTRAPPER_PATH -Raw
+          $constants = @{}
+          foreach ($match in [regex]::Matches($source, 'private const string (?<name>\w+) = (?<value>[^;]+);'))
+          {
+            $constants[$match.Groups["name"].Value] = $match.Groups["value"].Value.Trim()
+          }
+
+          # The URLs are concatenations of string literals and other constants, so they
+          # are evaluated here rather than rebuilt, and follow any change to the code.
+          $urlNames = @($constants.Keys | Where-Object { $_ -like "*DownloadUrl" })
+          if ($urlNames.Count -eq 0) { throw "Found no *DownloadUrl constants in $env:BOOTSTRAPPER_PATH." }
+
+          $failed = $false
+          foreach ($name in $urlNames)
+          {
+            $url = -join ($constants[$name] -split '\s*\+\s*' | ForEach-Object {
+              if ($_ -match '^"(?<text>[^"]*)"$') { $Matches["text"] }
+              elseif ($constants.ContainsKey($_)) { $constants[$_].Trim('"') }
+              else { throw "Cannot evaluate '$_' in $name." }
+            })
+
+            try
+            {
+              Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing | Out-Null
+              Write-Host "OK   $url"
+            }
+            catch
+            {
+              Write-Host "::error::$name no longer downloads: $url ($($_.Exception.Message))"
+              $failed = $true
+            }
+          }
+
+          if ($failed) { exit 1 }
+
+      - name: Check that the pinned FFmpeg build is kept long enough
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # yt-dlp/FFmpeg-Builds (util/prunetags.sh) keeps its 14 newest builds and the
+          # newest build of each of the 24 most recent months, and deletes the rest.
+          # A pin survives only if it is the last build of its month, and then for
+          # 24 months counting the current one.
+          $keptMonths = 24
+          $warningMonths = 3
+
+          $source = Get-Content -LiteralPath $env:BOOTSTRAPPER_PATH -Raw
+          $pinnedMatch = [regex]::Match($source, 'private const string FfmpegVersion = "(?<tag>autobuild-(?<year>\d{4})-(?<month>\d{2})-[^"]+)";')
+          if (-not $pinnedMatch.Success)
+          {
+            throw "Could not read FfmpegVersion from $env:BOOTSTRAPPER_PATH. The constant was renamed or no longer names an autobuild tag."
+          }
+
+          $pinned = $pinnedMatch.Groups["tag"].Value
+          $monthPrefix = "autobuild-$($pinnedMatch.Groups['year'].Value)-$($pinnedMatch.Groups['month'].Value)-"
+
+          $tags = gh release list --repo yt-dlp/FFmpeg-Builds --limit 200 --json tagName --jq ".[].tagName"
+          if ($LASTEXITCODE -ne 0) { throw "Could not list yt-dlp/FFmpeg-Builds releases." }
+
+          # Tags sort chronologically, since they are autobuild-yyyy-MM-dd-HH-mm.
+          $lastOfMonth = $tags | Where-Object { $_.StartsWith($monthPrefix) } | Sort-Object -Descending | Select-Object -First 1
+          if ([string]$lastOfMonth -ne $pinned)
+          {
+            Write-Host "::error::FfmpegVersion pins $pinned, but the last build of that month is '$lastOfMonth'. Only the last build of a month is kept past two weeks; pin the last build of a finished month."
+            exit 1
+          }
+
+          $now = [DateTime]::UtcNow
+          $ageInMonths = ($now.Year * 12 + $now.Month) - ([int]$pinnedMatch.Groups["year"].Value * 12 + [int]$pinnedMatch.Groups["month"].Value)
+          $monthsLeft = $keptMonths - $ageInMonths
+          Write-Host "Pinned $pinned is kept for about $monthsLeft more month(s)."
+
+          if ($monthsLeft -le $warningMonths)
+          {
+            Write-Host "::error::FFmpeg build $pinned will be deleted upstream in about $monthsLeft month(s). Pin the last build of the most recent finished month in $env:BOOTSTRAPPER_PATH."
+            exit 1
+          }

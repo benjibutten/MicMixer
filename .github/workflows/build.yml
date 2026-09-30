@@ -13,6 +13,7 @@ concurrency:
 env:
   SOLUTION_PATH: MicMixer.slnx
   PROJECT_PATH: src/MicMixer/MicMixer.csproj
+  LAUNCHER_PROJECT_PATH: src/MicMixer.Launcher/MicMixer.Launcher.csproj
   RUNTIME_ID: win-x64
 
 jobs:
@@ -61,6 +62,16 @@ jobs:
             -p:IncludeNativeLibrariesForSelfExtract=false `
             -p:EnableCompressionInSingleFile=false `
             -p:PublishReadyToRun=true `
+            -p:InformationalVersion="candidate+${{ github.sha }}" `
+            -o $publishDir
+
+          # Native, and starts MicMixer whenever it runs as administrator.
+          dotnet publish $env:LAUNCHER_PROJECT_PATH `
+            -c Release `
+            -r $env:RUNTIME_ID `
+            -p:ContinuousIntegrationBuild=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
             -p:InformationalVersion="candidate+${{ github.sha }}" `
             -o $publishDir
 

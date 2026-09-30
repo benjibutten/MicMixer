@@ -62,6 +62,7 @@ The rest of this document is the detailed reference.
   from mute up to a 2× boost.
 - Optionally lets music bypass push-to-talk, so the music keeps playing into the
   virtual cable while the voice stays gated.
+- Optionally lowers the music while you talk and brings it back when you stop.
 - Provides a monitor-only preview mode that keeps music out of the virtual cable
   entirely while you listen to it in local monitoring.
 - Displays input levels for the normal and modified microphones.
@@ -125,8 +126,11 @@ does not: Windows would start whatever program replaced `MicMixer.exe` there as
 administrator. Running as administrator, MicMixer still starts yt-dlp, the
 browser and File Explorer without administrator rights, and on Windows 11 it does
 not follow folder junctions made without administrator rights, so a music folder
-reached through such a junction stays empty. The option needs a Windows account
-with administrator rights.
+reached through such a junction stays empty. It starts as administrator through
+`MicMixer.Launcher.exe`, a small native program that first removes the
+`DOTNET_*`, `COMPlus_*`, `CORECLR_*` and `COREHOST_*` environment variables, since
+any program can set those to load a DLL, such as a profiler, into the .NET
+runtime. The option needs a Windows account with administrator rights.
 
 Alternatively, install MicMixer with Windows Package Manager:
 
@@ -196,7 +200,7 @@ intentional non-cable output.
 The main window holds what you use during a session: a status card, the music
 player, and orange problem cards. Everything you set up once lives in a separate
 **Settings** window with the pages Devices, Hotkey, Noise gate, Overlay,
-Secondary output, Music folders and General.
+Secondary output, Music and General.
 
 ![MicMixer settings, Devices page: where your sound goes, normal mic, modified voice and the virtual cable.](docs/assets/micmixer-settings.png)
 
@@ -310,7 +314,7 @@ When multiple folders are configured:
 - Each track has a colored folder badge; hover over it to see the full path.
 - Folder chips beside the search field filter the visible tracks.
 - The download destination can be selected separately.
-- Folders are added or removed in **Settings › Music folders**; at least one folder
+- Folders are added or removed in **Settings › Music**; at least one folder
   remains configured.
 
 Music can play while routing or local monitoring provides an audio clock. If neither
@@ -355,6 +359,19 @@ The status card and the overlay always reflect the outcome: when push-to-talk
 mutes the mic while music still flows, the pill reads **Mic muted** and the status
 line adds "music is still transmitting", and the overlay's music circle shows the
 current destination.
+
+**Lower the music while you talk** (**Settings › Music**) turns the music down to a
+set share of its volume, 25 % by default, while your mic reaches the virtual cable,
+and brings it back up once you are quiet. It glides down in a few hundredths of a
+second, so your first word is already on top, and up over about half a second, so
+the music does not jump between phrases. Push-to-talk or the noise gate decides
+when you talk: with push-to-talk alone the music stays lowered for as long as you
+hold the hotkey, and with the noise gate on it comes back up in the pauses between
+phrases. Push-to-talk alone counts only when **Music ignores push-to-talk** is on,
+since otherwise the music reaches the cable only while you hold the hotkey anyway.
+Without either, MicMixer cannot tell when you talk and leaves the music as it is.
+The virtual cable and the secondary output are both lowered; local monitoring is
+not.
 
 ## Secondary output
 
@@ -493,6 +510,12 @@ dotnet publish .\src\MicMixer\MicMixer.csproj `
   -c Release `
   -r win-x64 `
   --self-contained true `
+  -o .\artifacts\publish\win-x64
+
+# The launcher is compiled with NativeAOT, which needs the MSVC build tools.
+dotnet publish .\src\MicMixer.Launcher\MicMixer.Launcher.csproj `
+  -c Release `
+  -r win-x64 `
   -o .\artifacts\publish\win-x64
 ```
 

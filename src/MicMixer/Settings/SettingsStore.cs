@@ -73,6 +73,8 @@ public sealed class SettingsStore
                 ? Math.Clamp(settings.NormalMicVolume, 0f, 2f) : 1f;
             settings.NoiseGateThresholdDb = float.IsFinite(settings.NoiseGateThresholdDb)
                 ? Math.Clamp(settings.NoiseGateThresholdDb, -70f, -10f) : -45f;
+            settings.MusicDuckingLevel = float.IsFinite(settings.MusicDuckingLevel)
+                ? Math.Clamp(settings.MusicDuckingLevel, 0f, 0.9f) : 0.25f;
             settings.SkipModdedMic = settings.ModifiedVoiceMode == ModifiedVoiceMode.None;
             settings.ExtraHotkeyIds ??= [];
             return settings;

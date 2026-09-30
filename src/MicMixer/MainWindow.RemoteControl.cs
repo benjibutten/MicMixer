@@ -150,7 +150,7 @@ public partial class MainWindow
             _musicWasAutoPaused = false;
             if (_music.CurrentTrackPath is string path)
             {
-                MusicStatusText.Text = $"Pausad: {Path.GetFileNameWithoutExtension(path)}";
+                MusicStatusText.Text = $"Paused: {Path.GetFileNameWithoutExtension(path)}";
             }
 
             UpdateMusicUi();
