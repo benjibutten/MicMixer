@@ -53,7 +53,7 @@ internal sealed class MixFanoutSampleProvider : ISampleProvider
     /// <param name="secondaryMusicOpen">Secondary gate for the music (also open during monitor-only preview).</param>
     /// <param name="secondaryWrite">Receives the finished secondary mix, or null when no secondary output runs.</param>
     /// <param name="musicMeteringEnabled">Gates the per-sample music level computation.</param>
-    /// <param name="onMusicLevels">Receives each measured music block's peak and RMS (pre-gate, post music volume).</param>
+    /// <param name="onMusicLevels">Receives each measured music block's peak and RMS (pre-gate, after music volume and ducking).</param>
     public MixFanoutSampleProvider(
         ISampleProvider mic,
         ISampleProvider? music,

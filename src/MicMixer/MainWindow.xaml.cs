@@ -1316,9 +1316,12 @@ public partial class MainWindow : Window, IMicMixerControlHost
         OnConfigurationChanged();
     }
 
-    // Without push-to-talk or the noise gate the mic always reaches the cable,
-    // so ducking would keep the music lowered for good.
-    private bool CanTellWhenTalking => _settings.PushToTalkMode || _settings.NoiseGateEnabled;
+    // Without push-to-talk or the noise gate the mic always reaches the cable, so
+    // ducking would keep the music lowered for good. Music that follows push-to-talk
+    // reaches the cable only while the mic does, so ducking would only cut it and let
+    // it swell in for a moment at each key press.
+    private bool CanTellWhenTalking =>
+        _settings.NoiseGateEnabled || (_settings.PushToTalkMode && _settings.MusicIgnoresPushToTalk);
 
     private void ApplyMusicDucking()
     {
@@ -1525,9 +1528,11 @@ public partial class MainWindow : Window, IMicMixerControlHost
         }
 
         ApplyMusicRoutingModes();
+        ApplyMusicDucking();
         SaveSettings();
         UpdateStatusText();
         UpdateMusicUi();
+        UpdateDependentSettingsControls();
     }
 
     /// <summary>

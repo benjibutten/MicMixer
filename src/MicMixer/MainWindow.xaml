@@ -1519,7 +1519,7 @@
                                     </Grid>
                                     <TextBlock x:Name="MusicDuckingNeedsGateText" Margin="22,5,0,0" FontSize="11" TextWrapping="Wrap"
                                                Foreground="#B45309" Visibility="Collapsed"
-                                               Text="Turn on push-to-talk or the noise gate. Without either, MicMixer cannot tell when you talk and leaves the music as it is."/>
+                                               Text="Turn on the noise gate, or push-to-talk with “Music ignores push-to-talk” ticked. Without either, the music never plays on the cable while you are quiet, so MicMixer leaves it as it is."/>
                                 </StackPanel>
 
                                 <StackPanel Style="{StaticResource SettingsSection}">

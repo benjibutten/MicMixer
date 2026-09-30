@@ -367,9 +367,11 @@ second, so your first word is already on top, and up over about half a second, s
 the music does not jump between phrases. Push-to-talk or the noise gate decides
 when you talk: with push-to-talk alone the music stays lowered for as long as you
 hold the hotkey, and with the noise gate on it comes back up in the pauses between
-phrases. Without either, MicMixer cannot tell when you talk and leaves the music
-as it is. The virtual cable and the secondary output are both lowered; local
-monitoring is not.
+phrases. Push-to-talk alone counts only when **Music ignores push-to-talk** is on,
+since otherwise the music reaches the cable only while you hold the hotkey anyway.
+Without either, MicMixer cannot tell when you talk and leaves the music as it is.
+The virtual cable and the secondary output are both lowered; local monitoring is
+not.
 
 ## Secondary output
 
