@@ -261,7 +261,19 @@ begin
   Result := '';
   ProcessId := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
   if ProcessId = 0 then
+  begin
+    // A copy running from another folder, such as an unpacked zip, would keep running:
+    // the Finished page would only bring it forward, and it would overwrite the settings
+    // this install writes. Name must match the single-instance mutex in MicMixer.
+    while not WizardSilent and CheckForMutexes('MicMixer_SingleInstance_B7E3A1F0') do
+      if MsgBox('MicMixer is running. Exit it from its icon in the notification area, then click OK.',
+        mbInformation, MB_OKCANCEL) = IDCANCEL then
+      begin
+        Result := 'MicMixer is still running. Exit it and run Setup again.';
+        Exit;
+      end;
     Exit;
+  end;
 
   // The MicMixer that started this update keeps running until Windows has approved
   // the installer, and exits when told so here. Name must match ExitForUpdateEventName
