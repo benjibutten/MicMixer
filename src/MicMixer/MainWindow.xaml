@@ -362,7 +362,7 @@
                                         <TextBlock Style="{StaticResource TipBody}"
                                                    Text="Music is mixed into the mic channel with your voice so others can hear it whenever a track is playing and routing is active."/>
                                         <TextBlock Style="{StaticResource TipBody}" Margin="0,6,0,0"
-                                                   Text="In MP3 / YouTube mode, download tracks from a YouTube link or add your own MP3 files to the music folder (folder icon on the right; Settings › Music folders lets you add more folders). In External app mode, audio from a music app is captured and mixed in directly."/>
+                                                   Text="In MP3 / YouTube mode, download tracks from a YouTube link or add your own MP3 files to the music folder (folder icon on the right; Settings › Music lets you add more folders). In External app mode, audio from a music app is captured and mixed in directly."/>
                                     </StackPanel>
                                 </ToolTip>
                             </Border.ToolTip>
@@ -1483,42 +1483,79 @@
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- Music folders -->
-                    <TabItem Header="Music folders">
+                    <!-- Music -->
+                    <TabItem Header="Music">
                         <ScrollViewer Style="{StaticResource SettingsPage}">
-                            <StackPanel Style="{StaticResource SettingsSection}">
-                                <TextBlock Text="Music folders" Style="{StaticResource SettingsHeading}"/>
-                                <TextBlock Style="{StaticResource SettingsDesc}"
-                                           Text="The playlist shows the MP3 files in these folders. With more than one folder, each track gets a colored letter, and you choose the download folder next to the Download button. Folder changes are saved right away."/>
-                                <ItemsControl x:Name="MusicFoldersList" Focusable="False" Margin="0,2,0,8">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,6" Padding="8,5" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <Border Background="{Binding Tint}" CornerRadius="6" Padding="5,0" Margin="0,0,8,0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding Letter}" FontSize="10" FontWeight="SemiBold" Foreground="{Binding Accent}"/>
-                                                    </Border>
-                                                    <TextBlock Grid.Column="1" Text="{Binding Path}" FontSize="11.5" VerticalAlignment="Center"
-                                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}"/>
-                                                    <Button Grid.Column="2" Content="Remove" Click="OnRemoveMusicFolderClick" Margin="8,0,0,0" Padding="8,2" FontSize="11"
-                                                            IsEnabled="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                            ToolTipService.ShowOnDisabled="True" ToolTip="At least one music folder must remain."/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Add folder…" Click="OnAddMusicFolderClick" Padding="10,4" FontSize="11.5"
-                                            Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
-                                    <Button x:Name="ResetMusicFoldersButton" Content="Use only the default folder" Click="OnResetMusicFoldersClick"
-                                            Margin="8,0,0,0" Padding="10,4" FontSize="11.5"
-                                            Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                            <StackPanel>
+                                <StackPanel Style="{StaticResource SettingsSection}">
+                                    <TextBlock Text="Lower the music while you talk" Style="{StaticResource SettingsHeading}"/>
+                                    <TextBlock Style="{StaticResource SettingsDesc}"
+                                               Text="While your mic reaches the virtual cable, the music glides down to the level below, then comes back up once you are quiet. Push-to-talk or the noise gate decides when you talk. Applies to the virtual cable and the secondary output; what you hear in your own headphones is not affected."/>
+                                    <CheckBox x:Name="MusicDuckingCheck" FontSize="11.5" Foreground="#10233A"
+                                              Checked="OnMusicDuckingChanged" Unchecked="OnMusicDuckingChanged">
+                                        <TextBlock Text="Lower the music while you talk" VerticalAlignment="Center"/>
+                                    </CheckBox>
+                                    <Grid x:Name="MusicDuckingSettingsPanel" Margin="22,10,0,0">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter Property="Opacity" Value="0.5"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Music while you talk" FontSize="11" Foreground="#6B7280" VerticalAlignment="Center"/>
+                                        <Slider x:Name="MusicDuckingLevelSlider" Grid.Column="1" Minimum="0" Maximum="0.9" Value="0.25" Margin="12,0,8,0"
+                                                SmallChange="0.05" LargeChange="0.1" IsSnapToTickEnabled="True" TickFrequency="0.05" VerticalAlignment="Center"
+                                                AutomationProperties.Name="Music volume while you talk" ValueChanged="OnMusicDuckingLevelChanged"/>
+                                        <TextBlock x:Name="MusicDuckingLevelText" Grid.Column="2" Text="25 %" Width="40"
+                                                   TextAlignment="Right" FontSize="11" VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <TextBlock x:Name="MusicDuckingNeedsGateText" Margin="22,5,0,0" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="#B45309" Visibility="Collapsed"
+                                               Text="Turn on push-to-talk or the noise gate. Without either, MicMixer cannot tell when you talk and leaves the music as it is."/>
+                                </StackPanel>
+
+                                <StackPanel Style="{StaticResource SettingsSection}">
+                                    <TextBlock Text="Music folders" Style="{StaticResource SettingsHeading}"/>
+                                    <TextBlock Style="{StaticResource SettingsDesc}"
+                                               Text="The playlist shows the MP3 files in these folders. With more than one folder, each track gets a colored letter, and you choose the download folder next to the Download button. Folder changes are saved right away."/>
+                                    <ItemsControl x:Name="MusicFoldersList" Focusable="False" Margin="0,2,0,8">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,6" Padding="8,5" CornerRadius="6" Background="White" BorderBrush="#D7DEE7" BorderThickness="1">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Background="{Binding Tint}" CornerRadius="6" Padding="5,0" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Letter}" FontSize="10" FontWeight="SemiBold" Foreground="{Binding Accent}"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Path}" FontSize="11.5" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}"/>
+                                                        <Button Grid.Column="2" Content="Remove" Click="OnRemoveMusicFolderClick" Margin="8,0,0,0" Padding="8,2" FontSize="11"
+                                                                IsEnabled="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                ToolTipService.ShowOnDisabled="True" ToolTip="At least one music folder must remain."/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="Add folder…" Click="OnAddMusicFolderClick" Padding="10,4" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                        <Button x:Name="ResetMusicFoldersButton" Content="Use only the default folder" Click="OnResetMusicFoldersClick"
+                                                Margin="8,0,0,0" Padding="10,4" FontSize="11.5"
+                                                Background="#E8EEF5" Foreground="#10233A" BorderBrush="#D7DEE7" BorderThickness="1"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>

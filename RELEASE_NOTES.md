@@ -5,6 +5,11 @@
 - **Downloading music works again on a new install.** The ffmpeg build that
   MicMixer fetches the first time you download had been removed from GitHub, so
   the download failed with "404 (Not Found)".
+- **Lower the music while you talk.** A new option in **Settings › Music** turns
+  the music down while your mic reaches the virtual cable and brings it back when
+  you are quiet, so your voice is always on top. Choose how far down it goes; it
+  needs push-to-talk or the noise gate to know when you talk. The settings page
+  **Music folders** is now called **Music**.
 - **The held key reaches the game when MicMixer runs as administrator.** While
   MicMixer's own window has focus, Windows keeps the key MicMixer holds from
   programs that are not running as administrator. MicMixer now presses or
