@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MicMixer — push-to-talk mixer for voice, music, and voice changers</title>
+<title>MicMixer: a push-to-talk mixer for voice, music, and voice changers</title>
 <meta name="description" content="MicMixer is a free, open-source push-to-talk mixer for Windows. It gives your microphone, your music, and your voice changer separate rules, and plays the result into one virtual microphone.">
-<meta property="og:title" content="MicMixer — push-to-talk mixer for voice, music, and voice changers">
+<meta property="og:title" content="MicMixer: a push-to-talk mixer for voice, music, and voice changers">
 <meta property="og:description" content="A push-to-talk mixer for Windows: your mic, your music, and your voice changer get separate rules in one virtual microphone.">
 <meta property="og:image" content="https://benjibutten.github.io/MicMixer/assets/micmixer-main.png">
 <meta property="og:type" content="website">
@@ -148,7 +148,7 @@
   <p>
     The point is that voice and music get <em>separate</em> rules. Your voice can sit behind
     push-to-talk while the music keeps playing. Or the music stays private until you're ready.
-    Everything can be switched live, mid-session.
+    You can switch any of it mid-session.
   </p>
   <div class="actions">
     <a class="download" data-release-download href="https://github.com/benjibutten/MicMixer/releases/latest">Download for Windows</a>
@@ -162,13 +162,14 @@
     </span>
   </div>
   <p class="fineprint">
-    The button downloads the installer, <code>MicMixer-&lt;version&gt;-win-x64-setup.exe</code>.
+    The button downloads the installer, <code>MicMixer-&lt;version&gt;-win-x64-setup.exe</code>,
+    which needs administrator approval to install.
     The <a href="https://github.com/benjibutten/MicMixer/releases/latest">latest release</a>
-    also has the same app as a zip, without an installer; winget installs that one, and
-    keeps it updated with <code>winget upgrade</code>.
+    also has the same app as a zip that runs from any folder without administrator rights.
+    winget installs the zip and keeps it updated with <code>winget upgrade</code>.
     Windows 10/11, x64. Self-contained, no .NET install needed. Apache-2.0.
     Every release is built automatically from the source in this repository.
-    Windows shows a warning the first time you run it —
+    Your browser and Windows will warn you about the download:
     <a href="#first-run">here's what to click</a>.
   </p>
 
@@ -225,7 +226,7 @@
   <p>
     <em>Monitor only</em> keeps music out of the mic channel entirely and plays it in your
     headphones. Find the right song, set the level against the meters, then flip the toggle
-    to send it. The status panel always states exactly where the music is going.
+    to send it. The status panel always tells you where the music is going.
   </p>
 
   <h3>Getting the music from anywhere</h3>
@@ -260,8 +261,8 @@
     </figure>
   </div>
   <p>
-    If your streaming software captures the game as a single process, desktop overlays are
-    not part of the picture. MicMixer therefore also serves the overlay as a local web page
+    If your streaming software captures only the game, it won't see a desktop overlay.
+    So MicMixer also serves the overlay as a local web page
     (<code>http://127.0.0.1:4573/</code>) for an OBS browser source: same states, same
     rings, and it reconnects by itself. Details in
     <a href="guide.html?doc=stream-overlay.md">the stream overlay guide</a>.
@@ -283,21 +284,46 @@
     <li>In <em>Settings › Devices</em>, pick your mic (and optionally a modded mic), set <em>Send the mix to</em> to <em>MicMixer Input</em> (or <em>CABLE Input</em>), and click <em>Save</em>. On the first start, the built-in setup guide walks you through this.</li>
     <li>In the game or chat app, select <em>MicMixer Output</em> (or <em>CABLE Output</em>) as the microphone. Click <em>Enable</em> in MicMixer.</li>
   </ol>
-  <h3 id="first-run">The Windows warning on first run</h3>
+  <h3 id="first-run">The warnings on the way in</h3>
   <p>
-    MicMixer is not code-signed yet, so the first time you run the installer Windows shows a blue or red
-    <em>"Windows protected your PC"</em> box with the Run button hidden. Click
-    <em>More info</em>, then <em>Run anyway</em>. Any new app from a small publisher gets
-    this: it means Windows hasn't seen the file often enough yet, not that it found
-    anything wrong with it. Windows then asks for permission to install into Program Files,
-    listing the publisher as unknown for the same reason. It asks again when an update
-    installs, unless MicMixer runs as administrator.
+    MicMixer is not code-signed yet, so you'll click past up to three warnings before it
+    is installed. None of them means something was found in the file.
+  </p>
+  <ol class="setup">
+    <li>The browser may say the file <em>isn't commonly downloaded</em>. In Edge, open the
+      download's <em>…</em> menu, choose <em>Keep</em>, then <em>Show more › Keep anyway</em>.
+      In Chrome, choose to keep the file.</li>
+    <li>When you open it, Windows shows a blue <em>"Windows protected your PC"</em> box with
+      the Run button hidden. Click <em>More info</em>, then <em>Run anyway</em>.</li>
+    <li>Windows asks for permission to install into Program Files and lists the publisher
+      as unknown. Click <em>Yes</em>.</li>
+  </ol>
+  <p>
+    The first two are about reputation: Windows and the browser haven't seen this exact
+    file often enough yet. Each release is a new file, so they can come back for a while
+    after every release. The zip skips the third, since it doesn't install anything.
+    Updates from inside MicMixer never go through the browser. They only ask for the
+    permission in step 3, and not even that when MicMixer runs as administrator.
   </p>
   <p>
     If you'd rather check the download yourself first, each release ships a
     <code>.sha256</code> checksum next to the installer and the ZIP, and the
     <a href="code-signing-policy.html">code signing policy</a> covers how releases are built
     and where signing currently stands.
+  </p>
+
+  <h3 id="installed">Moving from the zip, and uninstalling</h3>
+  <p>
+    Your settings and logs live in <code>%LocalAppData%\MicMixer</code>, not next to the app,
+    so the installed copy picks up where a zip copy left off. Close the zip copy with
+    <em>Exit</em> in its tray menu, run the installer and let it start MicMixer. <em>Start with Windows</em>
+    then points at the installed copy, and you can delete the old folder.
+  </p>
+  <p>
+    To uninstall, use <em>Apps</em> in Windows Settings. That also removes MicMixer's
+    startup entries for your account. Your settings folder stays, and so does VB-CABLE;
+    remove it with VB-Audio's own setup from <a href="https://vb-audio.com/Cable/">vb-cable.com</a>
+    if you no longer need it.
   </p>
 
   <p>
@@ -311,8 +337,8 @@
   <h2>Guides</h2>
   <p>Step-by-step walkthroughs for the two most common setups:</p>
   <ul>
-    <li><a href="guide.html?doc=guides/fivem-music-through-mic.md">Play music in FiveM without holding push-to-talk</a> — route MicMixer into the game, gate your voice, and keep the music flowing.</li>
-    <li><a href="guide.html?doc=guides/discord-single-input.md">Mic and music as one Discord input</a> — send your voice and your music to Discord as a single microphone.</li>
+    <li><a href="guide.html?doc=guides/fivem-music-through-mic.md">Play music in FiveM without holding push-to-talk</a>: route MicMixer into the game, gate your voice, and keep the music flowing.</li>
+    <li><a href="guide.html?doc=guides/discord-single-input.md">Mic and music as one Discord input</a>: send your voice and your music to Discord as a single microphone.</li>
   </ul>
 </section>
 
