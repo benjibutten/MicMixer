@@ -1,17 +1,14 @@
 # Play music in FiveM without holding push-to-talk
 
-FiveM voice is usually proximity-based, but each server picks its own voice
-resource and rules. If the server lets you use an open or voice-activated
-microphone, playing music into it would normally keep your real mic open too.
+FiveM voice usually means a choice: hold the talk key all night to keep your
+music audible, or let the music cut out every time you release it. MicMixer
+removes that choice by giving your voice and your music **separate** rules.
 
-MicMixer gives your voice and your music **separate** rules. The game listens to
-one open microphone, a virtual cable, and MicMixer decides what goes into it:
-your voice waits for a push-to-talk key, while the music keeps flowing.
-
-> **Server limitation:** this setup only removes FiveM's push-to-talk when the
-> server permits an open or voice-activated input. Some RP servers use a custom
-> voice resource that forces its own push-to-talk. MicMixer cannot open that
-> server-controlled gate; follow the server's rules and do not try to bypass it.
+The game listens to one microphone, a virtual cable, and MicMixer decides what
+goes into it: your voice waits for your MicMixer hotkey, while the music flows
+continuously. MicMixer then holds down FiveM's push-to-talk key for exactly as
+long as it sends something, so FiveM transmits when there is voice or music on
+the cable and stays silent otherwise.
 
 ## What you need
 
@@ -20,7 +17,7 @@ your voice waits for a push-to-talk key, while the music keeps flowing.
   download and the Windows warnings you'll click past.
 - Your normal microphone.
 
-## Step 1: Route MicMixer into the game and open its voice gate
+## Step 1: Route MicMixer into the game
 
 1. Install VB-CABLE and reboot if the installer asks. The MicMixer installer can
    do this for you; if it also named the cable, its ends are *MicMixer Input* and
@@ -28,49 +25,67 @@ your voice waits for a push-to-talk key, while the music keeps flowing.
 2. In MicMixer's **Settings › Devices**, set **Normal mic** to your real microphone
    and **Send the mix to** to *CABLE Input (VB-Audio Virtual Cable)*, then click
    **Save**. If you don't use a voice changer, set **Voice changer** to **Off**.
-3. In FiveM's voice settings, set **Input Device** to **CABLE Output**. FiveM
-   exposes both an input-device setting and a voice-chat mode; a server resource
-   may replace or override either one. Both settings are listed in the official
+3. In FiveM's voice settings, set **Input Device** to **CABLE Output**, not
+   *Default*. Both this and the voice chat mode are listed in the official
    [FiveM profile-settings reference](https://docs.fivem.net/docs/game-references/profile-settings/).
-4. Set **Voice Chat Mode** to its voice-activated/open option if that option is
-   available. If the server has its own voice menu, use the equivalent setting
-   there. Adjust microphone sensitivity so normal music opens the input without
-   clipping its quiet passages.
-5. Click **Enable** in MicMixer and play a track briefly. Confirm with another
-   player or the server's voice indicator that the cable is received without
-   holding FiveM's push-to-talk key.
-
-If step 4 is unavailable or the test in step 5 only works while FiveM's talk key
-is held, the server is applying a second push-to-talk gate. Stop here: the
-continuous-music setup is not supported on that server. You can still use
-MicMixer while holding the server's required talk key, but MicMixer cannot
-remove that requirement.
 
 ## Step 2: Turn on push-to-talk in MicMixer
 
-The game listens to an always-open cable, so MicMixer has to gate your voice.
-Otherwise your mic is live all the time.
+1. Open **Settings › Hotkey** in MicMixer and set a **Hotkey**, for example a
+   mouse side button or the key that feels natural for speaking.
+2. Turn on **Use push-to-talk** on the same page.
 
-1. Open **Settings › Hotkey** in MicMixer and set a **Hotkey** (for example a
-   mouse side button or the key that feels natural for speaking).
-2. Enable **push-to-talk** on the same page and click **Save**. While the hotkey
-   is up, MicMixer sends silence for your voice; while you hold it, your voice
-   goes through.
+While the hotkey is *not* held, MicMixer sends silence; while it is held, your
+voice goes through. This is the only talk key you press from now on.
 
-MicMixer is now the only push-to-talk gate, so you don't hold FiveM's talk key.
-Keep the voice mode you verified in step 1, and follow any server rules about
-voice activation and music.
+## Step 3: Let MicMixer press FiveM's talk key
 
-## Step 3: Let the music ignore push-to-talk
+FiveM's push-to-talk gets its own key that you never touch: MicMixer holds it
+down while it sends to the cable.
+
+1. On the same **Settings › Hotkey** page, turn on **Hold a key while sending**
+   and keep **F24** in the list next to it. F13–F24 exist to Windows but not on a
+   normal keyboard, so they never collide with chat or game controls. Don't pick
+   a key that is also one of your MicMixer hotkeys; MicMixer warns you if you do.
+2. Click **Save**.
+3. In FiveM, set **Voice Chat Mode** to **push-to-talk**.
+4. Open the game's key bindings (**Settings › Key Bindings**) and select the
+   **Push to Talk** binding. Back in MicMixer, click **Send key once**, switch to
+   the game and start the binding there. MicMixer presses F24 after 5 seconds,
+   and the binding should read **F24**. Clicking **Send key once** again cancels.
+
+FiveM's push-to-talk listens for keyboard keys even while the game is in the
+background, so this keeps working when you alt-tab to MicMixer or another
+window.
+
+## Step 4: Let the music ignore push-to-talk
 
 1. Add music: paste a YouTube link and click **Download MP3**, or point MicMixer
    at a folder of your own `.mp3` files.
-2. In the music card, enable **Music ignores push-to-talk**.
-3. Start a track.
+2. In the music card, turn on **Music ignores push-to-talk**.
+3. Click **Enable** in the main window and start a track.
 
-The music now plays into the game continuously, and your voice only goes
-through while you hold the MicMixer hotkey. Release the key and your mic goes
-quiet while the music keeps going.
+Now the music plays into the game continuously, and your voice only goes
+through while you hold the MicMixer hotkey. Release the key and the music keeps
+going while your mic goes quiet. When the music stops and you are not talking,
+MicMixer lets go of F24 a tenth of a second later and FiveM stops transmitting.
+
+Test it with another player: they should hear the music without you pressing
+anything, and your voice only while you hold the hotkey.
+
+## Why not voice activation?
+
+FiveM also offers a voice-activated mode, and it seems like the natural fit for
+an always-open cable. It is less reliable here. In that mode FiveM, not
+MicMixer, decides when you are talking, and a server's voice resource can
+switch FiveM's input to a music mode in which it transmits all the time,
+silence included. Other players may then see your character's mouth move while
+you are quiet, even when there is nothing to hear. With push-to-talk on the key
+MicMixer holds, FiveM transmits only while MicMixer sends something.
+
+Server rules still apply. If the server blocks talking in some situations, for
+example while your character is downed, it blocks what MicMixer sends as well.
+Follow the server's rules about transmitting music.
 
 ## Checking what's live
 
@@ -86,25 +101,23 @@ else hears it, then turn it off to send it.
 
 ## Common problems
 
-- **Others can't hear the music.** Confirm the game's mic is set to *CABLE
-  Output* and MicMixer's output is *CABLE Input*, and that routing is enabled.
-  Also confirm that FiveM or the server's voice resource is not waiting for its
-  own push-to-talk key; if that gate is mandatory, this setup is unsupported.
-  Turn off noise suppression and echo cancellation in the game or voice
-  resource, since those filters often strip out music.
-- **Your character keeps "talking" after you stop.** FiveM decides who is
-  talking from the signal on the cable, with no hold time of its own. While the
-  MicMixer hotkey is held, room noise alone can keep its voice detection
-  triggered. Enable the noise gate in **Settings › Noise gate** and set the
-  threshold so the level bar passes the knob while you talk and stays below it
-  while you are quiet. The cable then carries true silence between phrases.
-  Keep **Release delay** at 0 when you use push-to-talk, and lower FiveM's
-  **Microphone Sensitivity** if quiet sounds still register.
-- **The music cuts out when you stop talking.** *Music ignores push-to-talk* is
-  off, or push-to-talk isn't enabled. The ignore toggle only does something
-  while push-to-talk is on.
-- **Music sounds thin or filtered.** Same suppression filters as above; turn
-  them off on the receiving side.
+- **Others hear nothing at all.** Check that FiveM's **Input Device** is *CABLE
+  Output*, that MicMixer sends to *CABLE Input*, and that routing is enabled.
+  Then check that the game's **Push to Talk** binding reads **F24** (or the key
+  you picked) and that **Hold a key while sending** is on and saved.
+- **Your voice only gets through while the game window has focus.** The **Push to
+  Talk** binding is on a mouse button. FiveM only follows the keyboard in the
+  background; bind F24 as in step 3.
+- **Your voice is live all the time.** **Use push-to-talk** is off in MicMixer.
+  Without it MicMixer always sends your mic, and so always holds F24.
+- **The music cuts out when you stop talking.** **Music ignores push-to-talk** is
+  off in the music card.
+- **The key does nothing while a program running as administrator has focus.**
+  Windows keeps keys from a normal program away from programs running as
+  administrator. MicMixer points this out in the main window and can restart
+  itself as administrator.
+- **Music sounds thin or filtered.** Noise suppression in FiveM or the voice
+  resource strips out music. Turn it off if the server's voice menu offers it.
 - **You hear yourself.** You've enabled local monitoring or a secondary output
   on a device you can hear. That's separate from the cable; see the
   [README](../../README.md#local-monitoring).
