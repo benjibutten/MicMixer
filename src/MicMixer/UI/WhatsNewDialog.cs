@@ -48,7 +48,7 @@ internal sealed class WhatsNewDialog : Window
             Foreground = MutedInk
         });
 
-        var list = new StackPanel();
+        var list = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
         foreach (string item in items)
         {
             list.Children.Add(CreateItem(item));
