@@ -1262,7 +1262,7 @@
                                 <StackPanel Style="{StaticResource SettingsSection}">
                                     <TextBlock Text="Hold a key while sending" Style="{StaticResource SettingsHeading}"/>
                                     <TextBlock Style="{StaticResource SettingsDesc}"
-                                               Text="Holds the chosen key down for as long as mic or music reaches the virtual cable, and lets go shortly after. Bind another app's push-to-talk to this key and it transmits exactly when MicMixer does, also in the background."/>
+                                               Text="Holds the chosen key down for as long as mic or music reaches the virtual cable, with push-to-talk for as long as you hold the hotkey, and lets go shortly after. Bind another app's push-to-talk to this key and it transmits exactly when MicMixer does, also in the background."/>
                                     <CheckBox x:Name="HoldKeyWhileSendingCheck" FontSize="11.5" Foreground="#10233A"
                                               Checked="OnHoldKeyWhileSendingChanged" Unchecked="OnHoldKeyWhileSendingChanged">
                                         <TextBlock Text="Hold a key while sending" VerticalAlignment="Center"/>

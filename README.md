@@ -266,7 +266,8 @@ cable receives silence. Neither microphone audio nor music is sent.
   it plays. See [Music routing](#music-routing).
 
 **Hold a key while sending** (same page) holds a chosen key, F13–F24, down for
-as long as mic or music reaches the virtual cable, and lets go shortly after. Bind
+as long as mic or music reaches the virtual cable, with push-to-talk for as long
+as you hold the hotkey, and lets go shortly after. Bind
 another app's push-to-talk to that key and it transmits exactly when MicMixer
 does, also while MicMixer is in the background. F13–F24 are not on a normal
 keyboard: click **Send key once**, switch to the other app and start its key
