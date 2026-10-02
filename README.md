@@ -354,7 +354,8 @@ in external capture mode as well.
   volume before anyone else hears it. The secondary output still receives the
   music, so streaming or recording software capturing that device hears what you hear. An
   amber hint below the toggle states exactly where the music goes while the mode
-  is active. Monitor-only overrides the ignore-push-to-talk toggle.
+  is active. Monitor-only overrides the ignore-push-to-talk toggle. It is off
+  each time MicMixer starts.
 
 The status card and the overlay always reflect the outcome: when push-to-talk
 mutes the mic while music still flows, the pill reads **Mic muted** and the status
