@@ -1400,13 +1400,21 @@ public partial class MainWindow : Window, IMicMixerControlHost
         UpdateSendingKey();
     }
 
-    /// <summary>Holds the chosen key while mic or music reaches the cable.</summary>
+    /// <summary>
+    /// Holds the chosen key while mic or music reaches the cable, and with push-to-talk
+    /// for as long as the hotkey is held.
+    /// </summary>
     private void UpdateSendingKey()
     {
+        // With push-to-talk the noise gate is left out: it opens only once speech has
+        // started, so the other app would begin transmitting partway into the first word.
         // NoiseGateOpen is also true while the noise gate is off.
+        bool musicSending = ComputeOverlayMusicState() == OverlayMusicState.Sending;
         bool sending = _router.IsRouting
-            && ((_router.OutputGateOpen && _router.NoiseGateOpen) || ComputeOverlayMusicState() == OverlayMusicState.Sending);
-        _sendingKey.Update(sending, _uptime.Elapsed);
+            && ((_router.OutputGateOpen && (IsPushToTalk || _router.NoiseGateOpen)) || musicSending);
+        // Music plays while nobody touches the game, so a press the game lost would
+        // otherwise stay lost until the music stops.
+        _sendingKey.Update(sending, _uptime.Elapsed, repeatPress: musicSending);
     }
 
     /// <summary>

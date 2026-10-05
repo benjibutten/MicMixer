@@ -266,9 +266,12 @@ cable receives silence. Neither microphone audio nor music is sent.
   it plays. See [Music routing](#music-routing).
 
 **Hold a key while sending** (same page) holds a chosen key, F13–F24, down for
-as long as mic or music reaches the virtual cable, and lets go shortly after. Bind
+as long as mic or music reaches the virtual cable, with push-to-talk for as long
+as you hold the hotkey, and lets go shortly after. Bind
 another app's push-to-talk to that key and it transmits exactly when MicMixer
-does, also while MicMixer is in the background. F13–F24 are not on a normal
+does, also while MicMixer is in the background. While music plays, the press is
+repeated every second, so a game that lost the key while you switched windows
+picks it up again. F13–F24 are not on a normal
 keyboard: click **Send key once**, switch to the other app and start its key
 binding, and MicMixer sends the key after 5 seconds.
 
@@ -353,7 +356,8 @@ in external capture mode as well.
   volume before anyone else hears it. The secondary output still receives the
   music, so streaming or recording software capturing that device hears what you hear. An
   amber hint below the toggle states exactly where the music goes while the mode
-  is active. Monitor-only overrides the ignore-push-to-talk toggle.
+  is active. Monitor-only overrides the ignore-push-to-talk toggle. It is off
+  each time MicMixer starts.
 
 The status card and the overlay always reflect the outcome: when push-to-talk
 mutes the mic while music still flows, the pill reads **Mic muted** and the status

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MicMixer.Settings;
 
@@ -122,7 +123,13 @@ public sealed class AppSettings
     /// <summary>Music keeps flowing to the virtual cable while push-to-talk holds the mic silent.</summary>
     public bool MusicIgnoresPushToTalk { get; set; }
 
-    /// <summary>Preview mode: music is never sent to the virtual cable — only local monitoring (and the secondary output) carry it.</summary>
+    /// <summary>
+    /// Preview mode: music is never sent to the virtual cable — only local monitoring
+    /// (and the secondary output) carry it. Not saved, so every start sends the music.
+    /// </summary>
+    // A preview left on would otherwise keep the music off the cable at every start,
+    // with nothing but the hint under the toggle to say why.
+    [JsonIgnore]
     public bool MusicMonitorOnly { get; set; }
 
     /// <summary>Lowers the music to <see cref="MusicDuckingLevel"/> while the mic reaches the virtual cable.</summary>

@@ -2,22 +2,12 @@
 
 <!-- Update this list together with user-visible changes under src/. -->
 
-- **Downloading music works again on a new install.** The ffmpeg build that
-  MicMixer fetches the first time you download had been removed from GitHub, so
-  the download failed with "404 (Not Found)".
-- **Lower the music while you talk.** A new option in **Settings › Music** turns
-  the music down while your mic reaches the virtual cable and brings it back when
-  you are quiet, so your voice is always on top. Choose how far down it goes; it
-  needs the noise gate, or push-to-talk with **Music ignores push-to-talk**, to
-  know when you talk. The settings page **Music folders** is now called
-  **Music**.
-- If MicMixer is running from another folder, such as an unpacked zip, Setup
-  asks you to exit it before installing.
-- **Starting MicMixer as administrator can no longer load a program other
-  programs chose.** Any program could set environment variables that make .NET
-  load its DLL into MicMixer, which then ran as administrator at sign-in without
-  a prompt. MicMixer now starts as administrator through a small launcher that
-  removes them first.
-- A silent update on a standard Windows account, approved with an
-  administrator's password, can close MicMixer and install. It used to fail
-  every time.
+- **The held key no longer lets go while music plays.** A game forgets the key
+  when you switch to another window and could miss it when you came back, so its
+  push-to-talk stayed off until the music stopped. While music plays, MicMixer
+  now presses the key again every second.
+- With push-to-talk, **Hold a key while sending** holds the key for as long as
+  you hold the hotkey. With the noise gate on, it used to go down only once you
+  had started speaking, so the other app missed the start of the first word.
+- **Monitor only** is off each time MicMixer starts. Left on by mistake, it
+  kept the music off the virtual cable at every start.

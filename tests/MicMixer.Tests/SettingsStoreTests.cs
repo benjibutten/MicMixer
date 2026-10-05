@@ -168,6 +168,20 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveAndLoad_ShouldStartWithMonitorOnlyOff()
+    {
+        Directory.CreateDirectory(_root);
+        string path = Path.Combine(_root, "settings.json");
+        File.WriteAllText(path, """{ "MusicMonitorOnly": true }""");
+        var sut = new SettingsStore(path);
+
+        sut.Load().MusicMonitorOnly.Should().BeFalse();
+
+        sut.Save(new AppSettings { MusicMonitorOnly = true });
+        sut.Load().MusicMonitorOnly.Should().BeFalse();
+    }
+
+    [Fact]
     public void SaveAndLoad_ShouldRoundTripExtraHotkeys()
     {
         var sut = new SettingsStore(Path.Combine(_root, "settings.json"));
