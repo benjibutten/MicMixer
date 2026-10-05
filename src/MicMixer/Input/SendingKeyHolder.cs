@@ -114,7 +114,9 @@ internal sealed class SendingKeyHolder
             // input, which would stop the screen saver, sleep and "away" statuses.
             // A game forgets a held key when it loses focus, and can miss the press sent
             // as it gets focus back while Windows still has the key down; repeating the
-            // press brings its push-to-talk back without any mismatch to see.
+            // press brings its push-to-talk back without any mismatch to see. Each repeat
+            // also counts as user input, so the screen saver, the automatic lock and
+            // "away" statuses wait while it runs.
             if (down && (repeatPress || !_isKeyDown(_key)) && now - _lastSentAt >= ResendInterval)
             {
                 Send(_key, true, now);
