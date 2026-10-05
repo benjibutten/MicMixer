@@ -65,11 +65,12 @@ internal sealed class SendingKeyHolder
     /// <summary>
     /// Presses or releases the key to match <paramref name="sending"/>, and sends the
     /// wanted state again when Windows has not taken it on. When another window takes
-    /// focus, the last press or release is sent again. Call it whenever sending
-    /// may have changed, and regularly, also while routing is off: the release delay,
-    /// the resends and the focus check only take effect on a call.
+    /// focus, the last press or release is sent again. With <paramref name="repeatPress"/>
+    /// the press is also sent again every <see cref="ResendInterval"/> while the key is
+    /// held. Call it whenever sending may have changed, and regularly, also while routing
+    /// is off: the release delay, the resends and the focus check only take effect on a call.
     /// </summary>
-    public void Update(bool sending, TimeSpan now)
+    public void Update(bool sending, TimeSpan now, bool repeatPress = false)
     {
         if (_wasSending && !sending)
         {
@@ -111,7 +112,10 @@ internal sealed class SendingKeyHolder
             // higher integrity level has focus, or while the UAC prompt or the lock screen
             // shows. Resending only on a mismatch keeps an idle MicMixer from injecting
             // input, which would stop the screen saver, sleep and "away" statuses.
-            if (down && !_isKeyDown(_key) && now - _lastSentAt >= ResendInterval)
+            // A game forgets a held key when it loses focus, and can miss the press sent
+            // as it gets focus back while Windows still has the key down; repeating the
+            // press brings its push-to-talk back without any mismatch to see.
+            if (down && (repeatPress || !_isKeyDown(_key)) && now - _lastSentAt >= ResendInterval)
             {
                 Send(_key, true, now);
                 return;

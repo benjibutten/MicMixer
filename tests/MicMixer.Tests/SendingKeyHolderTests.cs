@@ -104,6 +104,28 @@ public sealed class SendingKeyHolderTests
     }
 
     [Fact]
+    public void Update_ShouldRepeatThePressOncePerSecond_WhenAskedTo()
+    {
+        for (int ms = 0; ms <= 3_000; ms += 50)
+        {
+            _holder.Update(sending: true, Ms(ms), repeatPress: true);
+        }
+
+        _sent.Should().Equal(("F24", true), ("F24", true), ("F24", true), ("F24", true));
+    }
+
+    [Fact]
+    public void Update_ShouldStopRepeatingAndRelease_WhenSendingStops()
+    {
+        _holder.Update(sending: true, Ms(0), repeatPress: true);
+        _holder.Update(sending: false, Ms(500), repeatPress: false);
+        _holder.Update(sending: false, Ms(600), repeatPress: false);
+        _holder.Update(sending: false, Ms(3_000), repeatPress: false);
+
+        _sent.Should().Equal(("F24", true), ("F24", false));
+    }
+
+    [Fact]
     public void Update_ShouldResendAKeyUpThatWindowsDropped()
     {
         _holder.Update(sending: true, Ms(0));
