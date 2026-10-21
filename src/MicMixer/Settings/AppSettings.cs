@@ -153,8 +153,10 @@ public sealed class AppSettings
 
     public bool MonitorEnabled { get; set; } = true;
 
+    /// <summary>Gain of the music on the virtual cable, 0 to 1. The slider shows it through <see cref="Audio.VolumeCurve"/>.</summary>
     public float MusicVolume { get; set; } = 0.5f;
 
+    /// <summary>Gain of the music in local monitoring, 0 to 1. The slider shows it through <see cref="Audio.VolumeCurve"/>.</summary>
     public float MonitorVolume { get; set; } = 0.5f;
 
     public bool LinkVolumes { get; set; }

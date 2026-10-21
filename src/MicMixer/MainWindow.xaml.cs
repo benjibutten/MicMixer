@@ -223,8 +223,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
         _music.MusicVolume = _settings.MusicVolume;
         _music.MonitorVolume = _settings.MonitorVolume;
         _isUpdatingMusicUi = true;
-        MusicVolumeSlider.Value = _music.MusicVolume;
-        MonitorVolumeSlider.Value = _music.MonitorVolume;
+        MusicVolumeSlider.Value = VolumeCurve.ToPosition(_music.MusicVolume);
+        MonitorVolumeSlider.Value = VolumeCurve.ToPosition(_music.MonitorVolume);
         MonitorEnabledCheck.IsChecked = _settings.MonitorEnabled;
         VolumeLinkToggle.IsChecked = _settings.LinkVolumes;
         MusicIgnorePttCheck.IsChecked = _settings.MusicIgnoresPushToTalk;
@@ -4289,8 +4289,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _music.MusicVolume = (float)e.NewValue;
-        _settings.MusicVolume = (float)e.NewValue;
+        _music.MusicVolume = VolumeCurve.ToGain(e.NewValue);
+        _settings.MusicVolume = _music.MusicVolume;
 
         // Linked mode keeps a fixed offset between the sliders. The follower is
         // clamped at its edge, but the offset itself is preserved so the gap
@@ -4313,8 +4313,8 @@ public partial class MainWindow : Window, IMicMixerControlHost
             return;
         }
 
-        _music.MonitorVolume = (float)e.NewValue;
-        _settings.MonitorVolume = (float)e.NewValue;
+        _music.MonitorVolume = VolumeCurve.ToGain(e.NewValue);
+        _settings.MonitorVolume = _music.MonitorVolume;
 
         if (_settings.LinkVolumes && !_isSyncingLinkedVolume)
         {

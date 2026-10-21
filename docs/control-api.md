@@ -29,7 +29,7 @@ unsupported protocol version.
 | `playTrack`, `enqueueTrack` | `trackId` |
 | `togglePlayPause`, `stop`, `previous`, `next` | none |
 | `seek` | `positionSeconds` |
-| `setMusicVolume`, `setMonitorVolume` | `volume` from 0 to 1 |
+| `setMusicVolume`, `setMonitorVolume` | `volume` from 0 to 1, the slider position MicMixer shows as a percentage (the gain is its cube) |
 | `setVolumesLinked` | `linked` boolean; mirrors MicMixer's volume-sync toggle |
 | `setMusicIgnoresPushToTalk` | `enabled` boolean; music keeps flowing to the cable while push-to-talk holds the mic silent |
 | `setMusicMonitorOnly` | `enabled` boolean; preview mode — music is never sent to the cable, only local monitoring (and the secondary output) carry it |
