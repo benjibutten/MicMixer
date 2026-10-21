@@ -4,6 +4,8 @@ namespace MicMixer.Audio;
 
 internal sealed class ChannelAdapterSampleProvider : ISampleProvider
 {
+    private const int FrontChannels = 2;
+
     private readonly ISampleProvider _source;
     private readonly WaveFormat _waveFormat;
     private float[] _sourceBuffer = Array.Empty<float>();
@@ -36,10 +38,11 @@ internal sealed class ChannelAdapterSampleProvider : ISampleProvider
 
             if (sourceChannels == 1)
             {
+                // Mono plays on the front pair only, for the same reason as below.
                 float sample = _sourceBuffer[sourceFrameOffset];
                 for (int channel = 0; channel < targetChannels; channel++)
                 {
-                    buffer[targetFrameOffset + channel] = sample;
+                    buffer[targetFrameOffset + channel] = channel < FrontChannels ? sample : 0f;
                 }
             }
             else if (targetChannels == 1)
@@ -54,10 +57,15 @@ internal sealed class ChannelAdapterSampleProvider : ISampleProvider
             }
             else
             {
+                // Channels beyond the source stay silent: in a surround layout they
+                // are centre, LFE and rear speakers, and a copy of one stereo side
+                // there would make that side louder and send full-range audio to the
+                // subwoofer channel.
                 for (int channel = 0; channel < targetChannels; channel++)
                 {
-                    int sourceChannel = Math.Min(channel, sourceChannels - 1);
-                    buffer[targetFrameOffset + channel] = _sourceBuffer[sourceFrameOffset + sourceChannel];
+                    buffer[targetFrameOffset + channel] = channel < sourceChannels
+                        ? _sourceBuffer[sourceFrameOffset + channel]
+                        : 0f;
                 }
             }
         }

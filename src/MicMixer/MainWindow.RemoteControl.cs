@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Threading;
+using MicMixer.Audio;
 using MicMixer.Music;
 using MicMixer.Remote;
 
@@ -226,22 +227,10 @@ public partial class MainWindow
             return MissingArgument("volume");
         }
 
-        if (monitor)
-        {
-            float value = (float)Math.Clamp(volume, 0, 1);
-            _settings.MonitorVolume = value;
-            _music.MonitorVolume = value;
-            MonitorVolumeSlider.Value = value;
-        }
-        else
-        {
-            float value = (float)Math.Clamp(volume, 0, 1);
-            _settings.MusicVolume = value;
-            _music.MusicVolume = value;
-            MusicVolumeSlider.Value = value;
-        }
-
-        ScheduleSettingsSave();
+        // The payload is a slider position, like the percentage MicMixer shows. The
+        // slider's handler turns it into gain, saves it and moves a linked slider.
+        var slider = monitor ? MonitorVolumeSlider : MusicVolumeSlider;
+        slider.Value = Math.Clamp(volume, slider.Minimum, slider.Maximum);
 
         return ControlResult.Ok();
     }
@@ -564,8 +553,8 @@ public partial class MainWindow
             currentPath == null ? null : Path.GetFileNameWithoutExtension(currentPath),
             _music.Position.TotalSeconds,
             _music.Duration.TotalSeconds,
-            _settings.MusicVolume,
-            _settings.MonitorVolume,
+            VolumeCurve.ToPosition(_settings.MusicVolume),
+            VolumeCurve.ToPosition(_settings.MonitorVolume),
             _router.IsRouting,
             _music.HasMonitorOutput,
             gate.CanStart,
