@@ -19,8 +19,8 @@ public sealed class VolumeCurveTests
     [Fact]
     public void ToPosition_ShouldKeepASavedGainAtTheSameLoudness()
     {
-        // A gain saved by a build with a linear slider must come back unchanged
-        // once the slider position is turned into gain again.
+        // Settings store the gain, so a saved level must survive the trip through
+        // the slider position unchanged.
         foreach (float savedGain in new[] { 0f, 0.003f, 0.19f, 0.5f, 1f })
         {
             VolumeCurve.ToGain(VolumeCurve.ToPosition(savedGain)).Should().BeApproximately(savedGain, 1e-6f);

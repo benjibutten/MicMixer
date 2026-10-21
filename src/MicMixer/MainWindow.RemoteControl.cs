@@ -227,23 +227,10 @@ public partial class MainWindow
             return MissingArgument("volume");
         }
 
-        // The payload is a slider position, like the percentage MicMixer shows.
-        double position = Math.Clamp(volume, 0, 1);
-        float gain = VolumeCurve.ToGain(position);
-        if (monitor)
-        {
-            _settings.MonitorVolume = gain;
-            _music.MonitorVolume = gain;
-            MonitorVolumeSlider.Value = position;
-        }
-        else
-        {
-            _settings.MusicVolume = gain;
-            _music.MusicVolume = gain;
-            MusicVolumeSlider.Value = position;
-        }
-
-        ScheduleSettingsSave();
+        // The payload is a slider position, like the percentage MicMixer shows. The
+        // slider's handler turns it into gain, saves it and moves a linked slider.
+        var slider = monitor ? MonitorVolumeSlider : MusicVolumeSlider;
+        slider.Value = Math.Clamp(volume, slider.Minimum, slider.Maximum);
 
         return ControlResult.Ok();
     }
