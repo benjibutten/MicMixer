@@ -23,7 +23,7 @@ public sealed class ChannelAdapterSampleProviderTests
     }
 
     [Fact]
-    public void Read_ShouldCopyMonoToEveryChannel()
+    public void Read_ShouldCopyMonoToBothStereoChannels()
     {
         var mono = new StaticSource(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 1), [0.3f]);
         var adapter = new ChannelAdapterSampleProvider(mono, targetChannels: 2);
@@ -32,6 +32,18 @@ public sealed class ChannelAdapterSampleProviderTests
         adapter.Read(buffer, 0, buffer.Length);
 
         buffer.Should().Equal(0.3f, 0.3f);
+    }
+
+    [Fact]
+    public void Read_ShouldPutMonoOnTheFrontPairOnly_WhenTheDeviceHasMoreChannels()
+    {
+        var mono = new StaticSource(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 1), [0.3f]);
+        var adapter = new ChannelAdapterSampleProvider(mono, targetChannels: 8);
+        float[] buffer = new float[8];
+
+        adapter.Read(buffer, 0, buffer.Length);
+
+        buffer.Should().Equal(0.3f, 0.3f, 0f, 0f, 0f, 0f, 0f, 0f);
     }
 
     private sealed class StaticSource(WaveFormat format, float[] samples) : ISampleProvider
