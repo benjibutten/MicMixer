@@ -54,10 +54,15 @@ internal sealed class ChannelAdapterSampleProvider : ISampleProvider
             }
             else
             {
+                // Channels beyond the source stay silent: in a surround layout they
+                // are centre, LFE and rear speakers, and a copy of one stereo side
+                // there would make that side louder and send full-range audio to the
+                // subwoofer channel.
                 for (int channel = 0; channel < targetChannels; channel++)
                 {
-                    int sourceChannel = Math.Min(channel, sourceChannels - 1);
-                    buffer[targetFrameOffset + channel] = _sourceBuffer[sourceFrameOffset + sourceChannel];
+                    buffer[targetFrameOffset + channel] = channel < sourceChannels
+                        ? _sourceBuffer[sourceFrameOffset + channel]
+                        : 0f;
                 }
             }
         }
