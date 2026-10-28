@@ -29,6 +29,10 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      asset_name: ${{ steps.meta.outputs.asset_name }}
 
     steps:
       - name: Checkout repository
@@ -232,6 +236,13 @@ jobs:
           replacesArtifacts: true
           makeLatest: true
 
+  winget:
+    # A separate job so a failed submission can be re-run on its own. Re-running the
+    # release job computes the next version and publishes a second release.
+    needs: release
+    runs-on: windows-latest
+
+    steps:
       - name: Sync the winget-pkgs fork
         # wingetcreate pushes its submission branch from this fork and syncs the fork
         # itself first. That built-in sync fails once the fork has fallen far enough
@@ -269,10 +280,10 @@ jobs:
             return
           }
 
-          $url = "https://github.com/benjibutten/MicMixer/releases/download/${{ steps.meta.outputs.tag_name }}/${{ steps.meta.outputs.asset_name }}"
+          $url = "https://github.com/benjibutten/MicMixer/releases/download/${{ needs.release.outputs.tag_name }}/${{ needs.release.outputs.asset_name }}"
           Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$env:RUNNER_TEMP/wingetcreate.exe"
           & "$env:RUNNER_TEMP/wingetcreate.exe" update BenjiButten.MicMixer `
-            --version ${{ steps.meta.outputs.version }} `
+            --version ${{ needs.release.outputs.version }} `
             --urls "$url" `
             --submit `
             --token $env:WINGET_TOKEN
