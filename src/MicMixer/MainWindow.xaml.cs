@@ -230,6 +230,9 @@ public partial class MainWindow : Window, IMicMixerControlHost
         MusicIgnorePttCheck.IsChecked = _settings.MusicIgnoresPushToTalk;
         MusicMonitorOnlyCheck.IsChecked = _settings.MusicMonitorOnly;
         _isUpdatingMusicUi = false;
+        _isUpdatingUi = true;
+        StartRoutingOnLaunchCheck.IsChecked = _settings.StartRoutingOnLaunch;
+        _isUpdatingUi = false;
         ApplyMusicRoutingModes();
         UpdateDelayedPlayIdleUi();
         SetSingleTrackMode(_settings.SingleTrackMode ? SingleTrackPlayMode.Always : SingleTrackPlayMode.Off,
@@ -305,6 +308,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (!App.StartupBenchmarkMode)
         {
+            PromoteTrayIcon();
             App.StartupTrace("Device refresh queued");
             _ = LoadDevicesAndOfferSetupGuideAsync();
             StartWatchingDevices();
@@ -1878,7 +1882,36 @@ public partial class MainWindow : Window, IMicMixerControlHost
             ShowSetupGuide();
         }
 
+        if (_settings.StartRoutingOnLaunch && !isFirstRun)
+        {
+            await StartRoutingOnLaunchAsync();
+        }
+
         OfferWhatsNew(isSetUp: !isFirstRun);
+    }
+
+    private async Task StartRoutingOnLaunchAsync()
+    {
+        // With a saved device missing, routing would run on a stand-in that nobody
+        // chose. The problem cards say what is missing, and Enable still starts it.
+        bool micConnected = _settings.NormalInputDeviceId == null
+            || SelectedDeviceId(DryInputCombo) == _settings.NormalInputDeviceId;
+        bool voiceChangerMicConnected = CurrentModifiedVoiceMode != ModifiedVoiceMode.ExternalMicrophone
+            || _settings.ModdedInputDeviceId == null
+            || SelectedDeviceId(ExternalModdedInputCombo) == _settings.ModdedInputDeviceId;
+        bool cableConnected = _settings.OutputDeviceId == null
+            || SelectedDeviceId(OutputDeviceCombo) == _settings.OutputDeviceId;
+        if (!_devicesLoaded || !micConnected || !voiceChangerMicConnected || !cableConnected)
+        {
+            Log.Information("Not starting routing on launch: the saved devices are not all connected.");
+            return;
+        }
+
+        // Enable asks for a second click on these devices. They are the saved ones,
+        // and nobody is there to click.
+        _acknowledgedSameMicId = SelectedDeviceId(DryInputCombo);
+        _acknowledgedNonCableOutputId = SelectedDeviceId(OutputDeviceCombo);
+        await StartRoutingAsync();
     }
 
     /// <summary>
@@ -2089,6 +2122,17 @@ public partial class MainWindow : Window, IMicMixerControlHost
         // The registry follows on Save, together with the settings file.
         _settings.StartWithWindows = StartWithWindowsCheck.IsChecked == true;
         OnConfigurationChanged();
+    }
+
+    private void OnStartRoutingOnLaunchChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdatingUi)
+        {
+            return;
+        }
+
+        _settings.StartRoutingOnLaunch = StartRoutingOnLaunchCheck.IsChecked == true;
+        SaveSettings();
     }
 
     private void OnRunAsAdministratorChanged(object sender, RoutedEventArgs e)
@@ -4778,6 +4822,23 @@ public partial class MainWindow : Window, IMicMixerControlHost
         trayIcon.ContextMenuStrip = menu;
 
         return trayIcon;
+    }
+
+    private static void PromoteTrayIcon()
+    {
+        if (Environment.ProcessPath is not { } executablePath)
+        {
+            return;
+        }
+
+        try
+        {
+            TrayIconPromotion.PromoteUnlessUserChose(executablePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not move the tray icon out of the overflow menu.");
+        }
     }
 
     private void OnTrayIconDoubleClick(object? sender, EventArgs e)

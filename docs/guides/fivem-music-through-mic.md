@@ -120,7 +120,7 @@ else hears it, then turn it off to send it.
   resource strips out music. Turn it off if the server's voice menu offers it.
 - **You hear yourself.** You've enabled local monitoring or a secondary output
   on a device you can hear. That's separate from the cable; see the
-  [README](../../README.md#local-monitoring).
+  [manual](../manual.md#local-monitoring).
 
 ## Next step
 

@@ -65,7 +65,7 @@ the gating, so it can keep the music going while it gates only your voice.
 If you also stream, don't capture the Discord/cable path for your stream audio.
 Use MicMixer's **secondary output** instead: it plays the full mic-plus-music
 mix on a separate device that OBS or Streamlabs can capture, independent of what
-Discord receives. See the [README](../../README.md#secondary-output).
+Discord receives. See the [manual](../manual.md#secondary-output).
 
 ## Common problems
 
