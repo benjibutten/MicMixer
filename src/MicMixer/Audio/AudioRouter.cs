@@ -788,7 +788,7 @@ public sealed class AudioRouter : IDisposable
 
         private void OnStreamVolume(object? sender, StreamVolumeEventArgs e)
         {
-            float peak = e.MaxSampleValues.Length == 0 ? 0f : e.MaxSampleValues.Max();
+            float peak = e.MaxSampleValues is { Length: > 0 } channelPeaks ? channelPeaks.Max() : 0f;
             Volatile.Write(ref _currentPeak, Math.Clamp(peak, 0f, 1f));
         }
     }
