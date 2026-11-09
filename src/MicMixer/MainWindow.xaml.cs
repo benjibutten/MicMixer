@@ -305,6 +305,7 @@ public partial class MainWindow : Window, IMicMixerControlHost
 
         if (!App.StartupBenchmarkMode)
         {
+            PromoteTrayIcon();
             App.StartupTrace("Device refresh queued");
             _ = LoadDevicesAndOfferSetupGuideAsync();
             StartWatchingDevices();
@@ -4778,6 +4779,23 @@ public partial class MainWindow : Window, IMicMixerControlHost
         trayIcon.ContextMenuStrip = menu;
 
         return trayIcon;
+    }
+
+    private static void PromoteTrayIcon()
+    {
+        if (Environment.ProcessPath is not { } executablePath)
+        {
+            return;
+        }
+
+        try
+        {
+            TrayIconPromotion.PromoteUnlessUserChose(executablePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not move the tray icon out of the overflow menu.");
+        }
     }
 
     private void OnTrayIconDoubleClick(object? sender, EventArgs e)
