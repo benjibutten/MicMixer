@@ -2,6 +2,10 @@
 
 <!-- Update this list together with user-visible changes under src/. -->
 
+- **Routing can start by itself.** Tick **Enable when MicMixer starts** under
+  the Enable button and you no longer have to click Enable after every start.
+  If one of your saved devices is not connected, routing waits for you instead of
+  starting on another device.
 - **The tray icon stays on the taskbar.** Windows 11 puts new tray icons in the
   overflow menu behind the arrow. MicMixer now moves its icon out next to the
   clock. If you have already placed the icon yourself in Windows settings, your

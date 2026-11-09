@@ -269,14 +269,22 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </StackPanel>
-                <Button x:Name="ToggleBtn" Grid.Column="2" Click="OnToggleClick" Height="32" Padding="14,0" FontWeight="SemiBold"
-                        VerticalAlignment="Center" Background="#10233A" Foreground="White" BorderThickness="0">
-                    <StackPanel Orientation="Horizontal">
-                        <Path x:Name="ToggleBtnIcon" Data="{StaticResource PlayIcon}" Fill="White"
-                              Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,7,0"/>
-                        <TextBlock x:Name="ToggleBtnText" Text="Enable" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                    </StackPanel>
-                </Button>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <Button x:Name="ToggleBtn" Click="OnToggleClick" Height="32" Padding="14,0" FontWeight="SemiBold"
+                            HorizontalAlignment="Right" Background="#10233A" Foreground="White" BorderThickness="0">
+                        <StackPanel Orientation="Horizontal">
+                            <Path x:Name="ToggleBtnIcon" Data="{StaticResource PlayIcon}" Fill="White"
+                                  Style="{StaticResource SectionIcon}" Width="13" Height="13" Margin="0,0,7,0"/>
+                            <TextBlock x:Name="ToggleBtnText" Text="Enable" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                    <CheckBox x:Name="StartRoutingOnLaunchCheck" Margin="0,6,0,0" HorizontalAlignment="Right" FontSize="11" Foreground="#6B7280"
+                              Checked="OnStartRoutingOnLaunchChanged" Unchecked="OnStartRoutingOnLaunchChanged"
+                              ToolTipService.ShowDuration="30000"
+                              ToolTip="Turns routing on every time MicMixer starts. Your mic is then open from the start unless push-to-talk is on. If a saved device is not connected, routing waits for you to click Enable.">
+                        <TextBlock Text="Enable when MicMixer starts" VerticalAlignment="Center"/>
+                    </CheckBox>
+                </StackPanel>
 
                 <!-- Voice changer switch: switched during a session, so it lives here and
                      not only in settings. A running route restarts for a moment. -->

@@ -11,8 +11,9 @@ public sealed class AppSettings
     /// Copies the settings edited in the settings window. They apply live but are
     /// written to disk only by its Save button, so the saved values stay a reliable
     /// reference for "is the app running the way I set it up?". Everything else is
-    /// saved as it changes: what is switched during a session (music card, the voice
-    /// changer and its voice) and what the remote-control API changes (music folders).
+    /// saved as it changes: what is switched in the main window (music card, the voice
+    /// changer and its voice, starting routing on launch) and what the remote-control
+    /// API changes (music folders).
     /// </summary>
     public void CopyConfigurationFrom(AppSettings source)
     {
@@ -56,6 +57,9 @@ public sealed class AppSettings
     }
 
     public bool StartWithWindows { get; set; }
+
+    /// <summary>Starts routing when MicMixer starts, provided every saved device is connected.</summary>
+    public bool StartRoutingOnLaunch { get; set; }
 
     /// <summary>
     /// Runs MicMixer as administrator, so its hotkeys and held key also work while a
