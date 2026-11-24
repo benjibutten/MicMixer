@@ -18,9 +18,9 @@ namespace MicMixer.Music;
 /// </summary>
 public sealed class ToolBootstrapper
 {
-    private const string YtDlpVersion = "2026.10.26";
+    private const string YtDlpVersion = "2026.11.23";
     private const string YtDlpDownloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/download/" + YtDlpVersion + "/yt-dlp.exe";
-    private const string YtDlpSha256 = "f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d";
+    private const string YtDlpSha256 = "622ed48023cac1daa52a3bf3a6ac38f03514de214b5f0fa069389fd0f6d17e5c";
 
     // FFmpeg-Builds keeps only its 14 newest builds plus the last build of each of the
     // last 24 months, so the pinned build must be a month-end one.
